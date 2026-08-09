@@ -16,21 +16,42 @@ export function TranscriptSearch() {
   const [items, setItems] = useState<SearchHit[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>();
   const [error, setError] = useState<string>();
+  const [semantic, setSemantic] = useState(false);
   async function search(event?: React.FormEvent, cursor?: string) {
     event?.preventDefault();
     if (query.trim().length < 2) return;
-    const response = await fetch(
-      `/api/transcripts/search?q=${encodeURIComponent(query.trim())}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-    );
+    const response = semantic
+      ? await fetch("/api/ai/search", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ query: query.trim(), limit: 10 }),
+        })
+      : await fetch(
+          `/api/transcripts/search?q=${encodeURIComponent(query.trim())}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+        );
     if (!response.ok) {
       setError("Could not search workspace transcripts.");
       return;
     }
     setError(undefined);
-    const page = (await response.json()) as {
+    const raw = (await response.json()) as {
       items: SearchHit[];
       nextCursor: string | null;
     };
+    const page = semantic
+      ? {
+          items: raw.items.map(
+            (item: SearchHit & { title?: string }, index: number) => ({
+              ...item,
+              id:
+                item.id ??
+                `semantic-${item.recordingId}-${item.startMs}-${index}`,
+              recordingTitle: item.recordingTitle ?? item.title ?? "Recording",
+            }),
+          ),
+          nextCursor: null,
+        }
+      : raw;
     setItems((current) => (cursor ? [...current, ...page.items] : page.items));
     setNextCursor(page.nextCursor);
   }
@@ -46,6 +67,14 @@ export function TranscriptSearch() {
           />
         </label>
         <button type="submit">Search</button>
+        <label className="search-mode">
+          <input
+            type="checkbox"
+            checked={semantic}
+            onChange={(event) => setSemantic(event.target.checked)}
+          />
+          Meaning-based AI search
+        </label>
       </form>
       {error ? <p className="form-error">{error}</p> : null}
       {items.length ? (

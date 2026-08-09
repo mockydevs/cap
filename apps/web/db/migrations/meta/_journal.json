@@ -64,6 +64,13 @@
       "when": 1786310000000,
       "tag": "0008_google_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786313600000,
+      "tag": "0009_ai",
+      "breakpoints": true
     }
   ]
 }

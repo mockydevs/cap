@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { TranscriptSearch } from "./transcript-search";
+import { AiSettings } from "./ai-settings";
 
 type RecordingSummary = {
   id: string;
@@ -65,6 +66,7 @@ export function RecordingLibrary() {
         </Link>
       </div>
       <TranscriptSearch />
+      <AiSettings />
       {error && (
         <p className="form-error" role="alert">
           {error}

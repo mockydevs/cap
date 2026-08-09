@@ -1,10 +1,13 @@
 import { Queue, type JobsOptions } from "bullmq";
 import IORedis from "ioredis";
 import { z } from "zod";
+import { aiJobSchema, type AiJob } from "@cap/ai";
 
 export const MEDIA_PROCESSING_QUEUE = "media-processing";
 export const TRANSCRIPTION_QUEUE = "transcription";
 export const RENDER_QUEUE = "render";
+export const AI_QUEUE = "ai";
+export { aiJobSchema, type AiJob };
 export const renderJobSchema = z.object({
   renderJobId: z.string().uuid(),
   workspaceId: z.string().uuid(),
@@ -39,6 +42,18 @@ export function createTranscriptionQueue(
 }
 export function createRenderQueue(connection: IORedis): Queue<RenderJob> {
   return new Queue<RenderJob>(RENDER_QUEUE, { connection });
+}
+export function createAiQueue(connection: IORedis): Queue<AiJob> {
+  return new Queue<AiJob>(AI_QUEUE, { connection });
+}
+export function aiJobOptions(jobId: string): JobsOptions {
+  return {
+    jobId: `ai:${jobId}`,
+    attempts: 4,
+    backoff: { type: "exponential", delay: 10_000 },
+    removeOnComplete: { age: 604_800 },
+    removeOnFail: { age: 2_592_000 },
+  };
 }
 export function renderJobOptions(renderJobId: string): JobsOptions {
   return {

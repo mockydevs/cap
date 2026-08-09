@@ -79,6 +79,24 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+  ai-worker:
+    build:
+      context: .
+      dockerfile: apps/ai-worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://cap:cap@postgres:5432/cap
+      REDIS_URL: redis://redis:6379
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
+      AI_API_KEY: ${AI_API_KEY:?AI_API_KEY is required}
+      AI_MODEL: ${AI_MODEL:-gpt-5-mini}
+      AI_INPUT_COST_MICROUNITS_PER_MILLION: ${AI_INPUT_COST_MICROUNITS_PER_MILLION:-250000}
+      AI_OUTPUT_COST_MICROUNITS_PER_MILLION: ${AI_OUTPUT_COST_MICROUNITS_PER_MILLION:-2000000}
+      AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-2}
+      AI_WORKER_HEALTH_PORT: 8084
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 volumes:
   postgres-data:
   redis-data:

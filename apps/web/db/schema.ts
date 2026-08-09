@@ -97,6 +97,30 @@ export const renderJobStatus = pgEnum("render_job_status", [
   "FAILED",
   "CANCELED",
 ]);
+export const aiJobStatus = pgEnum("ai_job_status", [
+  "QUEUED",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELED",
+]);
+export const aiArtifactStatus = pgEnum("ai_artifact_status", [
+  "SUGGESTED",
+  "ACCEPTED",
+  "REJECTED",
+]);
+export const aiCapability = pgEnum("ai_capability", [
+  "TITLE_DESCRIPTION",
+  "SUMMARY",
+  "CHAPTERS",
+  "ACTION_ITEMS",
+  "HIGHLIGHTS",
+  "QUESTIONS_ANSWERS",
+  "TRANSLATION",
+  "FOLLOW_UP",
+  "SENSITIVE_DATA",
+  "SEARCH_INDEX",
+]);
 
 export const users = pgTable(
   "users",
@@ -1003,6 +1027,165 @@ export const renderJobs = pgTable(
     check(
       "render_jobs_manifest_hash_check",
       sql`length(${table.manifestHash}) = 64`,
+    ),
+  ],
+);
+
+export const aiWorkspacePolicies = pgTable(
+  "ai_workspace_policies",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(false),
+    allowedProvider: text("allowed_provider")
+      .notNull()
+      .default("openai-compatible"),
+    allowExternalProcessing: boolean("allow_external_processing")
+      .notNull()
+      .default(false),
+    monthlyTokenLimit: integer("monthly_token_limit")
+      .notNull()
+      .default(1_000_000),
+    monthlyCostLimitMicrounits: bigint("monthly_cost_limit_microunits", {
+      mode: "number",
+    })
+      .notNull()
+      .default(25_000_000),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => [
+    check(
+      "ai_workspace_policies_token_limit_check",
+      sql`${table.monthlyTokenLimit} >= 0`,
+    ),
+    check(
+      "ai_workspace_policies_cost_limit_check",
+      sql`${table.monthlyCostLimitMicrounits} >= 0`,
+    ),
+  ],
+);
+
+export const aiJobs = pgTable(
+  "ai_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    transcriptId: uuid("transcript_id")
+      .notNull()
+      .references(() => transcripts.id, { onDelete: "cascade" }),
+    transcriptRevision: integer("transcript_revision").notNull(),
+    inputHash: text("input_hash").notNull(),
+    capability: aiCapability("capability").notNull(),
+    status: aiJobStatus("status").notNull().default("QUEUED"),
+    promptTemplateVersion: text("prompt_template_version").notNull(),
+    provider: text("provider"),
+    model: text("model"),
+    question: text("question"),
+    targetLanguage: text("target_language"),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costMicrounits: bigint("cost_microunits", { mode: "number" }),
+    currency: text("currency"),
+    providerRequestIdHash: text("provider_request_id_hash"),
+    errorCategory: text("error_category"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("ai_jobs_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("ai_jobs_recording_status_idx").on(table.recordingId, table.status),
+    check("ai_jobs_input_hash_check", sql`length(${table.inputHash}) = 64`),
+    check("ai_jobs_revision_check", sql`${table.transcriptRevision} >= 0`),
+  ],
+);
+
+export const aiArtifacts = pgTable(
+  "ai_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    jobId: uuid("job_id")
+      .notNull()
+      .unique()
+      .references(() => aiJobs.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    capability: aiCapability("capability").notNull(),
+    content: jsonb("content").$type<unknown>().notNull(),
+    status: aiArtifactStatus("status").notNull().default("SUGGESTED"),
+    acceptedBy: uuid("accepted_by").references(() => users.id),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("ai_artifacts_recording_idx").on(
+      table.workspaceId,
+      table.recordingId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const aiSearchDocuments = pgTable(
+  "ai_search_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    transcriptId: uuid("transcript_id")
+      .notNull()
+      .references(() => transcripts.id, { onDelete: "cascade" }),
+    segmentId: uuid("segment_id")
+      .notNull()
+      .unique()
+      .references(() => transcriptSegments.id, { onDelete: "cascade" }),
+    startMs: integer("start_ms").notNull(),
+    endMs: integer("end_ms").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    embedding: jsonb("embedding").$type<number[]>().notNull(),
+    model: text("model").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("ai_search_documents_workspace_recording_idx").on(
+      table.workspaceId,
+      table.recordingId,
+    ),
+    check(
+      "ai_search_documents_content_hash_check",
+      sql`length(${table.contentHash})=64`,
     ),
   ],
 );

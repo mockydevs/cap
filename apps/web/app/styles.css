@@ -276,6 +276,78 @@ button:disabled {
   padding: 12px;
   line-height: 1.4;
 }
+.ai-panel {
+  margin-top: 32px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+.ai-panel h2 {
+  margin: 6px 0;
+}
+.ai-actions,
+.ai-panel form,
+.ai-results article > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ai-actions {
+  margin: 18px 0;
+}
+.ai-actions button,
+.ai-panel button {
+  padding: 8px 11px;
+  font-size: 0.82rem;
+}
+.ai-panel form input {
+  flex: 1;
+  min-width: 240px;
+  border: 1px solid #405047;
+  border-radius: 9px;
+  padding: 11px;
+  background: #0d1510;
+  color: var(--ink);
+}
+.ai-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.ai-results article {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+}
+.ai-results pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+}
+.ai-settings {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.ai-settings summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.ai-settings label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+  color: var(--muted);
+}
+.ai-settings label input[type="number"] {
+  margin-left: auto;
+  width: 140px;
+}
 .library-panel,
 .viewer-shell {
   padding-top: 48px;
@@ -426,7 +498,7 @@ button:disabled {
 .editor-actions {
   display: flex;
   align-items: center;
-  justify-content: end;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }

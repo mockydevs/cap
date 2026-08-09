@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ShareControls } from "./share-controls";
 import { CommentThread } from "./comment-thread";
 import { TranscriptPanel } from "./transcript-panel";
+import { AiPanel } from "./ai-panel";
 
 type Recording = {
   id: string;
@@ -148,6 +149,14 @@ export function RecordingViewer({
         onSeek={(positionMs) => {
           if (!playerRef.current) return;
           playerRef.current.currentTime = positionMs / 1_000;
+          void playerRef.current.play().catch(() => undefined);
+        }}
+      />
+      <AiPanel
+        recordingId={recording.id}
+        onSeek={(positionMs) => {
+          if (!playerRef.current) return;
+          playerRef.current.currentTime = positionMs / 1000;
           void playerRef.current.play().catch(() => undefined);
         }}
       />
