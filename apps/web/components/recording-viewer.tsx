@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ShareControls } from "./share-controls";
+import { CommentThread } from "./comment-thread";
 
 type Recording = {
   id: string;
@@ -20,6 +21,7 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
   const [recording, setRecording] = useState<Recording>();
   const [playback, setPlayback] = useState<Playback>();
   const [error, setError] = useState<string>();
+  const [timestampMs, setTimestampMs] = useState(0);
   const load = useCallback(async () => {
     const response = await fetch(`/api/recordings/${recordingId}`, {
       cache: "no-store",
@@ -94,6 +96,9 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
           controls
           preload="metadata"
           src={playback.url}
+          onTimeUpdate={(event) =>
+            setTimestampMs(event.currentTarget.currentTime * 1000)
+          }
           onError={() => void load()}
         />
       ) : (
@@ -111,6 +116,7 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
           </p>
         </div>
       )}
+      <CommentThread recordingId={recording.id} timestampMs={timestampMs} />
       {recording.canManageSharing && (
         <ShareControls recordingId={recording.id} />
       )}

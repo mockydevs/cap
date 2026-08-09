@@ -12,6 +12,7 @@ import {
 import { db } from "../../db/client";
 import { recordingAssets, recordings, shareLinks } from "../../db/schema";
 import { hashPassword, verifyPassword } from "../auth/credentials";
+import { beginViewSession, type ViewKind } from "../analytics/service";
 import { uploadStorage } from "../uploads/storage";
 import { enforceSharePasswordRateLimit } from "./rate-limit";
 
@@ -196,11 +197,27 @@ async function playableRecording(recordingId: string) {
 async function signedPlayback(
   recording: Awaited<ReturnType<typeof playableRecording>>,
   storage: PlaybackObjectStorage,
+  view: {
+    request: Request;
+    kind: ViewKind;
+    actorUserId?: string | undefined;
+    shareLinkId?: string | undefined;
+  },
 ) {
-  const signed = await storage.presignPlayback({
-    objectKey: assertManagedMediaObjectKey(recording.assetObjectKey),
-    expiresInSeconds: PLAYBACK_URL_TTL_SECONDS,
-  });
+  const [signed, analytics] = await Promise.all([
+    storage.presignPlayback({
+      objectKey: assertManagedMediaObjectKey(recording.assetObjectKey),
+      expiresInSeconds: PLAYBACK_URL_TTL_SECONDS,
+    }),
+    beginViewSession({
+      request: view.request,
+      recordingId: recording.recordingId,
+      workspaceId: recording.workspaceId,
+      kind: view.kind,
+      ...(view.actorUserId ? { actorUserId: view.actorUserId } : {}),
+      ...(view.shareLinkId ? { shareLinkId: view.shareLinkId } : {}),
+    }),
+  ]);
   return {
     recordingId: recording.recordingId,
     title: recording.title,
@@ -208,13 +225,16 @@ async function signedPlayback(
     sizeBytes: recording.sizeBytes,
     url: signed.url,
     expiresAt: signed.expiresAt.toISOString(),
+    viewSessionGrant: analytics.viewSessionGrant,
   };
 }
 
 export async function authorizeRecordingPlayback(
+  request: Request,
   recordingId: string,
   actor: SharingActor | null,
   storage: PlaybackObjectStorage = uploadStorage(),
+  viewKind?: ViewKind,
 ) {
   const recording = await playableRecording(recordingId);
   const decision = authorizePlayback({
@@ -231,7 +251,11 @@ export async function authorizeRecordingPlayback(
       "Recording not found",
     );
   }
-  return signedPlayback(recording, storage);
+  return signedPlayback(recording, storage, {
+    request,
+    kind: viewKind ?? (decision.grant === "WORKSPACE" ? "WORKSPACE" : "PUBLIC"),
+    ...(actor ? { actorUserId: actor.userId } : {}),
+  });
 }
 
 export async function authorizeSharePlayback(
@@ -239,11 +263,13 @@ export async function authorizeSharePlayback(
   token: string,
   password: string | undefined,
   storage: PlaybackObjectStorage = uploadStorage(),
+  options?: { viewKind?: ViewKind; expectedRecordingId?: string },
 ) {
   const tokenHash = hashShareToken(token);
   const now = new Date();
   const [link] = await db()
     .select({
+      id: shareLinks.id,
       recordingId: shareLinks.recordingId,
       mode: shareLinks.mode,
       passwordHash: shareLinks.passwordHash,
@@ -259,6 +285,12 @@ export async function authorizeSharePlayback(
     .limit(1);
   if (!link)
     throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
+  if (
+    options?.expectedRecordingId &&
+    link.recordingId !== options.expectedRecordingId
+  ) {
+    throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
+  }
   const recording = await playableRecording(link.recordingId);
   if (recording.visibility !== link.mode) {
     throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
@@ -299,5 +331,9 @@ export async function authorizeSharePlayback(
   });
   if (!decision.allowed)
     throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
-  return signedPlayback(recording, storage);
+  return signedPlayback(recording, storage, {
+    request,
+    kind: options?.viewKind ?? "SHARE",
+    shareLinkId: link.id,
+  });
 }

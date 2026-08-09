@@ -8,7 +8,9 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  serial,
   text,
+  unique,
   timestamp,
   uniqueIndex,
   uuid,
@@ -57,6 +59,13 @@ export const recordingVisibility = pgEnum("recording_visibility", [
   "PUBLIC",
 ]);
 export const shareLinkMode = pgEnum("share_link_mode", ["LINK", "PASSWORD"]);
+export const viewSessionKind = pgEnum("view_session_kind", [
+  "WORKSPACE",
+  "SHARE",
+  "PUBLIC",
+  "EMBED",
+]);
+export const viewEventKind = pgEnum("view_event_kind", ["HEARTBEAT", "ENDED"]);
 
 export const users = pgTable(
   "users",
@@ -361,5 +370,162 @@ export const shareLinks = pgTable(
       "share_links_token_hash_length_check",
       sql`length(${table.tokenHash}) = 64`,
     ),
+  ],
+);
+
+export const recordingEmbedPolicies = pgTable("recording_embed_policies", {
+  recordingId: uuid("recording_id")
+    .primaryKey()
+    .references(() => recordings.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  allowedOrigins: text("allowed_origins")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  updatedBy: uuid("updated_by")
+    .notNull()
+    .references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const viewSessions = pgTable(
+  "view_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    shareLinkId: uuid("share_link_id").references(() => shareLinks.id, {
+      onDelete: "set null",
+    }),
+    kind: viewSessionKind("kind").notNull(),
+    viewerHash: text("viewer_hash").notNull(),
+    dedupKeyHash: text("dedup_key_hash").notNull(),
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    watchTimeMs: bigint("watch_time_ms", { mode: "number" })
+      .notNull()
+      .default(0),
+    maxPositionMs: bigint("max_position_ms", { mode: "number" })
+      .notNull()
+      .default(0),
+    completed: boolean("completed").notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("view_sessions_dedup_key_unique_idx").on(table.dedupKeyHash),
+    index("view_sessions_recording_first_idx").on(
+      table.recordingId,
+      table.firstViewedAt,
+    ),
+    check(
+      "view_sessions_viewer_hash_length_check",
+      sql`length(${table.viewerHash}) = 64`,
+    ),
+    check(
+      "view_sessions_dedup_hash_length_check",
+      sql`length(${table.dedupKeyHash}) = 64`,
+    ),
+  ],
+);
+
+export const viewEvents = pgTable(
+  "view_events",
+  {
+    id: serial("id").primaryKey(),
+    viewSessionId: uuid("view_session_id")
+      .notNull()
+      .references(() => viewSessions.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id").notNull(),
+    kind: viewEventKind("kind").notNull(),
+    positionMs: bigint("position_ms", { mode: "number" }).notNull(),
+    deltaMs: integer("delta_ms").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("view_events_session_event_unique").on(
+      table.viewSessionId,
+      table.eventId,
+    ),
+    index("view_events_session_created_idx").on(
+      table.viewSessionId,
+      table.createdAt,
+    ),
+    check(
+      "view_events_position_nonnegative_check",
+      sql`${table.positionMs} >= 0`,
+    ),
+    check(
+      "view_events_delta_bounded_check",
+      sql`${table.deltaMs} >= 0 AND ${table.deltaMs} <= 30000`,
+    ),
+  ],
+);
+
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    authorUserId: uuid("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    guestName: text("guest_name"),
+    guestKeyHash: text("guest_key_hash"),
+    body: text("body").notNull(),
+    timestampMs: integer("timestamp_ms").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("comments_recording_created_idx").on(
+      table.recordingId,
+      table.createdAt,
+    ),
+    check(
+      "comments_author_check",
+      sql`(${table.authorUserId} IS NOT NULL) OR (${table.guestName} IS NOT NULL AND ${table.guestKeyHash} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const commentReactions = pgTable(
+  "comment_reactions",
+  {
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    actorKeyHash: text("actor_key_hash").notNull(),
+    emoji: text("emoji").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.commentId, table.actorKeyHash, table.emoji] }),
+    index("comment_reactions_comment_idx").on(table.commentId),
   ],
 );

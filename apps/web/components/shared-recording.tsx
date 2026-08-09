@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { CommentThread } from "./comment-thread";
 
-type Playback = { title: string; url: string; expiresAt: string };
+type Playback = {
+  recordingId: string;
+  title: string;
+  url: string;
+  expiresAt: string;
+};
 export function SharedRecording({
   token,
   recordingId,
@@ -14,6 +20,7 @@ export function SharedRecording({
   const [password, setPassword] = useState("");
   const [playback, setPlayback] = useState<Playback>();
   const [error, setError] = useState<string>();
+  const [timestampMs, setTimestampMs] = useState(0);
   const endpoint = token
     ? `/api/shares/${token}/playback`
     : `/api/recordings/${recordingId}/playback`;
@@ -48,7 +55,17 @@ export function SharedRecording({
             controls
             autoPlay
             src={playback.url}
+            onTimeUpdate={(event) =>
+              setTimestampMs(event.currentTarget.currentTime * 1000)
+            }
           />
+          {token && (
+            <CommentThread
+              recordingId={playback.recordingId}
+              timestampMs={timestampMs}
+              share={{ token, password }}
+            />
+          )}
         </>
       ) : (
         <section className="share-gate">

@@ -21,9 +21,12 @@ export async function POST(
       );
     const { recordingId } = recordingParamsSchema.parse(await context.params);
     const actor = await actorFromToken(tokenFromRequest(request));
-    return Response.json(await authorizeRecordingPlayback(recordingId, actor), {
-      headers: { "cache-control": "private, no-store" },
-    });
+    return Response.json(
+      await authorizeRecordingPlayback(request, recordingId, actor),
+      {
+        headers: { "cache-control": "private, no-store" },
+      },
+    );
   } catch (error) {
     return sharingError(error);
   }

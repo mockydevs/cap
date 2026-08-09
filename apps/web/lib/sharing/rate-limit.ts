@@ -30,6 +30,20 @@ if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
 return current
 `;
 
+export async function enforceFixedWindowRateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<void> {
+  const current = await connection().eval(
+    incrementScript,
+    1,
+    `cap:rate:${key}`,
+    windowSeconds,
+  );
+  if (Number(current) > limit) throw new ShareRateLimitError();
+}
+
 /** Fails closed so password shares never become unbounded when Redis is unavailable. */
 export async function enforceSharePasswordRateLimit(
   request: Request,

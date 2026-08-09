@@ -436,3 +436,64 @@ button:disabled {
 .share-gate .nav-link {
   margin-top: 18px;
 }
+.comments {
+  margin-top: 30px;
+  max-width: 780px;
+}
+.comment-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+.comment-form > input {
+  grid-column: 1 / -1;
+}
+.comment-form textarea,
+.comment-form input {
+  border: 1px solid #405047;
+  border-radius: 9px;
+  padding: 12px 13px;
+  background: #0d1510;
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+.comment-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.comment {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--panel);
+}
+.comment header {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+}
+.comment header strong {
+  color: var(--ink);
+}
+.comment footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.comment footer button {
+  padding: 6px 9px;
+  background: #243329;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.comment footer button.reacted {
+  color: #15200f;
+  background: var(--lime);
+}
+@media (max-width: 580px) {
+  .comment-form {
+    grid-template-columns: 1fr;
+  }
+}
