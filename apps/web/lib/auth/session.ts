@@ -76,6 +76,11 @@ export async function actorFromToken(
 }
 
 export function tokenFromRequest(request: Request) {
+  const authorization = request.headers.get("authorization");
+  if (authorization?.startsWith("Bearer ")) {
+    const bearer = authorization.slice(7);
+    if (/^[A-Za-z0-9_-]{43}$/.test(bearer)) return bearer;
+  }
   const cookie = request.headers
     .get("cookie")
     ?.split(";")
@@ -84,4 +89,8 @@ export function tokenFromRequest(request: Request) {
   return cookie
     ? decodeURIComponent(cookie.slice(sessionCookieName.length + 1))
     : undefined;
+}
+
+export function hasBearerSession(request: Request): boolean {
+  return request.headers.get("authorization")?.startsWith("Bearer ") ?? false;
 }

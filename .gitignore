@@ -3,6 +3,7 @@ node_modules
 .turbo
 .next
 dist
+target
 coverage
 *.tsbuildinfo
 .env

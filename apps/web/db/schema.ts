@@ -171,6 +171,35 @@ export const sessions = pgTable(
   ],
 );
 
+export const oauthAccounts = pgTable(
+  "oauth_accounts",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    providerSubject: text("provider_subject").notNull(),
+    emailAtLink: text("email_at_link").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("oauth_accounts_provider_subject_unique_idx").on(
+      table.provider,
+      table.providerSubject,
+    ),
+    uniqueIndex("oauth_accounts_provider_user_unique_idx").on(
+      table.provider,
+      table.userId,
+    ),
+  ],
+);
+
 export const recordings = pgTable(
   "recordings",
   {

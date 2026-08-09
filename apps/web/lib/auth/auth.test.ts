@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { hashPassword, signupSchema, verifyPassword } from "./credentials";
-import { hashSessionToken, tokenFromRequest } from "./session";
+import {
+  hashSessionToken,
+  hasBearerSession,
+  tokenFromRequest,
+} from "./session";
 
 describe("authentication primitives", () => {
   it("hashes passwords with Argon2id and verifies without retaining plaintext", async () => {
@@ -36,5 +40,21 @@ describe("authentication primitives", () => {
         }),
       ),
     ).toBe("abc 123");
+  });
+
+  it("accepts only exact native bearer-session tokens", () => {
+    const token = "a".repeat(43);
+    const request = new Request("https://cap.test", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(tokenFromRequest(request)).toBe(token);
+    expect(hasBearerSession(request)).toBe(true);
+    expect(
+      tokenFromRequest(
+        new Request("https://cap.test", {
+          headers: { authorization: "Bearer ../../credential" },
+        }),
+      ),
+    ).toBeUndefined();
   });
 });

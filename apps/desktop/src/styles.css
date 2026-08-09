@@ -1,0 +1,108 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #ecf4e9;
+  background: #09100b;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #203822, #09100b 45%);
+}
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 40px 24px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+}
+h1 {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 0.95;
+  max-width: 700px;
+  margin: 10px 0 28px;
+}
+.eyebrow {
+  letter-spacing: 0.22em;
+  color: #baf35b;
+}
+.panel,
+article {
+  background: #121c14;
+  border: 1px solid #2d4531;
+  border-radius: 16px;
+  padding: 20px;
+}
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+}
+.auth {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  align-items: center;
+}
+.auth h2 {
+  margin-right: auto;
+}
+.projects {
+  display: grid;
+  gap: 12px;
+}
+article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+article p,
+small {
+  color: #9eae9f;
+}
+label {
+  display: grid;
+  gap: 7px;
+}
+.check {
+  display: flex;
+  align-items: center;
+}
+input,
+select,
+button {
+  border: 1px solid #3a5540;
+  background: #0d160f;
+  color: inherit;
+  border-radius: 9px;
+  padding: 10px;
+}
+button {
+  cursor: pointer;
+}
+.primary {
+  background: #baf35b;
+  color: #0b130c;
+  border: 0;
+  font-weight: 700;
+}
+.danger {
+  border-color: #834945;
+  color: #ffc5be;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+progress {
+  width: 100%;
+  accent-color: #baf35b;
+}

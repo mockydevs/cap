@@ -1,5 +1,9 @@
 # Cap
 
+The browser platform and its native Tauri recorder share the same authenticated upload and processing pipeline. Desktop setup, platform permissions, crash recovery, signing, and release instructions are documented in [docs/DESKTOP.md](docs/DESKTOP.md).
+
+Password and Google sign-in configuration is documented in [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md).
+
 An independent, browser-first screen recording platform with authenticated workspaces, resumable private AWS S3 uploads, and asynchronous FFmpeg processing.
 
 ## Prerequisites
