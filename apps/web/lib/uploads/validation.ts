@@ -1,14 +1,60 @@
 import { z } from "zod";
 
 const uuid = z.string().uuid();
+const checksumSha256 = z.string().regex(/^[A-Za-z0-9+/]{43}=$/);
+const etag = z
+  .string()
+  .min(3)
+  .max(130)
+  .regex(/^"[^"\r\n]+"$/);
+
 export const createUploadSchema = z.object({
   title: z.string().trim().min(1).max(255),
   contentType: z.enum(["video/webm", "video/mp4"]),
-  sizeBytes: z.number().int().positive().max(5 * 1024 * 1024 * 1024),
+  sizeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(5 * 1024 * 1024 * 1024),
 });
-export const signPartSchema = z.object({ partNumber: z.number().int().min(1).max(10_000) });
-export const completeUploadSchema = z.object({
-  parts: z.array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1).max(512) })).min(1).max(10_000),
-}).refine(({ parts }) => new Set(parts.map((part) => part.partNumber)).size === parts.length, "Part numbers must be unique");
+
+export const signPartSchema = z.object({
+  contentLength: z
+    .number()
+    .int()
+    .positive()
+    .max(5 * 1024 * 1024 * 1024),
+  checksumSha256,
+  isFinalPart: z.boolean(),
+});
+
+export const completeUploadSchema = z
+  .object({
+    parts: z
+      .array(
+        z.object({
+          partNumber: z.number().int().min(1).max(10_000),
+          etag,
+          checksumSha256,
+        }),
+      )
+      .min(1)
+      .max(10_000),
+  })
+  .refine(
+    ({ parts }) =>
+      new Set(parts.map((part) => part.partNumber)).size === parts.length,
+    "Part numbers must be unique",
+  );
+
 export const sessionParamsSchema = z.object({ sessionId: uuid });
+export const partParamsSchema = z.object({
+  sessionId: uuid,
+  partNumber: z.coerce.number().int().min(1).max(10_000),
+});
+export const idempotencyKeySchema = z
+  .string()
+  .min(16)
+  .max(200)
+  .regex(/^[\x21-\x7E]+$/);
 export const UPLOAD_PART_SIZE_BYTES = 10 * 1024 * 1024;

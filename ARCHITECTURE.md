@@ -66,31 +66,31 @@ Delivery remains phased so each subsystem can be tested and operated safely, but
 
 ## 4. Technology choices
 
-| Concern | Choice |
-| --- | --- |
-| Repository | pnpm workspace with Turborepo |
-| Language | TypeScript in strict mode |
-| Web application | Next.js |
-| API | Next.js route handlers with a domain service layer |
-| UI | React, Tailwind CSS, accessible headless components |
-| Database | PostgreSQL |
-| Database access | Drizzle ORM and versioned SQL migrations |
-| Validation | Zod at every external boundary |
-| Queue | BullMQ |
-| Queue backend | Redis |
-| Media processing | Dedicated FFmpeg worker |
-| Desktop application | Tauri with a Rust capture and media core |
-| Editor | React timeline UI with a versioned edit-decision model |
-| Transcription | Provider-neutral speech-to-text adapter with self-hosted option |
-| AI orchestration | Dedicated asynchronous AI worker with provider adapters |
-| Search | PostgreSQL full-text search initially; vector search behind an adapter |
-| Object storage | Private AWS S3 bucket with SSE-KMS; adapter retained for local testing |
-| Playback | Native HTML5 video with HLS support |
-| Unit tests | Vitest |
-| End-to-end tests | Playwright |
-| Containers | Multi-stage Docker builds |
-| Deployment | Coolify |
-| Container registry | GitHub Container Registry |
+| Concern             | Choice                                                                 |
+| ------------------- | ---------------------------------------------------------------------- |
+| Repository          | pnpm workspace with Turborepo                                          |
+| Language            | TypeScript in strict mode                                              |
+| Web application     | Next.js                                                                |
+| API                 | Next.js route handlers with a domain service layer                     |
+| UI                  | React, Tailwind CSS, accessible headless components                    |
+| Database            | PostgreSQL                                                             |
+| Database access     | Drizzle ORM and versioned SQL migrations                               |
+| Validation          | Zod at every external boundary                                         |
+| Queue               | BullMQ                                                                 |
+| Queue backend       | Redis                                                                  |
+| Media processing    | Dedicated FFmpeg worker                                                |
+| Desktop application | Tauri with a Rust capture and media core                               |
+| Editor              | React timeline UI with a versioned edit-decision model                 |
+| Transcription       | Provider-neutral speech-to-text adapter with self-hosted option        |
+| AI orchestration    | Dedicated asynchronous AI worker with provider adapters                |
+| Search              | PostgreSQL full-text search initially; vector search behind an adapter |
+| Object storage      | Private AWS S3 bucket with SSE-KMS; adapter retained for local testing |
+| Playback            | Native HTML5 video with HLS support                                    |
+| Unit tests          | Vitest                                                                 |
+| End-to-end tests    | Playwright                                                             |
+| Containers          | Multi-stage Docker builds                                              |
+| Deployment          | Coolify                                                                |
+| Container registry  | GitHub Container Registry                                              |
 
 Exact dependency versions are pinned in the lockfile and updated through reviewed pull requests.
 
@@ -452,12 +452,12 @@ Initial authentication supports email magic links and optional OAuth. Production
 
 Workspace roles:
 
-| Role | Capabilities |
-| --- | --- |
-| Owner | Full workspace control, ownership transfer, and deletion |
-| Admin | Member and recording administration |
-| Member | Create and manage permitted recordings |
-| Viewer | View permitted internal recordings |
+| Role   | Capabilities                                             |
+| ------ | -------------------------------------------------------- |
+| Owner  | Full workspace control, ownership transfer, and deletion |
+| Admin  | Member and recording administration                      |
+| Member | Create and manage permitted recordings                   |
+| Viewer | View permitted internal recordings                       |
 
 Authorization is enforced in domain services. Interface visibility is a convenience, not a security boundary.
 
@@ -561,16 +561,16 @@ Create separate Coolify environments for staging and production.
 
 ### Production resources
 
-| Resource | Publicly exposed | Persistent |
-| --- | --- | --- |
-| Web | Yes, through HTTPS | No |
-| Media worker | No | No |
-| Render worker | No | No |
-| Transcription worker | No | No |
-| AI worker | No | No |
-| PostgreSQL | No | Yes |
-| Redis | No | Yes where required by queue policy |
-| Object storage | Through signed access only | Yes |
+| Resource             | Publicly exposed           | Persistent                         |
+| -------------------- | -------------------------- | ---------------------------------- |
+| Web                  | Yes, through HTTPS         | No                                 |
+| Media worker         | No                         | No                                 |
+| Render worker        | No                         | No                                 |
+| Transcription worker | No                         | No                                 |
+| AI worker            | No                         | No                                 |
+| PostgreSQL           | No                         | Yes                                |
+| Redis                | No                         | Yes where required by queue policy |
+| Object storage       | Through signed access only | Yes                                |
 
 Workers have no public domains. PostgreSQL and Redis remain on private service networks. CPU-heavy media and render workers can be moved to a separate Coolify server without changing application contracts.
 

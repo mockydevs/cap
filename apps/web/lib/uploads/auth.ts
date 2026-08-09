@@ -1,14 +1,11 @@
-/**
- * Transitional actor boundary. Production requests must be backed by the account/session
- * implementation before upload routes are enabled. Header values are never trusted.
- */
-export type UploadActor = { userId: string; workspaceId: string };
+import { AuthorizationError, requireActor } from "../auth/authorization";
+import { hasTrustedOrigin } from "../auth/origin";
 
-export function requireUploadActor(): UploadActor {
-  const userId = process.env.DEV_UPLOAD_USER_ID;
-  const workspaceId = process.env.DEV_UPLOAD_WORKSPACE_ID;
-  if (process.env.NODE_ENV === "production" || !userId || !workspaceId) {
-    throw new Error("UPLOAD_AUTH_NOT_CONFIGURED");
-  }
-  return { userId, workspaceId };
+/** Uploads require an authenticated member of the active workspace. */
+export const requireUploadActor = (request: Request) =>
+  requireActor(request, "MEMBER");
+
+export function requireTrustedUploadOrigin(request: Request): void {
+  if (!hasTrustedOrigin(request))
+    throw new AuthorizationError("Untrusted request origin");
 }

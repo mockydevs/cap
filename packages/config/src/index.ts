@@ -16,6 +16,8 @@ export const serverEnvironmentSchema = z.object({
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;
 
 /** Validates only server-side configuration. Never import credentials into client code. */
-export function parseServerEnvironment(environment: NodeJS.ProcessEnv): ServerEnvironment {
+export function parseServerEnvironment(
+  environment: NodeJS.ProcessEnv,
+): ServerEnvironment {
   return serverEnvironmentSchema.parse(environment);
 }

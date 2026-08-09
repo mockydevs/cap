@@ -80,9 +80,11 @@ describe("AWS multipart upload domain contract", () => {
   });
 
   it("keeps terminal states closed", () => {
-    expect(() => assertMultipartUploadTransition("COMPLETED", "UPLOADING")).toThrow(
-      "Cannot transition",
-    );
-    expect(() => assertMultipartUploadTransition("UPLOADING", "COMPLETING")).not.toThrow();
+    expect(() =>
+      assertMultipartUploadTransition("COMPLETED", "UPLOADING"),
+    ).toThrow("Cannot transition");
+    expect(() =>
+      assertMultipartUploadTransition("UPLOADING", "COMPLETING"),
+    ).not.toThrow();
   });
 });

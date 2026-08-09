@@ -8,6 +8,27 @@
       "when": 1775419200000,
       "tag": "0000_phase_2_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786280400000,
+      "tag": "0001_auth_and_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786284000000,
+      "tag": "0002_media_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786291200000,
+      "tag": "0003_sharing",
+      "breakpoints": true
     }
   ]
 }

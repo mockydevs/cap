@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
@@ -15,5 +17,7 @@
     "@aws-sdk/s3-request-presigner": "^3.850.0",
     "@cap/domain": "workspace:*"
   },
-  "devDependencies": { "vitest": "^3.1.4" }
+  "devDependencies": {
+    "vitest": "^3.1.4"
+  }
 }

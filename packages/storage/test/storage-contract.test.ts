@@ -7,6 +7,7 @@ import {
 } from "@cap/domain";
 import {
   assertManagedMediaObjectKey,
+  assertPlaybackExpirySeconds,
   assertPresignExpirySeconds,
   buildSourceMediaObjectKey,
   multipartUploadId,
@@ -21,16 +22,20 @@ describe("storage security contract", () => {
         uploadSessionId: uploadSessionId("attempt_1"),
         mediaType: sourceMediaType("video/webm;codecs=vp9,opus"),
       }),
-    ).toBe("workspaces/workspace_1/recordings/recording_1/source/attempt_1.webm");
+    ).toBe(
+      "workspaces/workspace_1/recordings/recording_1/source/attempt_1.webm",
+    );
   });
 
   it("rejects traversal and keys outside the managed namespace", () => {
     expect(() =>
-      assertManagedMediaObjectKey("workspaces/a/recordings/b/source/../private"),
+      assertManagedMediaObjectKey(
+        "workspaces/a/recordings/b/source/../private",
+      ),
     ).toThrow("managed media namespace");
-    expect(() => assertManagedMediaObjectKey("arbitrary/client/key.webm")).toThrow(
-      "managed media namespace",
-    );
+    expect(() =>
+      assertManagedMediaObjectKey("arbitrary/client/key.webm"),
+    ).toThrow("managed media namespace");
   });
 
   it("keeps upload signatures short lived", () => {
@@ -39,7 +44,15 @@ describe("storage security contract", () => {
     expect(() => assertPresignExpirySeconds(300)).not.toThrow();
   });
 
+  it("keeps playback bearer URLs short lived", () => {
+    expect(() => assertPlaybackExpirySeconds(29)).toThrow("30-900");
+    expect(() => assertPlaybackExpirySeconds(901)).toThrow("30-900");
+    expect(() => assertPlaybackExpirySeconds(120)).not.toThrow();
+  });
+
   it("rejects control characters in provider upload IDs", () => {
-    expect(() => multipartUploadId("bad\nupload")).toThrow("Invalid multipart upload");
+    expect(() => multipartUploadId("bad\nupload")).toThrow(
+      "Invalid multipart upload",
+    );
   });
 });

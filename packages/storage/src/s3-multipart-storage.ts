@@ -2,6 +2,7 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   ListPartsCommand,
   S3Client,
@@ -18,6 +19,7 @@ import {
 import { assertManagedMediaObjectKey } from "./media-object-key";
 import {
   assertPresignExpirySeconds,
+  assertPlaybackExpirySeconds,
   multipartUploadId,
   StorageContractError,
   type CompleteSourceMultipartUpload,
@@ -25,6 +27,7 @@ import {
   type CreatedSourceMultipartUpload,
   type CreateSourceMultipartUpload,
   type MultipartObjectStorage,
+  type PlaybackObjectStorage,
   type MultipartUploadReference,
   type PresignedUploadPart,
   type PresignUploadPart,
@@ -46,12 +49,17 @@ function assertOptions(options: S3MultipartStorageOptions): void {
     throw new StorageContractError("INVALID_CONFIG", "Invalid S3 bucket name");
   }
   if (!options.kmsKeyArn.startsWith("arn:aws:kms:")) {
-    throw new StorageContractError("INVALID_CONFIG", "AWS_KMS_KEY_ARN must be a KMS ARN");
+    throw new StorageContractError(
+      "INVALID_CONFIG",
+      "AWS_KMS_KEY_ARN must be a KMS ARN",
+    );
   }
 }
 
 /** AWS S3 production implementation. It deliberately has no endpoint/path-style options. */
-export class S3MultipartStorage implements MultipartObjectStorage {
+export class S3MultipartStorage
+  implements MultipartObjectStorage, PlaybackObjectStorage
+{
   readonly #client: S3Client;
   readonly #bucketName: string;
   readonly #kmsKeyArn: string;
@@ -86,12 +94,17 @@ export class S3MultipartStorage implements MultipartObjectStorage {
       }),
     );
     if (!response.UploadId) {
-      throw new StorageContractError("INVALID_S3_RESPONSE", "S3 did not return an upload ID");
+      throw new StorageContractError(
+        "INVALID_S3_RESPONSE",
+        "S3 did not return an upload ID",
+      );
     }
     return { uploadId: multipartUploadId(response.UploadId), objectKey };
   }
 
-  async presignUploadPart(input: PresignUploadPart): Promise<PresignedUploadPart> {
+  async presignUploadPart(
+    input: PresignUploadPart,
+  ): Promise<PresignedUploadPart> {
     assertManagedMediaObjectKey(input.objectKey);
     assertPresignExpirySeconds(input.expiresInSeconds);
     sha256Base64(input.checksumSha256);
@@ -103,7 +116,10 @@ export class S3MultipartStorage implements MultipartObjectStorage {
       input.contentLength < 1 ||
       input.contentLength > S3_MAX_MULTIPART_PART_BYTES
     ) {
-      throw new StorageContractError("INVALID_PART", "Invalid S3 multipart part number or size");
+      throw new StorageContractError(
+        "INVALID_PART",
+        "Invalid S3 multipart part number or size",
+      );
     }
 
     const checksumHeader = "x-amz-checksum-sha256";
@@ -127,8 +143,12 @@ export class S3MultipartStorage implements MultipartObjectStorage {
     return {
       url,
       method: "PUT",
-      expiresAt: new Date(this.#now().getTime() + input.expiresInSeconds * 1000),
-      requiredHeaders: Object.freeze({ [checksumHeader]: input.checksumSha256 }),
+      expiresAt: new Date(
+        this.#now().getTime() + input.expiresInSeconds * 1000,
+      ),
+      requiredHeaders: Object.freeze({
+        [checksumHeader]: input.checksumSha256,
+      }),
     };
   }
 
@@ -167,7 +187,9 @@ export class S3MultipartStorage implements MultipartObjectStorage {
           checksumSha256: sha256Base64(part.ChecksumSHA256),
         });
       }
-      partNumberMarker = response.IsTruncated ? response.NextPartNumberMarker : undefined;
+      partNumberMarker = response.IsTruncated
+        ? response.NextPartNumberMarker
+        : undefined;
       if (response.IsTruncated && !partNumberMarker) {
         throw new StorageContractError(
           "INVALID_S3_RESPONSE",
@@ -176,7 +198,9 @@ export class S3MultipartStorage implements MultipartObjectStorage {
       }
     } while (partNumberMarker);
 
-    return Object.freeze(parts.sort((left, right) => left.partNumber - right.partNumber));
+    return Object.freeze(
+      parts.sort((left, right) => left.partNumber - right.partNumber),
+    );
   }
 
   async completeSourceMultipartUpload(
@@ -198,7 +222,10 @@ export class S3MultipartStorage implements MultipartObjectStorage {
       }),
     );
     if (!response.ETag) {
-      throw new StorageContractError("INVALID_S3_RESPONSE", "S3 completion returned no ETag");
+      throw new StorageContractError(
+        "INVALID_S3_RESPONSE",
+        "S3 completion returned no ETag",
+      );
     }
     return {
       objectKey: input.objectKey,
@@ -209,20 +236,50 @@ export class S3MultipartStorage implements MultipartObjectStorage {
 
   async abortMultipartUpload(input: MultipartUploadReference): Promise<void> {
     assertManagedMediaObjectKey(input.objectKey);
-    await this.#client.send(
-      new AbortMultipartUploadCommand({
-        Bucket: this.#bucketName,
-        Key: input.objectKey,
-        UploadId: input.uploadId,
-      }),
-    );
+    try {
+      await this.#client.send(
+        new AbortMultipartUploadCommand({
+          Bucket: this.#bucketName,
+          Key: input.objectKey,
+          UploadId: input.uploadId,
+        }),
+      );
+    } catch (error) {
+      const candidate = error as {
+        name?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
+      };
+      if (
+        candidate.name !== "NoSuchUpload" &&
+        candidate.$metadata?.httpStatusCode !== 404
+      ) {
+        throw error;
+      }
+    }
   }
 
-  async headSourceObject(objectKey: StoredSourceObject["objectKey"]): Promise<StoredSourceObject> {
+  async findSourceObject(
+    objectKey: StoredSourceObject["objectKey"],
+  ): Promise<StoredSourceObject | undefined> {
     assertManagedMediaObjectKey(objectKey);
-    const response = await this.#client.send(
-      new HeadObjectCommand({ Bucket: this.#bucketName, Key: objectKey }),
-    );
+    let response;
+    try {
+      response = await this.#client.send(
+        new HeadObjectCommand({ Bucket: this.#bucketName, Key: objectKey }),
+      );
+    } catch (error) {
+      const candidate = error as {
+        name?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
+      };
+      if (
+        candidate.name === "NotFound" ||
+        candidate.$metadata?.httpStatusCode === 404
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
     if (
       response.ContentLength === undefined ||
       !response.ContentType ||
@@ -243,6 +300,38 @@ export class S3MultipartStorage implements MultipartObjectStorage {
       encryption: "aws:kms",
       kmsKeyId: response.SSEKMSKeyId,
       ...(response.VersionId ? { versionId: response.VersionId } : {}),
+    };
+  }
+
+  async headSourceObject(
+    objectKey: StoredSourceObject["objectKey"],
+  ): Promise<StoredSourceObject> {
+    const object = await this.findSourceObject(objectKey);
+    if (!object) {
+      throw new StorageContractError(
+        "INVALID_S3_RESPONSE",
+        "Stored source object does not exist",
+      );
+    }
+    return object;
+  }
+
+  async presignPlayback(input: {
+    readonly objectKey: StoredSourceObject["objectKey"];
+    readonly expiresInSeconds: number;
+  }) {
+    assertManagedMediaObjectKey(input.objectKey);
+    assertPlaybackExpirySeconds(input.expiresInSeconds);
+    const url = await getSignedUrl(
+      this.#client,
+      new GetObjectCommand({ Bucket: this.#bucketName, Key: input.objectKey }),
+      { expiresIn: input.expiresInSeconds },
+    );
+    return {
+      url,
+      expiresAt: new Date(
+        this.#now().getTime() + input.expiresInSeconds * 1000,
+      ),
     };
   }
 }

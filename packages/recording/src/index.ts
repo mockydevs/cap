@@ -1,6 +1,15 @@
-export type CaptureState = "idle" | "requesting" | "recording" | "stopping" | "ready" | "error";
+export type CaptureState =
+  | "idle"
+  | "requesting"
+  | "recording"
+  | "stopping"
+  | "uploading"
+  | "ready"
+  | "error";
 
-export function selectRecorderMimeType(supported: (mimeType: string) => boolean): string | undefined {
+export function selectRecorderMimeType(
+  supported: (mimeType: string) => boolean,
+): string | undefined {
   const candidates = [
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",

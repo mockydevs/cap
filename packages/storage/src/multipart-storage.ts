@@ -11,11 +11,20 @@ import type {
 import type { MediaObjectKey } from "./media-object-key";
 
 declare const multipartUploadIdBrand: unique symbol;
-export type MultipartUploadId = string & { readonly [multipartUploadIdBrand]: true };
+export type MultipartUploadId = string & {
+  readonly [multipartUploadIdBrand]: true;
+};
 
 export function multipartUploadId(value: string): MultipartUploadId {
-  if (value.length < 1 || value.length > 1024 || /[\u0000-\u001f\u007f]/.test(value)) {
-    throw new StorageContractError("INVALID_UPLOAD_ID", "Invalid multipart upload identifier");
+  if (
+    value.length < 1 ||
+    value.length > 1024 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new StorageContractError(
+      "INVALID_UPLOAD_ID",
+      "Invalid multipart upload identifier",
+    );
   }
   return value as MultipartUploadId;
 }
@@ -100,12 +109,38 @@ export interface MultipartObjectStorage {
     input: CreateSourceMultipartUpload,
   ): Promise<CreatedSourceMultipartUpload>;
   presignUploadPart(input: PresignUploadPart): Promise<PresignedUploadPart>;
-  listUploadedParts(input: MultipartUploadReference): Promise<readonly CompletedUploadPart[]>;
+  listUploadedParts(
+    input: MultipartUploadReference,
+  ): Promise<readonly CompletedUploadPart[]>;
   completeSourceMultipartUpload(
     input: CompleteSourceMultipartUpload,
   ): Promise<CompletedSourceMultipartUpload>;
   abortMultipartUpload(input: MultipartUploadReference): Promise<void>;
+  findSourceObject(
+    objectKey: MediaObjectKey,
+  ): Promise<StoredSourceObject | undefined>;
   headSourceObject(objectKey: MediaObjectKey): Promise<StoredSourceObject>;
+}
+
+export interface PresignedPlayback {
+  readonly url: string;
+  readonly expiresAt: Date;
+}
+
+export interface PlaybackObjectStorage {
+  presignPlayback(input: {
+    readonly objectKey: MediaObjectKey;
+    readonly expiresInSeconds: number;
+  }): Promise<PresignedPlayback>;
+}
+
+export function assertPlaybackExpirySeconds(value: number): void {
+  if (!Number.isInteger(value) || value < 30 || value > 900) {
+    throw new StorageContractError(
+      "INVALID_EXPIRY",
+      "Playback presigned URLs must expire in 30-900 seconds",
+    );
+  }
 }
 
 export function assertPresignExpirySeconds(value: number): void {

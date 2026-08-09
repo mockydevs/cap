@@ -33,7 +33,10 @@ export class UploadContractError extends Error {
   }
 }
 
-function parseIdentifier<Name extends string>(value: string, name: Name): Identifier<Name> {
+function parseIdentifier<Name extends string>(
+  value: string,
+  name: Name,
+): Identifier<Name> {
   if (!identifierPattern.test(value)) {
     throw new UploadContractError(
       "INVALID_IDENTIFIER",
@@ -56,10 +59,7 @@ export function uploadSessionId(value: string): UploadSessionId {
 }
 
 export type SourceMediaType =
-  | "video/webm"
-  | "video/mp4"
-  | "video/quicktime"
-  | "video/x-matroska";
+  "video/webm" | "video/mp4" | "video/quicktime" | "video/x-matroska";
 
 const sourceMediaTypes = new Set<SourceMediaType>([
   "video/webm",
@@ -71,7 +71,10 @@ const sourceMediaTypes = new Set<SourceMediaType>([
 export function sourceMediaType(value: string): SourceMediaType {
   const normalized = value.split(";", 1)[0]?.trim().toLowerCase();
   if (!normalized || !sourceMediaTypes.has(normalized as SourceMediaType)) {
-    throw new UploadContractError("INVALID_MEDIA_TYPE", "Unsupported source media type");
+    throw new UploadContractError(
+      "INVALID_MEDIA_TYPE",
+      "Unsupported source media type",
+    );
   }
   return normalized as SourceMediaType;
 }
@@ -89,7 +92,10 @@ export interface UploadPolicy {
 
 function assertSafePositiveInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new UploadContractError("INVALID_UPLOAD_PLAN", `${label} must be a positive safe integer`);
+    throw new UploadContractError(
+      "INVALID_UPLOAD_PLAN",
+      `${label} must be a positive safe integer`,
+    );
   }
 }
 
@@ -111,7 +117,10 @@ export function createUploadPlan(policy: UploadPolicy): UploadPlan {
     );
   }
   if (policy.maxUploadBytes > S3_MAX_OBJECT_BYTES) {
-    throw new UploadContractError("INVALID_UPLOAD_PLAN", "maxUploadBytes exceeds the S3 object limit");
+    throw new UploadContractError(
+      "INVALID_UPLOAD_PLAN",
+      "maxUploadBytes exceeds the S3 object limit",
+    );
   }
 
   const maxPartCount = Math.ceil(policy.maxUploadBytes / policy.partSizeBytes);
@@ -144,8 +153,16 @@ export function sha256Base64(value: string): Sha256Base64 {
 export type S3EntityTag = string & { readonly __s3EntityTag: true };
 
 export function s3EntityTag(value: string): S3EntityTag {
-  if (value.length < 3 || value.length > 130 || /[\r\n]/.test(value) || !/^"[^"]+"$/.test(value)) {
-    throw new UploadContractError("INVALID_ETAG", "ETag must be a quoted, bounded opaque value");
+  if (
+    value.length < 3 ||
+    value.length > 130 ||
+    /[\r\n]/.test(value) ||
+    !/^"[^"]+"$/.test(value)
+  ) {
+    throw new UploadContractError(
+      "INVALID_ETAG",
+      "ETag must be a quoted, bounded opaque value",
+    );
   }
   return value as S3EntityTag;
 }
@@ -171,15 +188,27 @@ export function validateUploadPartIntent(
     intent.partNumber < 1 ||
     intent.partNumber > plan.maxPartCount
   ) {
-    throw new UploadContractError("INVALID_PART", "partNumber is outside the upload plan");
+    throw new UploadContractError(
+      "INVALID_PART",
+      "partNumber is outside the upload plan",
+    );
   }
-  if (!Number.isSafeInteger(intent.contentLength) || intent.contentLength <= 0) {
-    throw new UploadContractError("INVALID_PART", "contentLength must be a positive safe integer");
+  if (
+    !Number.isSafeInteger(intent.contentLength) ||
+    intent.contentLength <= 0
+  ) {
+    throw new UploadContractError(
+      "INVALID_PART",
+      "contentLength must be a positive safe integer",
+    );
   }
 
   if (intent.isFinalPart) {
     if (intent.contentLength > plan.partSizeBytes) {
-      throw new UploadContractError("INVALID_PART", "The final part exceeds the planned part size");
+      throw new UploadContractError(
+        "INVALID_PART",
+        "The final part exceeds the planned part size",
+      );
     }
   } else if (intent.contentLength !== plan.partSizeBytes) {
     throw new UploadContractError(
@@ -188,9 +217,13 @@ export function validateUploadPartIntent(
     );
   }
 
-  const totalBytesIfFinal = (intent.partNumber - 1) * plan.partSizeBytes + intent.contentLength;
+  const totalBytesIfFinal =
+    (intent.partNumber - 1) * plan.partSizeBytes + intent.contentLength;
   if (totalBytesIfFinal > plan.maxUploadBytes) {
-    throw new UploadContractError("INVALID_PART", "The part would exceed the upload quota");
+    throw new UploadContractError(
+      "INVALID_PART",
+      "The part would exceed the upload quota",
+    );
   }
 
   sha256Base64(intent.checksumSha256);
@@ -219,18 +252,27 @@ export function verifyCompletedUpload(
   parts: readonly CompletedUploadPart[],
 ): VerifiedCompletedUpload {
   if (parts.length === 0 || parts.length > plan.maxPartCount) {
-    throw new UploadContractError("INVALID_PART", "The upload has an invalid number of parts");
+    throw new UploadContractError(
+      "INVALID_PART",
+      "The upload has an invalid number of parts",
+    );
   }
 
   let totalBytes = 0;
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
     if (!part) {
-      throw new UploadContractError("INVALID_PART", "The upload contains a missing part");
+      throw new UploadContractError(
+        "INVALID_PART",
+        "The upload contains a missing part",
+      );
     }
     const expectedPartNumber = index + 1;
     if (part.partNumber !== expectedPartNumber) {
-      throw new UploadContractError("INVALID_PART", "Parts must be unique and contiguous from 1");
+      throw new UploadContractError(
+        "INVALID_PART",
+        "Parts must be unique and contiguous from 1",
+      );
     }
     const isFinalPart = index === parts.length - 1;
     validateUploadPartIntent(plan, {
@@ -244,21 +286,21 @@ export function verifyCompletedUpload(
   }
 
   if (totalBytes > plan.maxUploadBytes) {
-    throw new UploadContractError("INVALID_PART", "The completed upload exceeds its quota");
+    throw new UploadContractError(
+      "INVALID_PART",
+      "The completed upload exceeds its quota",
+    );
   }
 
   return Object.freeze({ parts: Object.freeze([...parts]), totalBytes });
 }
 
 export type MultipartUploadStatus =
-  | "PENDING"
-  | "UPLOADING"
-  | "COMPLETING"
-  | "COMPLETED"
-  | "ABORTED"
-  | "EXPIRED";
+  "PENDING" | "UPLOADING" | "COMPLETING" | "COMPLETED" | "ABORTED" | "EXPIRED";
 
-const allowedTransitions: Readonly<Record<MultipartUploadStatus, readonly MultipartUploadStatus[]>> = {
+const allowedTransitions: Readonly<
+  Record<MultipartUploadStatus, readonly MultipartUploadStatus[]>
+> = {
   PENDING: ["UPLOADING", "ABORTED", "EXPIRED"],
   UPLOADING: ["COMPLETING", "ABORTED", "EXPIRED"],
   COMPLETING: ["UPLOADING", "COMPLETED", "ABORTED"],
@@ -272,7 +314,10 @@ export function assertMultipartUploadTransition(
   to: MultipartUploadStatus,
 ): void {
   if (!allowedTransitions[from].includes(to)) {
-    throw new UploadContractError("INVALID_TRANSITION", `Cannot transition upload from ${from} to ${to}`);
+    throw new UploadContractError(
+      "INVALID_TRANSITION",
+      `Cannot transition upload from ${from} to ${to}`,
+    );
   }
 }
 
