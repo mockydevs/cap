@@ -14,8 +14,10 @@ import { Pool } from "pg";
 import {
   createMediaProcessingQueue,
   createRedisConnection,
+  createTranscriptionQueue,
   MEDIA_PROCESSING_QUEUE,
   mediaProcessingJobSchema,
+  transcriptionJobOptions,
   type MediaProcessingJob,
 } from "@cap/queue";
 import { createPlaybackAssets, inspectMedia } from "./ffmpeg";
@@ -73,7 +75,14 @@ async function processMedia(
   );
   if (existing.rowCount !== 1)
     throw new Error("Recording not found for processing job");
-  if (existing.rows[0]?.status === "READY") return;
+  if (existing.rows[0]?.status === "READY") {
+    await transcriptionQueue.add(
+      "transcribe",
+      data,
+      transcriptionJobOptions(data.recordingId, data.processingVersion),
+    );
+    return;
+  }
   const attempt = await pool.query<{ id: string }>(
     "INSERT INTO recording_processing_attempts (recording_id, processing_version, worker_id, status, started_at) VALUES ($1, $2, $3, 'RUNNING', now()) ON CONFLICT (recording_id, processing_version) DO UPDATE SET worker_id = EXCLUDED.worker_id, status = 'RUNNING', started_at = now(), completed_at = NULL, failure_category = NULL, failure_detail = NULL RETURNING id",
     [
@@ -163,6 +172,11 @@ async function processMedia(
         [data.recordingId],
       );
       await pool.query("COMMIT");
+      await transcriptionQueue.add(
+        "transcribe",
+        data,
+        transcriptionJobOptions(data.recordingId, data.processingVersion),
+      );
     } catch (error) {
       await pool.query("ROLLBACK");
       throw error;
@@ -191,6 +205,7 @@ async function processMedia(
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const connection = createRedisConnection(required("REDIS_URL"));
 const queue = createMediaProcessingQueue(connection);
+const transcriptionQueue = createTranscriptionQueue(connection);
 const worker = new Worker<MediaProcessingJob>(
   MEDIA_PROCESSING_QUEUE,
   (job) => processMedia(job, pool),
@@ -235,6 +250,7 @@ async function shutdown(): Promise<void> {
   );
   await worker.close();
   await queue.close();
+  await transcriptionQueue.close();
   await connection.quit();
   await pool.end();
 }

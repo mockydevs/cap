@@ -31,10 +31,10 @@ services:
       REDIS_URL: redis://redis:6379
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:?AWS_S3_BUCKET_NAME is required}
-      AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+      AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
       MEDIA_WORKER_CONCURRENCY: ${MEDIA_WORKER_CONCURRENCY:-1}
       MEDIA_WORKER_HEALTH_PORT: 8081
     depends_on:
@@ -42,6 +42,26 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+  transcription-worker:
+    build:
+      context: .
+      dockerfile: apps/transcription-worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://cap:cap@postgres:5432/cap
+      REDIS_URL: redis://redis:6379
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:?AWS_S3_BUCKET_NAME is required}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-openai-compatible}
+      TRANSCRIPTION_BASE_URL: ${TRANSCRIPTION_BASE_URL:-https://api.openai.com/v1}
+      TRANSCRIPTION_API_KEY: ${TRANSCRIPTION_API_KEY:?TRANSCRIPTION_API_KEY is required}
+      TRANSCRIPTION_MODEL: ${TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
+      TRANSCRIPTION_CONSENT_BASIS: ${TRANSCRIPTION_CONSENT_BASIS:?TRANSCRIPTION_CONSENT_BASIS is required}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 volumes:
   postgres-data:
   redis-data:

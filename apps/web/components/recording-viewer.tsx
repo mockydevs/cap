@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ShareControls } from "./share-controls";
 import { CommentThread } from "./comment-thread";
+import { TranscriptPanel } from "./transcript-panel";
 
 type Recording = {
   id: string;
@@ -17,11 +18,18 @@ type Playback = {
   url: string;
   expiresAt: string;
 };
-export function RecordingViewer({ recordingId }: { recordingId: string }) {
+export function RecordingViewer({
+  recordingId,
+  initialTimestampMs,
+}: {
+  recordingId: string;
+  initialTimestampMs?: number;
+}) {
   const [recording, setRecording] = useState<Recording>();
   const [playback, setPlayback] = useState<Playback>();
   const [error, setError] = useState<string>();
   const [timestampMs, setTimestampMs] = useState(0);
+  const playerRef = useRef<HTMLVideoElement>(null);
   const load = useCallback(async () => {
     const response = await fetch(`/api/recordings/${recordingId}`, {
       cache: "no-store",
@@ -63,6 +71,11 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
     const timer = window.setInterval(() => void load(), 4_000);
     return () => window.clearInterval(timer);
   }, [recording, load]);
+  useEffect(() => {
+    if (!playback || !playerRef.current || initialTimestampMs === undefined)
+      return;
+    playerRef.current.currentTime = initialTimestampMs / 1_000;
+  }, [playback, initialTimestampMs]);
   if (error)
     return (
       <section className="viewer-shell">
@@ -92,6 +105,7 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
       </div>
       {playback ? (
         <video
+          ref={playerRef}
           className="playback-player"
           controls
           preload="metadata"
@@ -100,7 +114,15 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
             setTimestampMs(event.currentTarget.currentTime * 1000)
           }
           onError={() => void load()}
-        />
+        >
+          <track
+            default
+            kind="subtitles"
+            label="Transcript"
+            src={`/api/recordings/${recordingId}/captions?format=vtt`}
+            srcLang="en"
+          />
+        </video>
       ) : (
         <div className="processing-state">
           <span className="processing-pulse" />
@@ -116,6 +138,14 @@ export function RecordingViewer({ recordingId }: { recordingId: string }) {
           </p>
         </div>
       )}
+      <TranscriptPanel
+        recordingId={recording.id}
+        onSeek={(positionMs) => {
+          if (!playerRef.current) return;
+          playerRef.current.currentTime = positionMs / 1_000;
+          void playerRef.current.play().catch(() => undefined);
+        }}
+      />
       <CommentThread recordingId={recording.id} timestampMs={timestampMs} />
       {recording.canManageSharing && (
         <ShareControls recordingId={recording.id} />

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { TranscriptSearch } from "./transcript-search";
 
 type RecordingSummary = {
   id: string;
@@ -63,6 +64,7 @@ export function RecordingLibrary() {
           New recording
         </Link>
       </div>
+      <TranscriptSearch />
       {error && (
         <p className="form-error" role="alert">
           {error}

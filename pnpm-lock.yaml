@@ -52,6 +52,40 @@ importers:
         specifier: ^3.1.4
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
 
+  apps/transcription-worker:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.758.0
+        version: 3.1106.0
+      '@cap/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      '@cap/transcription':
+        specifier: workspace:*
+        version: link:../../packages/transcription
+      bullmq:
+        specifier: ^5.58.5
+        version: 5.81.3
+      pg:
+        specifier: ^8.15.6
+        version: 8.23.0
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.11
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.20.1
+      '@types/pg':
+        specifier: ^8.11.13
+        version: 8.21.0
+      vitest:
+        specifier: ^3.1.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
+
   apps/web:
     dependencies:
       '@aws-sdk/client-s3':
@@ -165,6 +199,12 @@ importers:
       '@cap/domain':
         specifier: workspace:*
         version: link:../domain
+    devDependencies:
+      vitest:
+        specifier: ^3.1.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
+
+  packages/transcription:
     devDependencies:
       vitest:
         specifier: ^3.1.4

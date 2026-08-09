@@ -5,6 +5,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -66,6 +67,27 @@ export const viewSessionKind = pgEnum("view_session_kind", [
   "EMBED",
 ]);
 export const viewEventKind = pgEnum("view_event_kind", ["HEARTBEAT", "ENDED"]);
+export const transcriptStatus = pgEnum("transcript_status", [
+  "REQUESTED",
+  "PROCESSING",
+  "READY",
+  "FAILED",
+  "DISABLED",
+]);
+export const transcriptionRunStatus = pgEnum("transcription_run_status", [
+  "PROCESSING",
+  "SUCCEEDED",
+  "FAILED",
+]);
+export const transcriptionConsentBasis = pgEnum("transcription_consent_basis", [
+  "EXPLICIT",
+  "WORKSPACE_POLICY",
+  "NOT_REQUIRED",
+]);
+export const captionTrackFormat = pgEnum("caption_track_format", [
+  "WEBVTT",
+  "SRT",
+]);
 
 export const users = pgTable(
   "users",
@@ -527,5 +549,292 @@ export const commentReactions = pgTable(
   (table) => [
     primaryKey({ columns: [table.commentId, table.actorKeyHash, table.emoji] }),
     index("comment_reactions_comment_idx").on(table.commentId),
+  ],
+);
+
+export const transcripts = pgTable(
+  "transcripts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    sourceAssetId: uuid("source_asset_id")
+      .notNull()
+      .references(() => recordingAssets.id),
+    status: transcriptStatus("status").notNull().default("REQUESTED"),
+    requestedLanguage: text("requested_language"),
+    approvedLanguage: text("approved_language"),
+    correctionRevision: integer("correction_revision").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("transcripts_recording_unique_idx").on(table.recordingId),
+    index("transcripts_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    check(
+      "transcripts_correction_revision_check",
+      sql`${table.correctionRevision} >= 0`,
+    ),
+  ],
+);
+
+export const transcriptionRuns = pgTable(
+  "transcription_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transcriptId: uuid("transcript_id")
+      .notNull()
+      .references(() => transcripts.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    status: transcriptionRunStatus("status").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    providerRequestIdHash: text("provider_request_id_hash"),
+    requestedLanguage: text("requested_language"),
+    detectedLanguage: text("detected_language"),
+    identifySpeakers: boolean("identify_speakers").notNull().default(false),
+    consentBasis: transcriptionConsentBasis("consent_basis").notNull(),
+    consentCapturedAt: timestamp("consent_captured_at", {
+      withTimezone: true,
+    }).notNull(),
+    consentActorUserId: uuid("consent_actor_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    billedDurationMs: bigint("billed_duration_ms", { mode: "number" }),
+    costMicrounits: bigint("cost_microunits", { mode: "number" }),
+    currency: text("currency"),
+    dataRegion: text("data_region"),
+    errorCategory: text("error_category"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("transcription_runs_attempt_unique_idx").on(
+      table.transcriptId,
+      table.attempt,
+    ),
+    index("transcription_runs_transcript_status_idx").on(
+      table.transcriptId,
+      table.status,
+    ),
+    check("transcription_runs_attempt_check", sql`${table.attempt} > 0`),
+    check(
+      "transcription_runs_cost_pair_check",
+      sql`(${table.costMicrounits} IS NULL AND ${table.currency} IS NULL) OR (${table.costMicrounits} >= 0 AND ${table.currency} ~ '^[A-Z]{3}$')`,
+    ),
+    check(
+      "transcription_runs_request_hash_check",
+      sql`${table.providerRequestIdHash} IS NULL OR length(${table.providerRequestIdHash}) = 64`,
+    ),
+    check(
+      "transcription_runs_explicit_consent_check",
+      sql`${table.consentBasis} <> 'EXPLICIT' OR ${table.consentActorUserId} IS NOT NULL`,
+    ),
+  ],
+);
+
+export const transcriptRunSegments = pgTable(
+  "transcript_run_segments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => transcriptionRuns.id, { onDelete: "cascade" }),
+    providerKey: text("provider_key").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    startMs: bigint("start_ms", { mode: "number" }).notNull(),
+    endMs: bigint("end_ms", { mode: "number" }).notNull(),
+    text: text("text").notNull(),
+    speakerLabel: text("speaker_label"),
+    confidence: numeric("confidence", {
+      precision: 6,
+      scale: 5,
+      mode: "number",
+    }),
+  },
+  (table) => [
+    uniqueIndex("transcript_run_segments_key_unique_idx").on(
+      table.runId,
+      table.providerKey,
+    ),
+    uniqueIndex("transcript_run_segments_ordinal_unique_idx").on(
+      table.runId,
+      table.ordinal,
+    ),
+    check(
+      "transcript_run_segments_timing_check",
+      sql`${table.startMs} >= 0 AND ${table.endMs} > ${table.startMs}`,
+    ),
+  ],
+);
+
+export const transcriptRunWords = pgTable(
+  "transcript_run_words",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runSegmentId: uuid("run_segment_id")
+      .notNull()
+      .references(() => transcriptRunSegments.id, { onDelete: "cascade" }),
+    providerKey: text("provider_key").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    startMs: bigint("start_ms", { mode: "number" }).notNull(),
+    endMs: bigint("end_ms", { mode: "number" }).notNull(),
+    text: text("text").notNull(),
+    confidence: numeric("confidence", {
+      precision: 6,
+      scale: 5,
+      mode: "number",
+    }),
+  },
+  (table) => [
+    uniqueIndex("transcript_run_words_key_unique_idx").on(
+      table.runSegmentId,
+      table.providerKey,
+    ),
+    uniqueIndex("transcript_run_words_ordinal_unique_idx").on(
+      table.runSegmentId,
+      table.ordinal,
+    ),
+    check(
+      "transcript_run_words_timing_check",
+      sql`${table.startMs} >= 0 AND ${table.endMs} > ${table.startMs}`,
+    ),
+  ],
+);
+
+export const transcriptSegments = pgTable(
+  "transcript_segments",
+  {
+    id: uuid("id").primaryKey(),
+    transcriptId: uuid("transcript_id")
+      .notNull()
+      .references(() => transcripts.id, { onDelete: "cascade" }),
+    sourceRunSegmentId: uuid("source_run_segment_id").references(
+      () => transcriptRunSegments.id,
+      { onDelete: "set null" },
+    ),
+    ordinal: integer("ordinal").notNull(),
+    startMs: bigint("start_ms", { mode: "number" }).notNull(),
+    endMs: bigint("end_ms", { mode: "number" }).notNull(),
+    providerText: text("provider_text").notNull(),
+    correctedText: text("corrected_text"),
+    providerSpeakerLabel: text("provider_speaker_label"),
+    correctedSpeakerLabel: text("corrected_speaker_label"),
+    confidence: numeric("confidence", {
+      precision: 6,
+      scale: 5,
+      mode: "number",
+    }),
+    isOrphaned: boolean("is_orphaned").notNull().default(false),
+    correctionVersion: integer("correction_version").notNull().default(0),
+    correctedBy: uuid("corrected_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    correctedAt: timestamp("corrected_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("transcript_segments_transcript_ordinal_idx").on(
+      table.transcriptId,
+      table.ordinal,
+    ),
+    check(
+      "transcript_segments_timing_check",
+      sql`${table.startMs} >= 0 AND ${table.endMs} > ${table.startMs}`,
+    ),
+    check(
+      "transcript_segments_correction_version_check",
+      sql`${table.correctionVersion} >= 0`,
+    ),
+    check(
+      "transcript_segments_correction_audit_check",
+      sql`(${table.correctedText} IS NULL AND ${table.correctedSpeakerLabel} IS NULL) OR ${table.correctedAt} IS NOT NULL`,
+    ),
+  ],
+);
+
+export const transcriptWords = pgTable(
+  "transcript_words",
+  {
+    id: uuid("id").primaryKey(),
+    segmentId: uuid("segment_id")
+      .notNull()
+      .references(() => transcriptSegments.id, { onDelete: "cascade" }),
+    sourceRunWordId: uuid("source_run_word_id").references(
+      () => transcriptRunWords.id,
+      { onDelete: "set null" },
+    ),
+    ordinal: integer("ordinal").notNull(),
+    startMs: bigint("start_ms", { mode: "number" }).notNull(),
+    endMs: bigint("end_ms", { mode: "number" }).notNull(),
+    providerText: text("provider_text").notNull(),
+    correctedText: text("corrected_text"),
+    confidence: numeric("confidence", {
+      precision: 6,
+      scale: 5,
+      mode: "number",
+    }),
+    isOrphaned: boolean("is_orphaned").notNull().default(false),
+    correctionVersion: integer("correction_version").notNull().default(0),
+    correctedBy: uuid("corrected_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    correctedAt: timestamp("corrected_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("transcript_words_segment_ordinal_idx").on(
+      table.segmentId,
+      table.ordinal,
+    ),
+    check(
+      "transcript_words_timing_check",
+      sql`${table.startMs} >= 0 AND ${table.endMs} > ${table.startMs}`,
+    ),
+    check(
+      "transcript_words_correction_audit_check",
+      sql`${table.correctedText} IS NULL OR ${table.correctedAt} IS NOT NULL`,
+    ),
+  ],
+);
+
+export const captionTracks = pgTable(
+  "caption_tracks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transcriptId: uuid("transcript_id")
+      .notNull()
+      .references(() => transcripts.id, { onDelete: "cascade" }),
+    format: captionTrackFormat("format").notNull(),
+    language: text("language").notNull(),
+    objectKey: text("object_key").notNull(),
+    contentHash: text("content_hash").notNull(),
+    sourceCorrectionRevision: integer("source_correction_revision").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("caption_tracks_revision_unique_idx").on(
+      table.transcriptId,
+      table.format,
+      table.language,
+      table.sourceCorrectionRevision,
+    ),
+    uniqueIndex("caption_tracks_object_key_unique_idx").on(table.objectKey),
+    check(
+      "caption_tracks_content_hash_check",
+      sql`length(${table.contentHash}) = 64`,
+    ),
   ],
 );

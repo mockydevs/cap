@@ -3,6 +3,7 @@ import IORedis from "ioredis";
 import { z } from "zod";
 
 export const MEDIA_PROCESSING_QUEUE = "media-processing";
+export const TRANSCRIPTION_QUEUE = "transcription";
 
 export const mediaProcessingJobSchema = z.object({
   recordingId: z.string().uuid(),
@@ -12,12 +13,33 @@ export const mediaProcessingJobSchema = z.object({
 });
 
 export type MediaProcessingJob = z.infer<typeof mediaProcessingJobSchema>;
+export const transcriptionJobSchema = mediaProcessingJobSchema
+  .pick({ recordingId: true, workspaceId: true, processingVersion: true })
+  .extend({ sourceObjectKey: z.string().min(1).max(1024) });
+export type TranscriptionJob = z.infer<typeof transcriptionJobSchema>;
 
 export function mediaProcessingJobId(
   recordingId: string,
   processingVersion: number,
 ): string {
   return `recording:${recordingId}:v${processingVersion}`;
+}
+export function createTranscriptionQueue(
+  connection: IORedis,
+): Queue<TranscriptionJob> {
+  return new Queue<TranscriptionJob>(TRANSCRIPTION_QUEUE, { connection });
+}
+export function transcriptionJobOptions(
+  recordingId: string,
+  processingVersion: number,
+): JobsOptions {
+  return {
+    jobId: `transcription:${recordingId}:v${processingVersion}`,
+    attempts: 5,
+    backoff: { type: "exponential", delay: 10_000 },
+    removeOnComplete: { age: 604_800 },
+    removeOnFail: { age: 2_592_000 },
+  };
 }
 
 export function createRedisConnection(redisUrl: string): IORedis {
