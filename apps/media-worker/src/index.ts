@@ -168,8 +168,13 @@ async function processMedia(
         ],
       );
       await pool.query(
-        "UPDATE recordings SET status = 'READY', updated_at = now() WHERE id = $1",
-        [data.recordingId],
+        "UPDATE recordings SET status = 'READY', duration_ms=$2, width=$3, height=$4, updated_at = now() WHERE id = $1",
+        [
+          data.recordingId,
+          Math.round(metadata.durationSeconds * 1000),
+          metadata.width,
+          metadata.height,
+        ],
       );
       await pool.query("COMMIT");
       await transcriptionQueue.add(

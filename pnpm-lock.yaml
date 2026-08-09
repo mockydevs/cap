@@ -52,6 +52,37 @@ importers:
         specifier: ^3.1.4
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
 
+  apps/render-worker:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.758.0
+        version: 3.1106.0
+      '@cap/editor-domain':
+        specifier: workspace:*
+        version: link:../../packages/editor-domain
+      '@cap/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      bullmq:
+        specifier: ^5.58.5
+        version: 5.81.3
+      pg:
+        specifier: ^8.15.6
+        version: 8.23.0
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.11
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.20.1
+      '@types/pg':
+        specifier: ^8.11.13
+        version: 8.21.0
+      vitest:
+        specifier: ^3.1.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
+
   apps/transcription-worker:
     dependencies:
       '@aws-sdk/client-s3':
@@ -94,6 +125,12 @@ importers:
       '@cap/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@cap/editor-domain':
+        specifier: workspace:*
+        version: link:../../packages/editor-domain
+      '@cap/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@cap/recording':
         specifier: workspace:*
         version: link:../../packages/recording
@@ -161,6 +198,16 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
 
   packages/domain:
+    devDependencies:
+      vitest:
+        specifier: ^3.1.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.11)
+
+  packages/editor-domain:
+    dependencies:
+      zod:
+        specifier: ^3.24.4
+        version: 3.25.76
     devDependencies:
       vitest:
         specifier: ^3.1.4

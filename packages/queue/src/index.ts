@@ -4,6 +4,14 @@ import { z } from "zod";
 
 export const MEDIA_PROCESSING_QUEUE = "media-processing";
 export const TRANSCRIPTION_QUEUE = "transcription";
+export const RENDER_QUEUE = "render";
+export const renderJobSchema = z.object({
+  renderJobId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  revision: z.number().int().nonnegative(),
+});
+export type RenderJob = z.infer<typeof renderJobSchema>;
 
 export const mediaProcessingJobSchema = z.object({
   recordingId: z.string().uuid(),
@@ -28,6 +36,18 @@ export function createTranscriptionQueue(
   connection: IORedis,
 ): Queue<TranscriptionJob> {
   return new Queue<TranscriptionJob>(TRANSCRIPTION_QUEUE, { connection });
+}
+export function createRenderQueue(connection: IORedis): Queue<RenderJob> {
+  return new Queue<RenderJob>(RENDER_QUEUE, { connection });
+}
+export function renderJobOptions(renderJobId: string): JobsOptions {
+  return {
+    jobId: `render:${renderJobId}`,
+    attempts: 3,
+    backoff: { type: "exponential", delay: 15_000 },
+    removeOnComplete: { age: 604_800 },
+    removeOnFail: { age: 2_592_000 },
+  };
 }
 export function transcriptionJobOptions(
   recordingId: string,

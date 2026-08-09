@@ -103,6 +103,11 @@ export function RecordingViewer({
           )}
         </span>
       </div>
+      {recording.status === "READY" && (
+        <Link className="editor-launch" href={`/library/${recording.id}/edit`}>
+          Edit recording
+        </Link>
+      )}
       {playback ? (
         <video
           ref={playerRef}

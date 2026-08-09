@@ -2,6 +2,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -49,6 +50,7 @@ export const recordingAssetKind = pgEnum("recording_asset_kind", [
   "HLS_MANIFEST",
   "HLS_SEGMENT",
   "POSTER",
+  "EXPORT",
 ]);
 export const processingOutboxTopic = pgEnum("processing_outbox_topic", [
   "MEDIA_PROCESSING",
@@ -87,6 +89,13 @@ export const transcriptionConsentBasis = pgEnum("transcription_consent_basis", [
 export const captionTrackFormat = pgEnum("caption_track_format", [
   "WEBVTT",
   "SRT",
+]);
+export const renderJobStatus = pgEnum("render_job_status", [
+  "QUEUED",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+  "CANCELED",
 ]);
 
 export const users = pgTable(
@@ -178,6 +187,9 @@ export const recordings = pgTable(
     sourceObjectKey: text("source_object_key").notNull().unique(),
     contentType: text("content_type").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }),
+    durationMs: bigint("duration_ms", { mode: "number" }),
+    width: integer("width"),
+    height: integer("height"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -189,6 +201,10 @@ export const recordings = pgTable(
     index("recordings_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt,
+    ),
+    check(
+      "recordings_media_metadata_check",
+      sql`(${table.durationMs} IS NULL AND ${table.width} IS NULL AND ${table.height} IS NULL) OR (${table.durationMs} > 0 AND ${table.width} > 0 AND ${table.height} > 0)`,
     ),
   ],
 );
@@ -835,6 +851,129 @@ export const captionTracks = pgTable(
     check(
       "caption_tracks_content_hash_check",
       sql`length(${table.contentHash}) = 64`,
+    ),
+  ],
+);
+
+export const editorProjects = pgTable(
+  "editor_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    currentRevision: integer("current_revision").notNull().default(0),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("editor_projects_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+    index("editor_projects_recording_idx").on(table.recordingId),
+    check("editor_projects_revision_check", sql`${table.currentRevision} >= 0`),
+    check(
+      "editor_projects_schema_version_check",
+      sql`${table.schemaVersion} > 0`,
+    ),
+  ],
+);
+
+export const editorRevisions = pgTable(
+  "editor_revisions",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => editorProjects.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    document: jsonb("document").$type<unknown>().notNull(),
+    documentHash: text("document_hash").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.revision] }),
+    index("editor_revisions_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    check("editor_revisions_revision_check", sql`${table.revision} >= 0`),
+    check(
+      "editor_revisions_document_hash_check",
+      sql`length(${table.documentHash}) = 64`,
+    ),
+  ],
+);
+
+export const renderJobs = pgTable(
+  "render_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => editorProjects.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    status: renderJobStatus("status").notNull().default("QUEUED"),
+    manifest: jsonb("manifest").$type<unknown>().notNull(),
+    manifestHash: text("manifest_hash").notNull(),
+    requestedBy: uuid("requested_by")
+      .notNull()
+      .references(() => users.id),
+    attempt: integer("attempt").notNull().default(0),
+    outputAssetId: uuid("output_asset_id").references(
+      () => recordingAssets.id,
+      { onDelete: "set null" },
+    ),
+    errorCategory: text("error_category"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.projectId, table.revision],
+      foreignColumns: [editorRevisions.projectId, editorRevisions.revision],
+      name: "render_jobs_project_revision_fk",
+    }),
+    uniqueIndex("render_jobs_project_revision_unique_idx").on(
+      table.projectId,
+      table.revision,
+    ),
+    index("render_jobs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.createdAt,
+    ),
+    check("render_jobs_attempt_check", sql`${table.attempt} >= 0`),
+    check(
+      "render_jobs_manifest_hash_check",
+      sql`length(${table.manifestHash}) = 64`,
     ),
   ],
 );
