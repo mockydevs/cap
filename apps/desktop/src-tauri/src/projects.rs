@@ -59,3 +59,120 @@ pub fn delete(directory: &Path) -> Result<(), String> {
         Err(error) => Err(error.to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("cap-projects-test-{nanos}"))
+    }
+
+    fn sample_project(status: ProjectStatus, media_path: PathBuf) -> Project {
+        let now = chrono::Utc::now();
+        Project {
+            id: "project-1".into(),
+            title: "Test recording".into(),
+            status,
+            media_path,
+            duration_ms: 0,
+            created_at: now,
+            updated_at: now,
+            upload_session_id: None,
+            recording_id: None,
+            completion_key: "key-1".into(),
+            uploaded_parts: Vec::new(),
+            failure: None,
+        }
+    }
+
+    #[test]
+    fn save_writes_atomically_leaving_no_temp_file() {
+        let root = unique_temp_dir();
+        let project_dir = root.join("project-1");
+        let media_path = project_dir.join("recording.mp4");
+        let project = sample_project(ProjectStatus::Ready, media_path);
+
+        save(&project_dir, &project).unwrap();
+
+        assert!(project_dir.join("project.json").exists());
+        assert!(!project_dir.join("project.json.tmp").exists());
+        let loaded: Project =
+            serde_json::from_slice(&fs::read(project_dir.join("project.json")).unwrap()).unwrap();
+        assert_eq!(loaded.id, project.id);
+        assert!(matches!(loaded.status, ProjectStatus::Ready));
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn load_all_recovers_an_interrupted_recording_with_media_on_disk() {
+        let root = unique_temp_dir();
+        let project_dir = root.join("project-1");
+        fs::create_dir_all(&project_dir).unwrap();
+        let media_path = project_dir.join("recording.mp4");
+        fs::write(&media_path, b"partial fragmented mp4 bytes").unwrap();
+        let project = sample_project(ProjectStatus::Recording, media_path);
+        save(&project_dir, &project).unwrap();
+
+        let recovered = load_all(&root).unwrap();
+
+        assert_eq!(recovered.len(), 1);
+        assert!(matches!(recovered[0].status, ProjectStatus::Recoverable));
+        assert!(recovered[0].failure.is_some());
+        // The recovery reclassification is itself persisted, not just returned.
+        let reread: Project =
+            serde_json::from_slice(&fs::read(project_dir.join("project.json")).unwrap()).unwrap();
+        assert!(matches!(reread.status, ProjectStatus::Recoverable));
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn load_all_marks_an_interrupted_recording_failed_when_media_is_missing() {
+        let root = unique_temp_dir();
+        let project_dir = root.join("project-1");
+        fs::create_dir_all(&project_dir).unwrap();
+        let media_path = project_dir.join("recording.mp4"); // never written
+        let project = sample_project(ProjectStatus::Recording, media_path);
+        save(&project_dir, &project).unwrap();
+
+        let recovered = load_all(&root).unwrap();
+
+        assert_eq!(recovered.len(), 1);
+        assert!(matches!(recovered[0].status, ProjectStatus::Failed));
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn load_all_leaves_non_recording_projects_untouched() {
+        let root = unique_temp_dir();
+        let project_dir = root.join("project-1");
+        fs::create_dir_all(&project_dir).unwrap();
+        let media_path = project_dir.join("recording.mp4");
+        fs::write(&media_path, b"done").unwrap();
+        let project = sample_project(ProjectStatus::Ready, media_path);
+        save(&project_dir, &project).unwrap();
+
+        let loaded = load_all(&root).unwrap();
+
+        assert_eq!(loaded.len(), 1);
+        assert!(matches!(loaded[0].status, ProjectStatus::Ready));
+        assert!(loaded[0].failure.is_none());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn delete_is_idempotent_when_the_directory_is_already_gone() {
+        let root = unique_temp_dir();
+        assert!(delete(&root).is_ok());
+        assert!(delete(&root).is_ok());
+    }
+}
