@@ -46,6 +46,18 @@ export function buildRecordingObjectPrefix(input: {
   return `workspaces/${input.workspaceId}/recordings/${input.recordingId}/`;
 }
 
+/** A generated (e.g. translated) caption file, cached alongside the recording's other assets. */
+export function buildTranscriptCaptionObjectKey(input: {
+  readonly workspaceId: WorkspaceId;
+  readonly recordingId: RecordingId;
+  readonly language: string;
+  readonly extension: "vtt" | "srt";
+}): MediaObjectKey {
+  return assertManagedMediaObjectKey(
+    `workspaces/${input.workspaceId}/recordings/${input.recordingId}/transcripts/${input.language}.${input.extension}`,
+  );
+}
+
 export function buildSourceMediaObjectKey(input: {
   readonly workspaceId: WorkspaceId;
   readonly recordingId: RecordingId;

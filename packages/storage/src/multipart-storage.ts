@@ -142,6 +142,20 @@ export interface PurgeableObjectStorage {
   }): Promise<void>;
 }
 
+/**
+ * Small, whole-object text reads/writes (generated captions, exports of a
+ * few KB) that don't need multipart upload machinery. Still SSE-KMS
+ * encrypted like every other object in the bucket.
+ */
+export interface SmallObjectStorage {
+  putTextObject(input: {
+    readonly objectKey: MediaObjectKey;
+    readonly content: string;
+    readonly contentType: string;
+  }): Promise<void>;
+  getTextObject(objectKey: MediaObjectKey): Promise<string | undefined>;
+}
+
 export function assertPlaybackExpirySeconds(value: number): void {
   if (!Number.isInteger(value) || value < 30 || value > 900) {
     throw new StorageContractError(

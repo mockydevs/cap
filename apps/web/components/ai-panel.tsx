@@ -27,6 +27,7 @@ export function AiPanel({
 }) {
   const [items, setItems] = useState<Item[]>([]),
     [question, setQuestion] = useState(""),
+    [targetLanguage, setTargetLanguage] = useState(""),
     [error, setError] = useState<string>(),
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
@@ -50,6 +51,7 @@ export function AiPanel({
       body: JSON.stringify({
         capability,
         ...(capability === "QUESTIONS_ANSWERS" ? { question } : {}),
+        ...(capability === "TRANSLATION" ? { targetLanguage } : {}),
       }),
     });
     setBusy(false);
@@ -106,6 +108,21 @@ export function AiPanel({
         />
         <button disabled={busy}>Ask</button>
       </form>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void request("TRANSLATION");
+        }}
+      >
+        <input
+          value={targetLanguage}
+          pattern="[a-z]{2,3}(-[A-Z]{2})?"
+          required
+          onChange={(event) => setTargetLanguage(event.target.value)}
+          placeholder="Target language (e.g. es, fr, pt-BR)"
+        />
+        <button disabled={busy}>Translate</button>
+      </form>
       {error && <p className="form-error">{error}</p>}
       <div className="ai-results">
         {items.map((item) => (
@@ -114,7 +131,11 @@ export function AiPanel({
               {item.capability.replaceAll("_", " ")} · {item.status}
             </strong>
             {item.content ? (
-              <Artifact value={item.content} onSeek={onSeek} />
+              <Artifact
+                value={item.content}
+                onSeek={onSeek}
+                recordingId={recordingId}
+              />
             ) : null}
             {item.errorCategory && (
               <p>Generation failed: {item.errorCategory}</p>
@@ -138,11 +159,35 @@ export function AiPanel({
 function Artifact({
   value,
   onSeek,
+  recordingId,
 }: {
   value: unknown;
   onSeek: (ms: number) => void;
+  recordingId: string;
 }) {
   const content = value as Record<string, unknown>;
+  if (typeof content.language === "string" && typeof content.text === "string")
+    return (
+      <>
+        <p>{content.text}</p>
+        {Array.isArray(content.segments) && content.segments.length > 0 && (
+          <p>
+            Captions:{" "}
+            <a
+              href={`/api/recordings/${recordingId}/captions?language=${content.language}&format=vtt`}
+            >
+              WebVTT
+            </a>{" "}
+            ·{" "}
+            <a
+              href={`/api/recordings/${recordingId}/captions?language=${content.language}&format=srt`}
+            >
+              SRT
+            </a>
+          </p>
+        )}
+      </>
+    );
   if (Array.isArray(content.chapters))
     return (
       <ul>

@@ -17,3 +17,7 @@ The settings screen supports workspace BYOK routing for transcript analysis, inc
 Transcription and embeddings retain their existing deployment-managed provider paths for now. Their contracts are separate because audio transcription, chat generation, and vector embeddings have different request formats, data residency, model capabilities, and cost semantics. Provider-connection capability fields and routing purposes are already modeled so those adapters can be added without exposing credentials or changing job provenance.
 
 `AI_ALLOW_DEPLOYMENT_CREDENTIAL=true` explicitly enables the legacy deployment-wide `AI_API_KEY` fallback. It defaults to false; production workspaces should configure an approved connection instead.
+
+## Translated captions
+
+A `TRANSLATION` job returns both a flowing translated summary and a per-segment breakdown aligned to the source transcript's timestamps. Once that job is accepted, `GET /api/recordings/:recordingId/captions?language=<code>&format=vtt|srt` serves a generated caption file in that language — generated once and cached in object storage (keyed by transcript revision, so a re-transcription invalidates it automatically) rather than re-translated on every request.

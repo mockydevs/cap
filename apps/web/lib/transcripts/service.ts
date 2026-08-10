@@ -3,6 +3,7 @@ import { db } from "../../db/client";
 import { recordings, transcriptSegments, transcripts } from "../../db/schema";
 import type { Actor } from "../auth/session";
 import { toSrt, toWebVtt } from "./format";
+import { translatedCaptions } from "./translations";
 
 export class TranscriptServiceError extends Error {
   constructor(
@@ -11,7 +12,8 @@ export class TranscriptServiceError extends Error {
       | "TRANSCRIPT_NOT_READY"
       | "SEGMENT_NOT_FOUND"
       | "TRANSCRIPT_EDIT_FORBIDDEN"
-      | "TRANSCRIPT_CONFLICT",
+      | "TRANSCRIPT_CONFLICT"
+      | "TRANSLATION_NOT_AVAILABLE",
     readonly status: number,
   ) {
     super(code);
@@ -220,6 +222,28 @@ export async function renderCaptions(
     )
     .orderBy(asc(transcriptSegments.ordinal));
   return format === "vtt" ? toWebVtt(segments) : toSrt(segments);
+}
+
+export async function renderTranslatedCaptions(
+  recordingId: string,
+  actor: TranscriptActor,
+  language: string,
+  format: "vtt" | "srt",
+) {
+  const transcript = await scopedTranscript(recordingId, actor);
+  if (transcript.status !== "READY")
+    throw new TranscriptServiceError("TRANSCRIPT_NOT_READY", 409);
+  const content = await translatedCaptions({
+    workspaceId: actor.workspaceId,
+    recordingId,
+    transcriptId: transcript.id,
+    correctionRevision: transcript.correctionRevision,
+    language,
+    format,
+  });
+  if (content === undefined)
+    throw new TranscriptServiceError("TRANSLATION_NOT_AVAILABLE", 404);
+  return content;
 }
 
 export async function searchWorkspaceTranscripts(

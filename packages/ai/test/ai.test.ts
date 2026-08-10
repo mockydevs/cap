@@ -36,4 +36,30 @@ describe("AI contracts", () => {
     expect(transcriptInputHash("hello", 1)).not.toBe(
       transcriptInputHash("hello", 2),
     ));
+  it("accepts a translation with per-segment captions and without them", () => {
+    expect(
+      aiArtifactContentSchema.parse({
+        kind: "TRANSLATION",
+        language: "es",
+        text: "hola mundo",
+      }),
+    ).toMatchObject({ language: "es" });
+    const withSegments = aiArtifactContentSchema.parse({
+      kind: "TRANSLATION",
+      language: "es",
+      text: "hola mundo",
+      segments: [{ startMs: 0, endMs: 1_000, text: "hola" }],
+    });
+    if (withSegments.kind !== "TRANSLATION") throw new Error("unreachable");
+    expect(withSegments.segments).toHaveLength(1);
+  });
+  it("rejects a translation segment with a non-increasing time range", () =>
+    expect(() =>
+      aiArtifactContentSchema.parse({
+        kind: "TRANSLATION",
+        language: "es",
+        text: "hola",
+        segments: [{ startMs: 1_000, endMs: 500, text: "hola" }],
+      }),
+    ).toThrow());
 });

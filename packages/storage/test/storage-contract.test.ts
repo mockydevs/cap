@@ -11,6 +11,7 @@ import {
   assertPresignExpirySeconds,
   buildRecordingObjectPrefix,
   buildSourceMediaObjectKey,
+  buildTranscriptCaptionObjectKey,
   multipartUploadId,
 } from "../src/index";
 
@@ -35,6 +36,17 @@ describe("storage security contract", () => {
         recordingId: recordingId("recording_1"),
       }),
     ).toBe("workspaces/workspace_1/recordings/recording_1/");
+  });
+
+  it("builds a translated caption object key", () => {
+    expect(
+      buildTranscriptCaptionObjectKey({
+        workspaceId: workspaceId("workspace_1"),
+        recordingId: recordingId("recording_1"),
+        language: "es",
+        extension: "vtt",
+      }),
+    ).toBe("workspaces/workspace_1/recordings/recording_1/transcripts/es.vtt");
   });
 
   it("rejects traversal and keys outside the managed namespace", () => {

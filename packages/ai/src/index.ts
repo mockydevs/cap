@@ -113,6 +113,19 @@ export const aiArtifactContentSchema = z.discriminatedUnion("kind", [
     kind: z.literal("TRANSLATION"),
     language: z.string(),
     text: z.string().min(1).max(50000),
+    /** Per-segment translation for caption tracks; startMs/endMs echo the source transcript's. */
+    segments: z
+      .array(
+        z
+          .object({
+            startMs: z.number().int().nonnegative(),
+            endMs: z.number().int().positive(),
+            text: z.string().min(1).max(2_000),
+          })
+          .refine((value) => value.endMs > value.startMs),
+      )
+      .max(50_000)
+      .optional(),
   }),
   z.object({
     kind: z.literal("FOLLOW_UP"),

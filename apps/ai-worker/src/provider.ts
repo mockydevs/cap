@@ -57,7 +57,8 @@ const instructions: Record<AiCapability, string> = {
   HIGHLIGHTS: "Return {kind:'HIGHLIGHTS',highlights:[{startMs,endMs,reason}]}.",
   QUESTIONS_ANSWERS:
     "Return {kind:'QUESTIONS_ANSWERS',question,answer,citations:[{startMs,endMs}],insufficientEvidence}. If evidence is absent say so.",
-  TRANSLATION: "Return {kind:'TRANSLATION',language,text}.",
+  TRANSLATION:
+    "Return {kind:'TRANSLATION',language,text,segments:[{startMs,endMs,text}]}. `text` is the full flowing translation. `segments` is a translation of every [start-end] tagged line in the transcript, one entry per line, each using that exact line's startMs/endMs, for caption generation — do not merge, split, or omit lines.",
   FOLLOW_UP: "Return {kind:'FOLLOW_UP',subject,body}.",
   SENSITIVE_DATA:
     "Return {kind:'SENSITIVE_DATA',findings:[{category,startMs,excerpt}]}. Do not reproduce more sensitive text than needed.",

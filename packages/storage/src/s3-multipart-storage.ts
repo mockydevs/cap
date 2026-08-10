@@ -7,6 +7,8 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   ListPartsCommand,
+  NoSuchKey,
+  PutObjectCommand,
   S3Client,
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
@@ -23,6 +25,7 @@ import {
 import {
   assertManagedMediaObjectKey,
   buildRecordingObjectPrefix,
+  type MediaObjectKey,
 } from "./media-object-key";
 import {
   assertPresignExpirySeconds,
@@ -39,6 +42,7 @@ import {
   type PresignedUploadPart,
   type PresignUploadPart,
   type PurgeableObjectStorage,
+  type SmallObjectStorage,
   type StoredSourceObject,
 } from "./multipart-storage";
 
@@ -66,7 +70,11 @@ function assertOptions(options: S3MultipartStorageOptions): void {
 
 /** AWS S3 production implementation. It deliberately has no endpoint/path-style options. */
 export class S3MultipartStorage
-  implements MultipartObjectStorage, PlaybackObjectStorage, PurgeableObjectStorage
+  implements
+    MultipartObjectStorage,
+    PlaybackObjectStorage,
+    PurgeableObjectStorage,
+    SmallObjectStorage
 {
   readonly #client: S3Client;
   readonly #bucketName: string;
@@ -372,5 +380,37 @@ export class S3MultipartStorage
         ? page.NextContinuationToken
         : undefined;
     } while (ContinuationToken);
+  }
+
+  async putTextObject(input: {
+    readonly objectKey: MediaObjectKey;
+    readonly content: string;
+    readonly contentType: string;
+  }): Promise<void> {
+    assertManagedMediaObjectKey(input.objectKey);
+    await this.#client.send(
+      new PutObjectCommand({
+        Bucket: this.#bucketName,
+        Key: input.objectKey,
+        Body: input.content,
+        ContentType: input.contentType,
+        ServerSideEncryption: "aws:kms",
+        SSEKMSKeyId: this.#kmsKeyArn,
+        BucketKeyEnabled: true,
+      }),
+    );
+  }
+
+  async getTextObject(objectKey: MediaObjectKey): Promise<string | undefined> {
+    assertManagedMediaObjectKey(objectKey);
+    try {
+      const response = await this.#client.send(
+        new GetObjectCommand({ Bucket: this.#bucketName, Key: objectKey }),
+      );
+      return await response.Body?.transformToString("utf-8");
+    } catch (error) {
+      if (error instanceof NoSuchKey) return undefined;
+      throw error;
+    }
   }
 }
