@@ -16,6 +16,8 @@ export const createUploadSchema = z.object({
     .int()
     .positive()
     .max(5 * 1024 * 1024 * 1024),
+  /** Marks this as a camera recording captured alongside an existing (usually screen) recording. */
+  linkedRecordingId: uuid.optional(),
 });
 
 export const signPartSchema = z.object({

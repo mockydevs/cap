@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -256,6 +257,11 @@ export const recordings = pgTable(
     durationMs: bigint("duration_ms", { mode: "number" }),
     width: integer("width"),
     height: integer("height"),
+    /** A separately-captured camera recording made alongside this one (or vice versa) — see docs on camera overlays. */
+    linkedRecordingId: uuid("linked_recording_id").references(
+      (): AnyPgColumn => recordings.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -269,6 +275,7 @@ export const recordings = pgTable(
       table.workspaceId,
       table.createdAt,
     ),
+    index("recordings_linked_recording_idx").on(table.linkedRecordingId),
     check(
       "recordings_media_metadata_check",
       sql`(${table.durationMs} IS NULL AND ${table.width} IS NULL AND ${table.height} IS NULL) OR (${table.durationMs} > 0 AND ${table.width} > 0 AND ${table.height} > 0)`,

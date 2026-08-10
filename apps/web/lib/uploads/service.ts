@@ -43,7 +43,8 @@ export class UploadServiceError extends Error {
     | "UPLOAD_PART_CONFLICT"
     | "UPLOAD_COMPLETION_IN_PROGRESS"
     | "IDEMPOTENCY_KEY_REUSED"
-    | "UPLOAD_INTEGRITY_ERROR";
+    | "UPLOAD_INTEGRITY_ERROR"
+    | "LINKED_RECORDING_NOT_FOUND";
   readonly status: number;
 
   constructor(
@@ -78,9 +79,32 @@ function uploadReference(session: { objectKey: string; s3UploadId: string }) {
 
 export async function initiateSourceUpload(
   actor: UploadActor,
-  input: { title: string; contentType: string; sizeBytes: number },
+  input: {
+    title: string;
+    contentType: string;
+    sizeBytes: number;
+    linkedRecordingId?: string | undefined;
+  },
   storage: MultipartObjectStorage = uploadStorage(),
 ) {
+  if (input.linkedRecordingId) {
+    const [linked] = await db()
+      .select({ id: recordings.id })
+      .from(recordings)
+      .where(
+        and(
+          eq(recordings.id, input.linkedRecordingId),
+          eq(recordings.workspaceId, actor.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!linked)
+      throw new UploadServiceError(
+        "LINKED_RECORDING_NOT_FOUND",
+        404,
+        "Linked recording not found in this workspace",
+      );
+  }
   const plan = createUploadPlan({
     partSizeBytes: UPLOAD_PART_SIZE_BYTES,
     maxUploadBytes: input.sizeBytes,
@@ -113,6 +137,9 @@ export async function initiateSourceUpload(
         title: input.title,
         sourceObjectKey: objectKey,
         contentType: mediaType,
+        ...(input.linkedRecordingId
+          ? { linkedRecordingId: input.linkedRecordingId }
+          : {}),
       });
       await transaction.insert(uploadSessions).values({
         id: session,

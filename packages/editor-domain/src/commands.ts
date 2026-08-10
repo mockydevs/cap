@@ -1,4 +1,5 @@
 import {
+  assetIdSchema,
   canvasSchema,
   clipIdSchema,
   clipSchema,
@@ -6,6 +7,7 @@ import {
   overlayIdSchema,
   overlaySchema,
   trackIdSchema,
+  type AssetId,
   type Canvas,
   type Clip,
   type EditorDocumentV2,
@@ -34,7 +36,9 @@ export type EditorCommand =
       readonly type: "SET_TRACK_ORDER";
       readonly trackId: TrackId;
       readonly order: number;
-    };
+    }
+  | { readonly type: "ADD_SOURCE_ASSET"; readonly assetId: AssetId }
+  | { readonly type: "REMOVE_SOURCE_ASSET"; readonly assetId: AssetId };
 
 export class EditorCommandError extends Error {
   constructor(message: string) {
@@ -159,6 +163,28 @@ export function applyEditorCommand(
         ),
       };
       inverse = { type: "SET_TRACK_ORDER", trackId: id, order: track.order };
+      break;
+    }
+    case "ADD_SOURCE_ASSET": {
+      const assetId = assetIdSchema.parse(command.assetId);
+      if (current.sourceAssetIds.includes(assetId))
+        throw new EditorCommandError("Source asset already attached");
+      candidate = {
+        ...current,
+        sourceAssetIds: [...current.sourceAssetIds, assetId],
+      };
+      inverse = { type: "REMOVE_SOURCE_ASSET", assetId };
+      break;
+    }
+    case "REMOVE_SOURCE_ASSET": {
+      const assetId = assetIdSchema.parse(command.assetId);
+      if (!current.sourceAssetIds.includes(assetId))
+        throw new EditorCommandError("Source asset is not attached");
+      candidate = {
+        ...current,
+        sourceAssetIds: current.sourceAssetIds.filter((id) => id !== assetId),
+      };
+      inverse = { type: "ADD_SOURCE_ASSET", assetId };
       break;
     }
   }

@@ -239,6 +239,89 @@ describe("reversible editor commands", () => {
       }).redoStack,
     ).toEqual([]);
   });
+
+  it("attaches and detaches a source asset, e.g. a linked camera recording", () => {
+    const before = document();
+    const attached = applyEditorCommand(before, {
+      type: "ADD_SOURCE_ASSET",
+      assetId: "asset_camera" as never,
+    });
+    expect(attached.document.sourceAssetIds).toContain("asset_camera");
+    const detached = applyEditorCommand(attached.document, attached.inverse);
+    expect(detached.document).toEqual(before);
+  });
+
+  it("rejects attaching a source asset that is already attached", () => {
+    const before = document();
+    expect(() =>
+      applyEditorCommand(before, {
+        type: "ADD_SOURCE_ASSET",
+        assetId: "asset_a" as never,
+      }),
+    ).toThrow("already attached");
+  });
+
+  it("rejects detaching a source asset that is still referenced by a clip", () => {
+    const before = document();
+    expect(() =>
+      applyEditorCommand(before, {
+        type: "REMOVE_SOURCE_ASSET",
+        assetId: "asset_a" as never,
+      }),
+    ).toThrow();
+  });
+
+  it("defaults an image overlay's mask to NONE and accepts a circular camera mask", () => {
+    const before = document();
+    const withCamera = applyEditorCommand(before, {
+      type: "ADD_SOURCE_ASSET",
+      assetId: "asset_camera" as never,
+    }).document;
+    const unmasked = applyEditorCommand(withCamera, {
+      type: "ADD_OVERLAY",
+      overlay: {
+        id: "camera_1" as never,
+        trackId: "overlay_1" as never,
+        kind: "IMAGE",
+        startMs: 0,
+        endMs: 2_000,
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        opacity: 1,
+        zIndex: 2,
+        assetId: "asset_camera" as never,
+        fit: "COVER",
+      } as never,
+    }).document;
+    expect(unmasked.overlays.find((o) => o.id === "camera_1")).toMatchObject({
+      mask: "NONE",
+    });
+
+    const masked = applyEditorCommand(withCamera, {
+      type: "ADD_OVERLAY",
+      overlay: {
+        id: "camera_2" as never,
+        trackId: "overlay_1" as never,
+        kind: "IMAGE",
+        startMs: 0,
+        endMs: 2_000,
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        opacity: 1,
+        zIndex: 2,
+        assetId: "asset_camera" as never,
+        fit: "COVER",
+        mask: "CIRCLE",
+      } as never,
+    }).document;
+    expect(masked.overlays.find((o) => o.id === "camera_2")).toMatchObject({
+      mask: "CIRCLE",
+    });
+  });
 });
 
 describe("revision and rendering invariants", () => {

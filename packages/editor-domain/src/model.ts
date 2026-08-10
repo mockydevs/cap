@@ -126,6 +126,8 @@ export const overlaySchema = z.discriminatedUnion("kind", [
       kind: z.literal("IMAGE"),
       assetId: assetIdSchema,
       fit: z.enum(["CONTAIN", "COVER", "FILL"]),
+      /** CIRCLE/ROUNDED_RECT mask a moving video source too — this is how a camera recording becomes a picture-in-picture overlay. */
+      mask: z.enum(["NONE", "CIRCLE", "ROUNDED_RECT"]).default("NONE"),
     })
     .strict(),
   z

@@ -181,18 +181,71 @@ describe("generatedOverlayFilterChain", () => {
 
 describe("imageOverlayFilterChain", () => {
   it("letterboxes for CONTAIN with a transparent pad", () => {
-    const chain = imageOverlayFilterChain({ width: 100, height: 50, fit: "CONTAIN", opacity: 1 });
+    const chain = imageOverlayFilterChain({
+      width: 100,
+      height: 50,
+      fit: "CONTAIN",
+      opacity: 1,
+      mask: "NONE",
+    });
     expect(chain).toContain("force_original_aspect_ratio=decrease");
     expect(chain).toContain("pad=100:50");
   });
   it("crops for COVER", () => {
-    const chain = imageOverlayFilterChain({ width: 100, height: 50, fit: "COVER", opacity: 1 });
+    const chain = imageOverlayFilterChain({
+      width: 100,
+      height: 50,
+      fit: "COVER",
+      opacity: 1,
+      mask: "NONE",
+    });
     expect(chain).toContain("force_original_aspect_ratio=increase");
     expect(chain).toContain("crop=100:50");
   });
   it("stretches for FILL and applies opacity", () => {
-    const chain = imageOverlayFilterChain({ width: 100, height: 50, fit: "FILL", opacity: 0.5 });
+    const chain = imageOverlayFilterChain({
+      width: 100,
+      height: 50,
+      fit: "FILL",
+      opacity: 0.5,
+      mask: "NONE",
+    });
     expect(chain).toContain("scale=100:50");
     expect(chain).toContain("colorchannelmixer=aa=0.5");
+  });
+  it("applies no mask filter for NONE", () => {
+    const chain = imageOverlayFilterChain({
+      width: 200,
+      height: 200,
+      fit: "COVER",
+      opacity: 1,
+      mask: "NONE",
+    });
+    expect(chain).not.toContain("geq=");
+  });
+  it("masks a camera overlay to a circle, preserving color and existing alpha", () => {
+    const chain = imageOverlayFilterChain({
+      width: 200,
+      height: 200,
+      fit: "COVER",
+      opacity: 1,
+      mask: "CIRCLE",
+    });
+    expect(chain).toContain("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)'");
+    expect(chain).toContain("lte(pow((X-100.000)/100.000,2)+pow((Y-100.000)/100.000,2),1)");
+    expect(chain).toContain("a(X,Y)");
+  });
+  it("masks to rounded corners with a balanced expression", () => {
+    const chain = imageOverlayFilterChain({
+      width: 200,
+      height: 100,
+      fit: "COVER",
+      opacity: 1,
+      mask: "ROUNDED_RECT",
+    });
+    const opens = chain.match(/\(/g)?.length ?? 0;
+    const closes = chain.match(/\)/g)?.length ?? 0;
+    expect(opens).toBe(closes);
+    expect(chain).toContain("geq=");
   });
 });

@@ -16,13 +16,17 @@ export function CaptureStudio() {
   const [elapsed, setElapsed] = useState(0);
   const [message, setMessage] = useState("Choose a source when you are ready.");
   const [includeMic, setIncludeMic] = useState(true);
+  const [includeCamera, setIncludeCamera] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string>();
   const [recordingBlob, setRecordingBlob] = useState<Blob>();
+  const [cameraBlob, setCameraBlob] = useState<Blob>();
   const [uploadProgress, setUploadProgress] = useState<number>();
   const [recordingId, setRecordingId] = useState<string>();
   const recorder = useRef<MediaRecorder | undefined>(undefined);
+  const cameraRecorder = useRef<MediaRecorder | undefined>(undefined);
   const displayStream = useRef<MediaStream | undefined>(undefined);
   const micStream = useRef<MediaStream | undefined>(undefined);
+  const cameraStream = useRef<MediaStream | undefined>(undefined);
   const startedAt = useRef(0);
 
   useEffect(
@@ -45,8 +49,10 @@ export function CaptureStudio() {
   function stopTracks() {
     displayStream.current?.getTracks().forEach((track) => track.stop());
     micStream.current?.getTracks().forEach((track) => track.stop());
+    cameraStream.current?.getTracks().forEach((track) => track.stop());
     displayStream.current = undefined;
     micStream.current = undefined;
+    cameraStream.current = undefined;
   }
 
   async function start() {
@@ -69,6 +75,10 @@ export function CaptureStudio() {
       if (includeMic)
         microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStream.current = microphone;
+      let camera: MediaStream | undefined;
+      if (includeCamera)
+        camera = await navigator.mediaDevices.getUserMedia({ video: true });
+      cameraStream.current = camera;
       const audio = new MediaStream([
         ...display.getAudioTracks(),
         ...(microphone?.getAudioTracks() ?? []),
@@ -77,18 +87,36 @@ export function CaptureStudio() {
         ...display.getVideoTracks(),
         ...audio.getAudioTracks(),
       ]);
-      const chunks: BlobPart[] = [];
       const mimeType = selectRecorderMimeType((value) =>
         MediaRecorder.isTypeSupported(value),
       );
-      const nextRecorder = new MediaRecorder(
-        combined,
-        mimeType ? { mimeType } : undefined,
-      );
+      const recorderOptions = mimeType ? { mimeType } : undefined;
+      const chunks: BlobPart[] = [];
+      const nextRecorder = new MediaRecorder(combined, recorderOptions);
       recorder.current = nextRecorder;
       nextRecorder.ondataavailable = (event) => {
         if (event.data.size) chunks.push(event.data);
       };
+
+      const cameraChunks: BlobPart[] = [];
+      let nextCameraRecorder: MediaRecorder | undefined;
+      if (camera) {
+        nextCameraRecorder = new MediaRecorder(camera, recorderOptions);
+        cameraRecorder.current = nextCameraRecorder;
+        nextCameraRecorder.ondataavailable = (event) => {
+          if (event.data.size) cameraChunks.push(event.data);
+        };
+        nextCameraRecorder.onstop = () => {
+          setCameraBlob(
+            new Blob(cameraChunks, {
+              type: nextCameraRecorder!.mimeType || "video/webm",
+            }),
+          );
+        };
+      } else {
+        setCameraBlob(undefined);
+      }
+
       nextRecorder.onstop = () => {
         const blob = new Blob(chunks, {
           type: nextRecorder.mimeType || "video/webm",
@@ -100,6 +128,8 @@ export function CaptureStudio() {
           if (previous) URL.revokeObjectURL(previous);
           return URL.createObjectURL(blob);
         });
+        if (nextCameraRecorder?.state === "recording")
+          nextCameraRecorder.stop();
         setState("ready");
         setMessage("Recording ready. Preview it or download the WebM file.");
         stopTracks();
@@ -109,9 +139,14 @@ export function CaptureStudio() {
       });
       startedAt.current = Date.now();
       setElapsed(0);
+      nextCameraRecorder?.start(2_000);
       nextRecorder.start(2_000);
       setState("recording");
-      setMessage("Recording locally in this browser.");
+      setMessage(
+        camera
+          ? "Recording your screen and camera locally in this browser."
+          : "Recording locally in this browser.",
+      );
     } catch (error) {
       stopTracks();
       setState("error");
@@ -136,14 +171,21 @@ export function CaptureStudio() {
     setState("uploading");
     setMessage("Securing your recording in private storage…");
     try {
-      const pending = await beginResumableUpload(
-        `Recording ${new Date().toLocaleString()}`,
-        recordingBlob,
-      );
+      const title = `Recording ${new Date().toLocaleString()}`;
+      const pending = await beginResumableUpload(title, recordingBlob);
       const result = await resumeUpload(pending, (completed, total) => {
         setUploadProgress(Math.round((completed / total) * 100));
       });
       setRecordingId(result.recordingId);
+      if (cameraBlob) {
+        setMessage("Uploading camera recording…");
+        const pendingCamera = await beginResumableUpload(
+          `${title} (camera)`,
+          cameraBlob,
+          result.recordingId,
+        );
+        await resumeUpload(pendingCamera, () => {});
+      }
       setState("ready");
       setMessage("Upload complete. Media processing has started.");
     } catch (error) {
@@ -173,6 +215,15 @@ export function CaptureStudio() {
             onChange={(event) => setIncludeMic(event.target.checked)}
           />{" "}
           Include microphone
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={includeCamera}
+            disabled={state === "recording" || state === "requesting"}
+            onChange={(event) => setIncludeCamera(event.target.checked)}
+          />{" "}
+          Include camera
         </label>
         {state === "recording" || state === "stopping" ? (
           <button

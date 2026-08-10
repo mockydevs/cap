@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import type { FfmpegRenderManifest } from "@cap/editor-domain";
-import { assertExecutableManifest, UnsupportedRenderFeatureError } from "../src/ffmpeg";
+import {
+  assertExecutableManifest,
+  renderArguments,
+  UnsupportedRenderFeatureError,
+} from "../src/ffmpeg";
 
 function baseManifest(): FfmpegRenderManifest {
   return {
@@ -288,5 +295,156 @@ describe("manifest execution guard", () => {
     expect(() => assertExecutableManifest(manifest)).toThrow(
       UnsupportedRenderFeatureError,
     );
+  });
+});
+
+describe("renderArguments end-to-end graph assembly", () => {
+  let workDir: string;
+
+  afterEach(async () => {
+    if (workDir) await rm(workDir, { recursive: true, force: true });
+  });
+
+  it("assembles a balanced filter_complex for a masked camera overlay and a text overlay", async () => {
+    workDir = await mkdtemp(join(tmpdir(), "cap-render-test-"));
+    const base = baseManifest();
+    const manifest: FfmpegRenderManifest = {
+      ...base,
+      inputs: [...base.inputs, { index: 1, assetId: "asset_camera" as never }],
+      overlays: [
+        {
+          id: "camera_1" as never,
+          trackId: "overlay_track" as never,
+          kind: "IMAGE",
+          startMs: 0,
+          endMs: 5_000,
+          x: 900,
+          y: 500,
+          width: 300,
+          height: 300,
+          opacity: 1,
+          zIndex: 1,
+          assetId: "asset_camera" as never,
+          fit: "COVER",
+          mask: "CIRCLE",
+        } as never,
+        {
+          id: "title_1" as never,
+          trackId: "overlay_track" as never,
+          kind: "TEXT",
+          startMs: 0,
+          endMs: 2_000,
+          x: 50,
+          y: 50,
+          width: 600,
+          height: 80,
+          opacity: 1,
+          zIndex: 2,
+          text: "Hello & <world>",
+          color: "#FFFFFF",
+          fontSize: 32,
+        } as never,
+      ],
+    };
+
+    const args = await renderArguments(
+      manifest,
+      ["/tmp/input-0.mp4", "/tmp/input-1.mp4"],
+      join(workDir, "export.mp4"),
+      workDir,
+    );
+
+    const filterComplexIndex = args.indexOf("-filter_complex");
+    expect(filterComplexIndex).toBeGreaterThan(-1);
+    const graph = args[filterComplexIndex + 1]!;
+    const opens = graph.match(/\(/g)?.length ?? 0;
+    const closes = graph.match(/\)/g)?.length ?? 0;
+    expect(opens).toBe(closes);
+    expect(graph).toContain("geq="); // the circular camera mask
+    expect(graph).not.toContain("split=2"); // only a BLUR overlay would need split
+  });
+
+  it("writes the overlay text to a file rather than inlining it in the graph", async () => {
+    workDir = await mkdtemp(join(tmpdir(), "cap-render-test-"));
+    const base = baseManifest();
+    const trickyText = "It's a \"quoted\", colon: and comma, test";
+    const manifest: FfmpegRenderManifest = {
+      ...base,
+      overlays: [
+        {
+          id: "title_1" as never,
+          trackId: "overlay_track" as never,
+          kind: "TEXT",
+          startMs: 0,
+          endMs: 2_000,
+          x: 50,
+          y: 50,
+          width: 600,
+          height: 80,
+          opacity: 1,
+          zIndex: 1,
+          text: trickyText,
+          color: "#FFFFFF",
+          fontSize: 32,
+        } as never,
+      ],
+    };
+
+    const args = await renderArguments(
+      manifest,
+      ["/tmp/input-0.mp4"],
+      join(workDir, "export.mp4"),
+      workDir,
+    );
+    const graph = args[args.indexOf("-filter_complex") + 1]!;
+    const match = graph.match(/textfile=([^:]+)/);
+    expect(match).not.toBeNull();
+    const written = await readFile(match![1]!, "utf8");
+    expect(written).toBe(trickyText);
+  });
+
+  it("adds -loop 1 only for inputs used exclusively by an IMAGE overlay", async () => {
+    workDir = await mkdtemp(join(tmpdir(), "cap-render-test-"));
+    const base = baseManifest();
+    const manifest: FfmpegRenderManifest = {
+      ...base,
+      inputs: [...base.inputs, { index: 1, assetId: "asset_logo" as never }],
+      overlays: [
+        {
+          id: "logo_1" as never,
+          trackId: "overlay_track" as never,
+          kind: "IMAGE",
+          startMs: 0,
+          endMs: 5_000,
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+          opacity: 1,
+          zIndex: 1,
+          assetId: "asset_logo" as never,
+          fit: "CONTAIN",
+          mask: "NONE",
+        } as never,
+      ],
+    };
+
+    const args = await renderArguments(
+      manifest,
+      ["/tmp/input-0.mp4", "/tmp/logo.png"],
+      join(workDir, "export.mp4"),
+      workDir,
+    );
+    // First input (used by the video clip) must not be looped; the second
+    // (used only by the image overlay) must be. Each "-i PATH" pair is
+    // preceded by "-loop 1" only when looped, so PATH's own preceding
+    // token is always "-i" either way — check two tokens back instead.
+    const firstInputIndex = args.indexOf("/tmp/input-0.mp4");
+    const secondInputIndex = args.indexOf("/tmp/logo.png");
+    expect(args[firstInputIndex - 1]).toBe("-i");
+    expect(args[firstInputIndex - 2]).not.toBe("-loop");
+    expect(args[secondInputIndex - 1]).toBe("-i");
+    expect(args[secondInputIndex - 2]).toBe("1");
+    expect(args[secondInputIndex - 3]).toBe("-loop");
   });
 });

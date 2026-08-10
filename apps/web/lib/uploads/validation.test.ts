@@ -21,6 +21,26 @@ describe("multipart upload validation", () => {
     ).toMatchObject({ title: "Demo" });
   });
 
+  it("accepts an optional linkedRecordingId for a camera recording", () => {
+    const linkedRecordingId = "11111111-1111-1111-1111-111111111111";
+    expect(
+      createUploadSchema.parse({
+        title: "Camera",
+        contentType: "video/webm",
+        sizeBytes: UPLOAD_PART_SIZE_BYTES,
+        linkedRecordingId,
+      }),
+    ).toMatchObject({ linkedRecordingId });
+    expect(() =>
+      createUploadSchema.parse({
+        title: "Camera",
+        contentType: "video/webm",
+        sizeBytes: UPLOAD_PART_SIZE_BYTES,
+        linkedRecordingId: "not-a-uuid",
+      }),
+    ).toThrow();
+  });
+
   it("requires a valid checksum on every signing intent", () => {
     expect(() =>
       signPartSchema.parse({

@@ -184,12 +184,45 @@ export function generatedOverlayFilterChain(input: {
   throw new Error(`No generated layer for shape ${overlay.shape}`);
 }
 
+/**
+ * The "inside the shape" boolean expression for a WxH box, in FFmpeg geq
+ * pixel-position syntax (X/Y). ROUNDED_RECT uses a fixed corner radius
+ * (12% of the shorter side) — the overlay model doesn't expose a separate
+ * knob for it, matching how BLUR/ELLIPSE don't either.
+ */
+function maskInsideExpr(
+  mask: "CIRCLE" | "ROUNDED_RECT",
+  w: number,
+  h: number,
+): string {
+  if (mask === "CIRCLE") {
+    const rx = (w / 2).toFixed(3);
+    const ry = (h / 2).toFixed(3);
+    return `lte(pow((X-${rx})/${rx},2)+pow((Y-${ry})/${ry},2),1)`;
+  }
+  const r = (Math.min(w, h) * 0.12).toFixed(3);
+  const cornerDist = (cx: string, cy: string) =>
+    `(pow(X-(${cx}),2)+pow(Y-(${cy}),2))`;
+  const rSquared = `pow(${r},2)`;
+  const corner = (xTest: string, yTest: string, cx: string, cy: string) =>
+    `if(and(${xTest},${yTest}),lte(${cornerDist(cx, cy)},${rSquared})`;
+  return (
+    `${corner(`lt(X,${r})`, `lt(Y,${r})`, r, r)},` +
+    `${corner(`gt(X,${w}-${r})`, `lt(Y,${r})`, `${w}-${r}`, r)},` +
+    `${corner(`lt(X,${r})`, `gt(Y,${h}-${r})`, r, `${h}-${r}`)},` +
+    `${corner(`gt(X,${w}-${r})`, `gt(Y,${h}-${r})`, `${w}-${r}`, `${h}-${r}`)},` +
+    "1" +
+    ")))) "
+  ).trimEnd();
+}
+
 /** Scales a decoded image/video asset input to an IMAGE overlay's WxH box. */
 export function imageOverlayFilterChain(overlay: {
   readonly width: number;
   readonly height: number;
   readonly fit: "CONTAIN" | "COVER" | "FILL";
   readonly opacity: number;
+  readonly mask: "NONE" | "CIRCLE" | "ROUNDED_RECT";
 }): string {
   const w = Math.round(overlay.width);
   const h = Math.round(overlay.height);
@@ -207,6 +240,12 @@ export function imageOverlayFilterChain(overlay: {
       "format=rgba",
       `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0`,
     );
+  if (overlay.mask !== "NONE") {
+    const inside = maskInsideExpr(overlay.mask, w, h);
+    stages.push(
+      `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(${inside},a(X,Y),0)'`,
+    );
+  }
   if (overlay.opacity !== 1) stages.push(`colorchannelmixer=aa=${overlay.opacity}`);
   return stages.join(",");
 }

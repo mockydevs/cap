@@ -12,7 +12,7 @@ import {
   createRenderQueue,
   renderJobOptions,
 } from "@cap/queue";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne, or } from "drizzle-orm";
 import { db } from "../../db/client";
 import {
   editorProjects,
@@ -51,6 +51,60 @@ export type EditorSnapshot = {
   revision: number;
   document: EditorDocumentV2;
 };
+
+/**
+ * Recordings linked to this one (e.g. a camera recording captured alongside
+ * a screen recording, in either direction) that are ready to attach to the
+ * editor's sourceAssetIds via the ADD_SOURCE_ASSET command.
+ */
+export async function listLinkedRecordingAssets(
+  recordingId: string,
+  actor: Pick<Actor, "workspaceId">,
+) {
+  const [primary] = await db()
+    .select({ linkedRecordingId: recordings.linkedRecordingId })
+    .from(recordings)
+    .where(
+      and(
+        eq(recordings.id, recordingId),
+        eq(recordings.workspaceId, actor.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!primary) throw new EditorError("EDITOR_NOT_FOUND", 404);
+
+  const candidates = [
+    eq(recordings.linkedRecordingId, recordingId),
+    ...(primary.linkedRecordingId
+      ? [eq(recordings.id, primary.linkedRecordingId)]
+      : []),
+  ];
+  return db()
+    .select({
+      recordingId: recordings.id,
+      title: recordings.title,
+      sourceAssetId: recordingAssets.id,
+      durationMs: recordings.durationMs,
+      width: recordings.width,
+      height: recordings.height,
+    })
+    .from(recordings)
+    .innerJoin(recordingAssets, eq(recordingAssets.recordingId, recordings.id))
+    .where(
+      and(
+        eq(recordings.workspaceId, actor.workspaceId),
+        ne(recordings.id, recordingId),
+        eq(recordings.status, "READY"),
+        eq(recordingAssets.kind, "MP4"),
+        or(...candidates),
+      ),
+    )
+    // A linked recording that's been reprocessed more than once returns one
+    // row per processing version, newest first — fine for the tiny result
+    // set this produces (there are rarely more than one or two linked
+    // recordings), but callers should take the first match per recordingId.
+    .orderBy(desc(recordingAssets.processingVersion));
+}
 
 export async function loadEditor(
   recordingId: string,

@@ -88,6 +88,7 @@ async function responseError(
 export async function beginResumableUpload(
   title: string,
   blob: Blob,
+  linkedRecordingId?: string,
 ): Promise<PendingUpload> {
   const response = await fetch("/api/upload-sessions", {
     method: "POST",
@@ -96,6 +97,7 @@ export async function beginResumableUpload(
       title,
       contentType: blob.type === "video/mp4" ? "video/mp4" : "video/webm",
       sizeBytes: blob.size,
+      ...(linkedRecordingId ? { linkedRecordingId } : {}),
     }),
   });
   if (!response.ok)
