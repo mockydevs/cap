@@ -91,6 +91,7 @@ async function run(job: Job<RenderJob>) {
       paths,
       output,
       Number(process.env.RENDER_TIMEOUT_MS ?? "1800000"),
+      dir,
     );
     const key = `workspaces/${d.workspaceId}/recordings/${claimed.rows[0].recording_id}/exports/${d.renderJobId}.mp4`;
     await s3.send(

@@ -1,5 +1,5 @@
 FROM node:22-bookworm-slim
-RUN corepack enable && apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile && pnpm --filter @cap/render-worker build

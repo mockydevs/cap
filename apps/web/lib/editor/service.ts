@@ -22,6 +22,7 @@ import {
   renderJobs,
 } from "../../db/schema";
 import type { Actor } from "../auth/session";
+import { approvedCaptionCues } from "../transcripts/service";
 import { uploadStorage } from "../uploads/storage";
 
 const PLAYBACK_URL_TTL_SECONDS = 120;
@@ -246,7 +247,10 @@ export async function requestRender(projectId: string, actor: Actor) {
     .limit(1);
   if (!revision) throw new EditorError("EDITOR_NOT_FOUND", 404);
   const document = validateEditDocument(revision.document);
-  const manifest = compileRenderManifest(document);
+  const captionCues = document.captionStyle.burnIn
+    ? await approvedCaptionCues(project.recordingId, actor.workspaceId)
+    : [];
+  const manifest = compileRenderManifest(document, captionCues);
   assertExecutableRenderManifest(manifest);
   const manifestHash = digest(stableSerializeRenderManifest(manifest));
   if (!process.env.REDIS_URL)

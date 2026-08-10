@@ -36,6 +36,12 @@ export interface FfmpegRenderManifest {
   }[];
   readonly overlays: readonly Overlay[];
   readonly captions: EditorDocumentV2["captionStyle"];
+  /** Populated by the caller from the approved transcript when captions.burnIn is set. */
+  readonly captionCues: readonly {
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly text: string;
+  }[];
   readonly output: {
     readonly container: "mp4";
     readonly videoCodec: "libx264";
@@ -57,21 +63,35 @@ export class UnsupportedRenderFeatureError extends Error {
   }
 }
 
+/**
+ * Deliberate remaining scope boundary: gradient/image canvas backgrounds,
+ * canvas padding/shadow/rounded-corners, keyframed audio gain automation,
+ * audio noise reduction, and the ARROW/CALLOUT overlay shapes are cosmetic
+ * or algorithmically heavy enough that they are not yet implemented by the
+ * FFmpeg executor. Everything else the editor domain models is executable.
+ */
 export function assertExecutableRenderManifest(manifest: FfmpegRenderManifest) {
+  if (manifest.canvas.background.kind !== "COLOR")
+    throw new UnsupportedRenderFeatureError("canvas background:gradient-or-image");
   if (
-    manifest.canvas.background.kind !== "COLOR" ||
-    manifest.canvas.background.color.toLowerCase() !== "#000000"
-  ) {
-    throw new UnsupportedRenderFeatureError("canvas background");
-  }
-  if (manifest.audio.length)
-    throw new UnsupportedRenderFeatureError("audio automation/fades/mute/gain");
-  if (manifest.overlays.length)
-    throw new UnsupportedRenderFeatureError(
-      `overlay:${manifest.overlays[0]!.kind}`,
-    );
-  if (manifest.captions.enabled || manifest.captions.burnIn)
-    throw new UnsupportedRenderFeatureError("caption burn-in");
+    manifest.canvas.padding !== 0 ||
+    manifest.canvas.borderRadius !== 0 ||
+    manifest.canvas.shadow.enabled
+  )
+    throw new UnsupportedRenderFeatureError("canvas styling:padding/shadow/radius");
+  for (const clip of manifest.audio)
+    if (clip.settings.gainAutomation.length || clip.settings.noiseReduction)
+      throw new UnsupportedRenderFeatureError(
+        "audio:gainAutomation-or-noiseReduction",
+      );
+  for (const overlay of manifest.overlays)
+    if (
+      overlay.kind === "SHAPE" &&
+      (overlay.shape === "ARROW" || overlay.shape === "CALLOUT")
+    )
+      throw new UnsupportedRenderFeatureError(`overlay:shape:${overlay.shape}`);
+  if (manifest.captions.burnIn && manifest.captionCues.length === 0)
+    throw new UnsupportedRenderFeatureError("caption burn-in:no cues provided");
   let cursor = 0;
   for (const clip of manifest.video) {
     if (clip.timelineStartMs !== cursor)
@@ -79,25 +99,16 @@ export function assertExecutableRenderManifest(manifest: FfmpegRenderManifest) {
     cursor += Math.round(
       (clip.sourceEndMs - clip.sourceStartMs) / clip.playbackRate,
     );
-    const transform = clip.transform;
-    if (transform.zoomKeyframes.length)
-      throw new UnsupportedRenderFeatureError("zoom");
-    if (
-      transform.rotationDegrees !== 0 ||
-      transform.opacity !== 1 ||
-      transform.x !== 0 ||
-      transform.y !== 0 ||
-      transform.width !== manifest.canvas.width ||
-      transform.height !== manifest.canvas.height ||
-      Object.values(transform.crop).some((value) => value !== 0)
-    ) {
-      throw new UnsupportedRenderFeatureError("transform");
-    }
   }
 }
 
 export function compileRenderManifest(
   value: EditorDocumentV2,
+  captionCues: readonly {
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly text: string;
+  }[] = [],
 ): FfmpegRenderManifest {
   const document = editorDocumentV2Schema.parse(value);
   const tracks = new Map(document.tracks.map((track) => [track.id, track]));
@@ -156,6 +167,7 @@ export function compileRenderManifest(
     audio,
     overlays,
     captions: document.captionStyle,
+    captionCues,
     output: {
       container: "mp4",
       videoCodec: "libx264",

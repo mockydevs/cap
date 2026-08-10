@@ -53,6 +53,39 @@ function visibleSpeaker() {
   >`coalesce(${transcriptSegments.correctedSpeakerLabel}, ${transcriptSegments.providerSpeakerLabel})`;
 }
 
+/** All approved segments for burning captions into a render; empty when no ready transcript exists. */
+export async function approvedCaptionCues(
+  recordingId: string,
+  workspaceId: string,
+): Promise<{ startMs: number; endMs: number; text: string }[]> {
+  const [transcript] = await db()
+    .select({ id: transcripts.id })
+    .from(transcripts)
+    .where(
+      and(
+        eq(transcripts.recordingId, recordingId),
+        eq(transcripts.workspaceId, workspaceId),
+        eq(transcripts.status, "READY"),
+      ),
+    )
+    .limit(1);
+  if (!transcript) return [];
+  return db()
+    .select({
+      startMs: transcriptSegments.startMs,
+      endMs: transcriptSegments.endMs,
+      text: visibleText(),
+    })
+    .from(transcriptSegments)
+    .where(
+      and(
+        eq(transcriptSegments.transcriptId, transcript.id),
+        eq(transcriptSegments.isOrphaned, false),
+      ),
+    )
+    .orderBy(asc(transcriptSegments.ordinal));
+}
+
 export async function listTranscript(
   recordingId: string,
   actor: TranscriptActor,
