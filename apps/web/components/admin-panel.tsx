@@ -41,6 +41,15 @@ type WebhookEndpoint = {
   lastDeliveryStatus: string | null;
 };
 
+type ApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 const WEBHOOK_EVENTS = [
   "recording.ready",
@@ -67,6 +76,9 @@ export function AdminPanel() {
     "recording.ready",
   ]);
   const [newWebhookSecret, setNewWebhookSecret] = useState<string>();
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [apiKeyName, setApiKeyName] = useState("");
+  const [newApiKey, setNewApiKey] = useState<string>();
 
   const refreshMembers = useCallback(async () => {
     const response = await fetch("/api/workspace/members", {
@@ -119,18 +131,28 @@ export function AdminPanel() {
       setWebhooks((await response.json() as { items: WebhookEndpoint[] }).items);
   }, []);
 
+  const refreshApiKeys = useCallback(async () => {
+    const response = await fetch("/api/workspace/api-keys", {
+      cache: "no-store",
+    });
+    if (response.ok)
+      setApiKeys((await response.json() as { items: ApiKey[] }).items);
+  }, []);
+
   useEffect(() => {
     void refreshMembers();
     void refreshInvitations();
     void refreshRetention();
     void loadAuditEvents();
     void refreshWebhooks();
+    void refreshApiKeys();
   }, [
     refreshMembers,
     refreshInvitations,
     refreshRetention,
     loadAuditEvents,
     refreshWebhooks,
+    refreshApiKeys,
   ]);
 
   const createWebhook = async () => {
@@ -155,6 +177,30 @@ export function AdminPanel() {
       method: "DELETE",
     });
     if (response.ok) void refreshWebhooks();
+  };
+
+  const createApiKey = async () => {
+    setNewApiKey(undefined);
+    const response = await fetch("/api/workspace/api-keys", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: apiKeyName }),
+    });
+    if (!response.ok) {
+      setMessage("Could not create that API key.");
+      return;
+    }
+    const created = (await response.json()) as { key: string };
+    setNewApiKey(created.key);
+    setApiKeyName("");
+    void refreshApiKeys();
+  };
+
+  const revokeApiKey = async (id: string) => {
+    const response = await fetch(`/api/workspace/api-keys/${id}`, {
+      method: "DELETE",
+    });
+    if (response.ok) void refreshApiKeys();
   };
 
   const inviteMember = async () => {
@@ -404,6 +450,45 @@ export function AdminPanel() {
           <p className="hint">
             Signing secret (shown once, store it now): {newWebhookSecret}
           </p>
+        )}
+      </section>
+
+      <section>
+        <h2>API keys</h2>
+        {apiKeys.map((apiKey) => (
+          <div key={apiKey.id} className="admin-row">
+            <span>
+              {apiKey.name} — {apiKey.keyPrefix}…
+              {apiKey.revokedAt
+                ? " — revoked"
+                : apiKey.lastUsedAt
+                  ? ` — last used ${new Date(apiKey.lastUsedAt).toLocaleString()}`
+                  : " — never used"}
+            </span>
+            {!apiKey.revokedAt && (
+              <button type="button" onClick={() => void revokeApiKey(apiKey.id)}>
+                Revoke
+              </button>
+            )}
+          </div>
+        ))}
+        <label>
+          Key name
+          <input
+            value={apiKeyName}
+            onChange={(event) => setApiKeyName(event.target.value)}
+            placeholder="e.g. Zapier integration"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={apiKeyName.trim().length < 2}
+          onClick={() => void createApiKey()}
+        >
+          Create API key
+        </button>
+        {newApiKey && (
+          <p className="hint">Key (shown once, store it now): {newApiKey}</p>
         )}
       </section>
 

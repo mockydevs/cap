@@ -60,4 +60,4 @@ Desktop installers and the Chrome, Edge, and Firefox companion extension are pub
 
 ## Administration and integrations
 
-Workspace owners and admins manage members, invitations, recording retention, and webhooks at `/admin`; every sensitive workspace action is recorded to an audit log visible there. Webhook events, delivery, and signature verification are documented in [docs/WEBHOOKS.md](docs/WEBHOOKS.md).
+Workspace owners and admins manage members, invitations, recording retention, webhooks, and API keys at `/admin`; every sensitive workspace action is recorded to an audit log visible there. Webhook events, delivery, and signature verification are documented in [docs/WEBHOOKS.md](docs/WEBHOOKS.md); the read-only public API is documented in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).
