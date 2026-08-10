@@ -14,6 +14,18 @@ export const aiCapabilitySchema = z.enum([
   "SEARCH_INDEX",
 ]);
 export type AiCapability = z.infer<typeof aiCapabilitySchema>;
+export const aiProviderSchema = z.enum([
+  "OPENAI",
+  "ANTHROPIC",
+  "OPENAI_COMPATIBLE",
+]);
+export type AiProviderKind = z.infer<typeof aiProviderSchema>;
+export const providerCapabilitySchema = z.enum([
+  "ANALYSIS",
+  "EMBEDDINGS",
+  "TRANSCRIPTION",
+]);
+export type ProviderCapability = z.infer<typeof providerCapabilitySchema>;
 export const aiJobSchema = z
   .object({
     jobId: z.string().uuid(),

@@ -1,0 +1,30 @@
+name: Browser extension release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["extension-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate extension source
+        run: node apps/browser-extension/scripts/validate.mjs
+      - name: Package Chrome and Edge
+        run: bash apps/browser-extension/scripts/package.sh chromium
+      - name: Package Firefox
+        run: bash apps/browser-extension/scripts/package.sh firefox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cap-browser-extensions
+          path: apps/browser-extension/dist/*.zip
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/extension-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${GITHUB_REF_NAME}" apps/browser-extension/dist/*.zip --generate-notes --title "Cap Browser Extension ${GITHUB_REF_NAME#extension-v}"

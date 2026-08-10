@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
+import { DecryptCommand, KMSClient } from "@aws-sdk/client-kms";
 import {
   AI_QUEUE,
   aiJobSchema,
@@ -9,7 +10,7 @@ import {
   type AiJob,
 } from "@cap/queue";
 import { transcriptInputHash } from "@cap/ai";
-import { providerFromEnvironment } from "./provider";
+import { providerFromConnection, providerFromEnvironment } from "./provider";
 const required = (name: string) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} must be configured`);
@@ -17,9 +18,58 @@ const required = (name: string) => {
 };
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const connection = createRedisConnection(required("REDIS_URL"));
-const provider = providerFromEnvironment();
+const kms = new KMSClient(
+  process.env.AWS_REGION ? { region: process.env.AWS_REGION } : {},
+);
+async function providerForJob(data: AiJob) {
+  const selected = await pool.query<{
+    provider_connection_id: string | null;
+    model: string | null;
+    provider: "OPENAI" | "ANTHROPIC" | "OPENAI_COMPATIBLE" | null;
+    base_url: string | null;
+    encrypted_credential: string | null;
+    credential_key_arn: string | null;
+  }>(
+    "SELECT j.provider_connection_id,j.model,c.provider,c.base_url,c.encrypted_credential,c.credential_key_arn FROM ai_jobs j LEFT JOIN ai_provider_connections c ON c.id=j.provider_connection_id AND c.workspace_id=j.workspace_id AND c.status='ACTIVE' WHERE j.id=$1 AND j.workspace_id=$2",
+    [data.jobId, data.workspaceId],
+  );
+  const connection = selected.rows[0];
+  if (!connection) throw new Error("AI job is not available");
+  if (!connection.provider_connection_id) {
+    if (process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL !== "true")
+      throw new Error("AI provider connection is required");
+    return providerFromEnvironment();
+  }
+  if (
+    !connection.provider ||
+    !connection.encrypted_credential ||
+    !connection.credential_key_arn ||
+    !connection.model
+  )
+    throw new Error("AI provider connection is unavailable");
+  const decrypted = await kms.send(
+    new DecryptCommand({
+      KeyId: connection.credential_key_arn,
+      CiphertextBlob: Buffer.from(connection.encrypted_credential, "base64"),
+      EncryptionContext: {
+        application: "cap",
+        workspaceId: data.workspaceId,
+        purpose: "ai-provider-credential",
+      },
+    }),
+  );
+  if (!decrypted.Plaintext)
+    throw new Error("AI provider credential could not be decrypted");
+  return providerFromConnection({
+    provider: connection.provider,
+    baseUrl: connection.base_url,
+    apiKey: Buffer.from(decrypted.Plaintext).toString("utf8"),
+    model: connection.model,
+  });
+}
 async function processJob(job: Job<AiJob>) {
   const data = aiJobSchema.parse(job.data);
+  const provider = await providerForJob(data);
   const policy = await pool.query<{
     enabled: boolean;
     allowed_provider: string;
@@ -29,12 +79,7 @@ async function processJob(job: Job<AiJob>) {
     [data.workspaceId],
   );
   const workspacePolicy = policy.rows[0];
-  if (
-    !workspacePolicy?.enabled ||
-    workspacePolicy.allowed_provider !== provider.name ||
-    (provider.name === "openai-compatible" &&
-      !workspacePolicy.allow_external_processing)
-  ) {
+  if (!workspacePolicy?.enabled || !workspacePolicy.allow_external_processing) {
     await pool.query(
       "UPDATE ai_jobs SET status='FAILED',error_category='PolicyDenied',completed_at=now() WHERE id=$1 AND workspace_id=$2 AND status IN ('QUEUED','FAILED')",
       [data.jobId, data.workspaceId],
@@ -42,7 +87,7 @@ async function processJob(job: Job<AiJob>) {
     return;
   }
   const claimed = await pool.query(
-    "UPDATE ai_jobs SET status='PROCESSING',started_at=now(),provider=$2,model=$3,error_category=NULL WHERE id=$1 AND workspace_id=$4 AND status IN ('QUEUED','FAILED') RETURNING input_hash",
+    "UPDATE ai_jobs SET status='PROCESSING',started_at=now(),provider=$2,model=coalesce(model,$3),error_category=NULL WHERE id=$1 AND workspace_id=$4 AND status IN ('QUEUED','FAILED') RETURNING input_hash",
     [
       data.jobId,
       provider.name,
@@ -84,6 +129,11 @@ async function processJob(job: Job<AiJob>) {
           result.content,
         ],
       );
+      if (data.jobId)
+        await transaction.query(
+          "UPDATE ai_provider_connections SET last_used_at=now() WHERE id=(SELECT provider_connection_id FROM ai_jobs WHERE id=$1)",
+          [data.jobId],
+        );
       await transaction.query(
         "UPDATE ai_jobs SET status='COMPLETED',provider=$2,model=$3,input_tokens=$4,output_tokens=$5,cost_microunits=$6,currency=$7,provider_request_id_hash=$8,completed_at=now() WHERE id=$1",
         [

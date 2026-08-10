@@ -51,6 +51,6 @@ jobs:
           projectPath: apps/desktop
           tagName: desktop-v__VERSION__
           releaseName: Cap Desktop v__VERSION__
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

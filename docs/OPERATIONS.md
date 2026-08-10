@@ -11,7 +11,7 @@ This runbook is the required deployment and recovery procedure for Cap. Staging 
 5. Run database migrations exactly once before deploying application containers: `pnpm --filter @cap/web db:migrate`.
 6. Deploy workers, then web. Check `/api/health` on web and `/health` on every worker before shifting traffic.
 
-The AI worker is optional. Leave workspace AI disabled unless its configured `AI_PROVIDER` matches the workspace policy. `openai-compatible` requires explicit external-processing consent; `self-hosted` is intended for an OpenAI-compatible private endpoint.
+The AI worker is optional. Configure the dedicated `AI_CREDENTIALS_KMS_KEY_ARN` and attach only the Terraform web-encrypt and worker-decrypt policies to their respective services. Leave workspace AI disabled until an administrator adds and routes a validated provider connection and explicitly approves external processing. Deployment-wide credentials are a compatibility fallback and should remain disabled.
 
 ## Backup and restore
 

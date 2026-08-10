@@ -21,6 +21,27 @@ resource "aws_kms_alias" "media" {
   target_key_id = aws_kms_key.media.key_id
 }
 
+resource "aws_kms_key" "ai_credentials" {
+  description             = "Cap ${var.environment} BYOK provider credentials"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "RootAdministration"
+      Effect    = "Allow"
+      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+      Action    = "kms:*"
+      Resource  = "*"
+    }]
+  })
+}
+
+resource "aws_kms_alias" "ai_credentials" {
+  name          = "alias/cap-${var.environment}-ai-credentials"
+  target_key_id = aws_kms_key.ai_credentials.key_id
+}
+
 resource "aws_s3_bucket" "media" {
   bucket = var.bucket_name
 }
@@ -156,7 +177,15 @@ resource "aws_iam_policy" "web" {
   name = "cap-${var.environment}-web-media"
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["s3:PutObject", "s3:ListMultipartUploadParts", "s3:AbortMultipartUpload", "s3:GetObject"], Resource = local.object_resource },
-    { Effect = "Allow", Action = local.kms_write, Resource = aws_kms_key.media.arn }
+    { Effect = "Allow", Action = local.kms_write, Resource = aws_kms_key.media.arn },
+    { Effect = "Allow", Action = ["kms:Encrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
+  ] })
+}
+
+resource "aws_iam_policy" "ai_worker" {
+  name = "cap-${var.environment}-ai-worker"
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
   ] })
 }
 

@@ -53,3 +53,7 @@ Upload routes create private S3 multipart uploads, sign each part for five minut
 ## AI intelligence
 
 Workspace administrators explicitly enable AI, choose either an external OpenAI-compatible provider or a self-hosted compatible endpoint, and set monthly token and cost ceilings. The worker rechecks that policy before processing, stores usage/provenance, validates structured suggestions, and rejects changed transcripts. Recording-grounded Q&A and semantic transcript search remain workspace-scoped; generated changes require user acceptance.
+
+Workspace BYOK setup for OpenAI, Anthropic Claude, and compatible private endpoints is documented in [docs/AI_PROVIDERS.md](docs/AI_PROVIDERS.md).
+
+Desktop installers and the Chrome, Edge, and Firefox companion extension are published through tagged GitHub Releases. See [docs/DESKTOP.md](docs/DESKTOP.md) and [docs/BROWSER_EXTENSION.md](docs/BROWSER_EXTENSION.md).

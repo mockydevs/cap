@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Cap Screen Recorder",
+  "version": "0.1.0",
+  "description": "Launch your Cap recorder and recording library from Firefox.",
+  "permissions": ["storage", "tabs", "contextMenus"],
+  "background": { "scripts": ["background.js"] },
+  "action": { "default_title": "Cap", "default_popup": "popup.html" },
+  "commands": {
+    "start-recording": {
+      "suggested_key": { "default": "Ctrl+Shift+9", "mac": "Command+Shift+9" },
+      "description": "Open the Cap recorder"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": { "id": "cap@mockydevs.com", "strict_min_version": "109.0" }
+  }
+}

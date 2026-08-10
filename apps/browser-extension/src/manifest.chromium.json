@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Cap Screen Recorder",
+  "version": "0.1.0",
+  "description": "Launch your Cap recorder and recording library from Chrome or Edge.",
+  "permissions": ["storage", "tabs", "contextMenus"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Cap", "default_popup": "popup.html" },
+  "commands": {
+    "start-recording": {
+      "suggested_key": { "default": "Ctrl+Shift+9", "mac": "Command+Shift+9" },
+      "description": "Open the Cap recorder"
+    }
+  }
+}

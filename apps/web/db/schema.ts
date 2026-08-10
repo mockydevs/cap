@@ -109,6 +109,20 @@ export const aiArtifactStatus = pgEnum("ai_artifact_status", [
   "ACCEPTED",
   "REJECTED",
 ]);
+export const aiProviderKind = pgEnum("ai_provider_kind", [
+  "OPENAI",
+  "ANTHROPIC",
+  "OPENAI_COMPATIBLE",
+]);
+export const aiProviderConnectionStatus = pgEnum(
+  "ai_provider_connection_status",
+  ["ACTIVE", "REVOKED"],
+);
+export const aiProviderPurpose = pgEnum("ai_provider_purpose", [
+  "ANALYSIS",
+  "EMBEDDINGS",
+  "TRANSCRIPTION",
+]);
 export const aiCapability = pgEnum("ai_capability", [
   "TITLE_DESCRIPTION",
   "SUMMARY",
@@ -1031,6 +1045,71 @@ export const renderJobs = pgTable(
   ],
 );
 
+export const aiProviderConnections = pgTable(
+  "ai_provider_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    provider: aiProviderKind("provider").notNull(),
+    displayName: text("display_name").notNull(),
+    baseUrl: text("base_url"),
+    encryptedCredential: text("encrypted_credential").notNull(),
+    credentialKeyArn: text("credential_key_arn").notNull(),
+    credentialFingerprint: text("credential_fingerprint").notNull(),
+    allowedCapabilities: jsonb("allowed_capabilities")
+      .$type<Array<"ANALYSIS" | "EMBEDDINGS" | "TRANSCRIPTION">>()
+      .notNull(),
+    allowedModels: jsonb("allowed_models").$type<string[]>().notNull(),
+    defaultModel: text("default_model").notNull(),
+    dataRegion: text("data_region"),
+    status: aiProviderConnectionStatus("status").notNull().default("ACTIVE"),
+    lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("ai_provider_connections_workspace_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    check(
+      "ai_provider_connections_fingerprint_check",
+      sql`length(${table.credentialFingerprint}) = 12`,
+    ),
+  ],
+);
+
+export const aiProviderRoutes = pgTable(
+  "ai_provider_routes",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    purpose: aiProviderPurpose("purpose").notNull(),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => aiProviderConnections.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.purpose] })],
+);
+
 export const aiWorkspacePolicies = pgTable(
   "ai_workspace_policies",
   {
@@ -1089,6 +1168,10 @@ export const aiJobs = pgTable(
     capability: aiCapability("capability").notNull(),
     status: aiJobStatus("status").notNull().default("QUEUED"),
     promptTemplateVersion: text("prompt_template_version").notNull(),
+    providerConnectionId: uuid("provider_connection_id").references(
+      () => aiProviderConnections.id,
+      { onDelete: "set null" },
+    ),
     provider: text("provider"),
     model: text("model"),
     question: text("question"),

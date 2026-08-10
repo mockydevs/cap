@@ -42,3 +42,38 @@ export const semanticSearchSchema = z
     limit: z.number().int().min(1).max(20).default(10),
   })
   .strict();
+
+const providerCapability = z.enum(["ANALYSIS", "EMBEDDINGS", "TRANSCRIPTION"]);
+export const providerConnectionSchema = z
+  .object({
+    provider: z.enum(["OPENAI", "ANTHROPIC", "OPENAI_COMPATIBLE"]),
+    displayName: z.string().trim().min(2).max(80),
+    apiKey: z.string().trim().min(8).max(500),
+    baseUrl: z.string().url().startsWith("https://").max(500).optional(),
+    allowedCapabilities: z.array(providerCapability).min(1).max(3),
+    allowedModels: z.array(z.string().trim().min(1).max(120)).min(1).max(30),
+    defaultModel: z.string().trim().min(1).max(120),
+    dataRegion: z.string().trim().min(2).max(80).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (!value.allowedModels.includes(value.defaultModel))
+      ctx.addIssue({
+        code: "custom",
+        path: ["defaultModel"],
+        message: "Default model must be in the model allowlist",
+      });
+    if (value.provider === "OPENAI_COMPATIBLE" && !value.baseUrl)
+      ctx.addIssue({
+        code: "custom",
+        path: ["baseUrl"],
+        message: "A custom provider requires an HTTPS base URL",
+      });
+  });
+export const providerRouteSchema = z
+  .object({
+    purpose: providerCapability,
+    connectionId: z.string().uuid(),
+    model: z.string().trim().min(1).max(120),
+  })
+  .strict();
