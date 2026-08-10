@@ -11,6 +11,7 @@ import {
 } from "@cap/storage";
 import { db } from "../../db/client";
 import { recordingAssets, recordings, shareLinks } from "../../db/schema";
+import { recordAuditEvent } from "../audit/service";
 import { hashPassword, verifyPassword } from "../auth/credentials";
 import { beginViewSession, type ViewKind } from "../analytics/service";
 import { uploadStorage } from "../uploads/storage";
@@ -144,6 +145,14 @@ export async function updateRecordingSharing(
         expiresAt,
       });
     }
+    await recordAuditEvent(transaction, {
+      workspaceId: actor.workspaceId,
+      actorUserId: actor.userId,
+      action: "recording.sharing_updated",
+      targetType: "recording",
+      targetId: recording.id,
+      metadata: { visibility: input.visibility },
+    });
   });
 
   return {

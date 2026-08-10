@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "retention:sweep": "tsx scripts/retention-sweep.ts"
   },
   "dependencies": {
     "@cap/ai": "workspace:*",
@@ -39,6 +40,7 @@
     "drizzle-kit": "^0.30.6",
     "eslint": "^10.8.1",
     "eslint-config-next": "^16.3.0",
+    "tsx": "^4.19.3",
     "vitest": "^3.1.4"
   }
 }

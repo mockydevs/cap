@@ -133,7 +133,6 @@ export const aiCapability = pgEnum("ai_capability", [
   "TRANSLATION",
   "FOLLOW_UP",
   "SENSITIVE_DATA",
-  "SEARCH_INDEX",
 ]);
 
 export const users = pgTable(
@@ -263,6 +262,7 @@ export const recordings = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     index("recordings_workspace_created_idx").on(
@@ -1277,3 +1277,74 @@ export const aiSearchDocuments = pgTable(
     ),
   ],
 );
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    targetType: text("target_type").notNull(),
+    targetId: text("target_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("audit_events_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const workspaceInvitations = pgTable(
+  "workspace_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: workspaceRole("role").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    invitedBy: uuid("invited_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("workspace_invitations_workspace_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("workspace_invitations_email_idx").on(table.email),
+  ],
+);
+
+export const retentionPolicies = pgTable("retention_policies", {
+  workspaceId: uuid("workspace_id")
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  recordingRetentionDays: integer("recording_retention_days"),
+  deletedRecordingPurgeDays: integer("deleted_recording_purge_days")
+    .notNull()
+    .default(30),
+  updatedBy: uuid("updated_by")
+    .notNull()
+    .references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

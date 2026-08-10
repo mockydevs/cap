@@ -32,6 +32,10 @@ export function UserNav() {
   return (
     <div className="user-nav">
       <Link href="/library">Library</Link>
+      {(session.workspace.role === "OWNER" ||
+        session.workspace.role === "ADMIN") && (
+        <Link href="/admin">Admin</Link>
+      )}
       <span>
         {session.user.displayName} · {session.workspace.role.toLowerCase()}
       </span>

@@ -19,6 +19,10 @@ The AI worker is optional. Configure the dedicated `AI_CREDENTIALS_KMS_KEY_ARN` 
 - Enable S3 versioning and retain non-current media versions for the configured recovery window. Do not delete the KMS key while any recoverable object version exists.
 - Redis is disposable queue state; PostgreSQL rows and transactional outbox records are the source of truth.
 
+## Retention sweep
+
+Each workspace optionally configures a recording-retention window and a soft-delete purge grace period through `PUT /api/workspace/retention-policy` (admin/owner only). Run `pnpm --filter @cap/web retention:sweep` on a schedule (e.g. an hourly Coolify scheduled task) to auto-delete recordings past their workspace's retention window and permanently purge object-storage assets for recordings whose grace period has elapsed. The sweep only deletes what a workspace has explicitly configured; a workspace with no policy row keeps recordings indefinitely and purges soft-deleted recordings after the 30-day default.
+
 Quarterly restore drill:
 
 1. Create an isolated database and restore the latest backup with `pg_restore --clean --if-exists --no-owner`.

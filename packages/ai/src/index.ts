@@ -11,7 +11,6 @@ export const aiCapabilitySchema = z.enum([
   "TRANSLATION",
   "FOLLOW_UP",
   "SENSITIVE_DATA",
-  "SEARCH_INDEX",
 ]);
 export type AiCapability = z.infer<typeof aiCapabilitySchema>;
 export const aiProviderSchema = z.enum([
@@ -131,10 +130,6 @@ export const aiArtifactContentSchema = z.discriminatedUnion("kind", [
         }),
       )
       .max(200),
-  }),
-  z.object({
-    kind: z.literal("SEARCH_INDEX"),
-    indexedSegments: z.number().int().nonnegative(),
   }),
 ]);
 export type AiArtifactContent = z.infer<typeof aiArtifactContentSchema>;

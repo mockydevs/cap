@@ -61,7 +61,6 @@ const instructions: Record<AiCapability, string> = {
   FOLLOW_UP: "Return {kind:'FOLLOW_UP',subject,body}.",
   SENSITIVE_DATA:
     "Return {kind:'SENSITIVE_DATA',findings:[{category,startMs,excerpt}]}. Do not reproduce more sensitive text than needed.",
-  SEARCH_INDEX: "Return {kind:'SEARCH_INDEX',indexedSegments:0}.",
 };
 export class OpenAiCompatibleProvider implements AiProvider {
   readonly name: "OPENAI" | "OPENAI_COMPATIBLE";
@@ -83,8 +82,6 @@ export class OpenAiCompatibleProvider implements AiProvider {
     question?: string;
     targetLanguage?: string;
   }) {
-    if (input.capability === "SEARCH_INDEX")
-      throw new Error("SEARCH_INDEX requires embedding adapter");
     const response = await fetch(
       `${this.c.baseUrl.replace(/\/$/, "")}/chat/completions`,
       {
@@ -153,8 +150,6 @@ export class AnthropicProvider implements AiProvider {
     question?: string;
     targetLanguage?: string;
   }) {
-    if (input.capability === "SEARCH_INDEX")
-      throw new Error("SEARCH_INDEX requires embedding adapter");
     const response = await fetch(
       `${this.c.baseUrl.replace(/\/$/, "")}/v1/messages`,
       {

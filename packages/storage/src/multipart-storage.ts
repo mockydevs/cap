@@ -134,6 +134,14 @@ export interface PlaybackObjectStorage {
   }): Promise<PresignedPlayback>;
 }
 
+/** Retention hard-purge deletes every object under a recording's namespace. */
+export interface PurgeableObjectStorage {
+  deleteRecordingObjects(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly recordingId: RecordingId;
+  }): Promise<void>;
+}
+
 export function assertPlaybackExpirySeconds(value: number): void {
   if (!Number.isInteger(value) || value < 30 || value > 900) {
     throw new StorageContractError(

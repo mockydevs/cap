@@ -2,7 +2,7 @@ import { aiCapabilitySchema } from "@cap/ai";
 import { z } from "zod";
 export const createAiJobSchema = z
   .object({
-    capability: aiCapabilitySchema.exclude(["SEARCH_INDEX"]),
+    capability: aiCapabilitySchema,
     question: z.string().trim().min(2).max(2000).optional(),
     targetLanguage: z
       .string()

@@ -2,8 +2,10 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   ListPartsCommand,
   S3Client,
   UploadPartCommand,
@@ -15,8 +17,13 @@ import {
   s3EntityTag,
   sha256Base64,
   type CompletedUploadPart,
+  type RecordingId,
+  type WorkspaceId,
 } from "@cap/domain";
-import { assertManagedMediaObjectKey } from "./media-object-key";
+import {
+  assertManagedMediaObjectKey,
+  buildRecordingObjectPrefix,
+} from "./media-object-key";
 import {
   assertPresignExpirySeconds,
   assertPlaybackExpirySeconds,
@@ -31,6 +38,7 @@ import {
   type MultipartUploadReference,
   type PresignedUploadPart,
   type PresignUploadPart,
+  type PurgeableObjectStorage,
   type StoredSourceObject,
 } from "./multipart-storage";
 
@@ -58,7 +66,7 @@ function assertOptions(options: S3MultipartStorageOptions): void {
 
 /** AWS S3 production implementation. It deliberately has no endpoint/path-style options. */
 export class S3MultipartStorage
-  implements MultipartObjectStorage, PlaybackObjectStorage
+  implements MultipartObjectStorage, PlaybackObjectStorage, PurgeableObjectStorage
 {
   readonly #client: S3Client;
   readonly #bucketName: string;
@@ -333,5 +341,36 @@ export class S3MultipartStorage
         this.#now().getTime() + input.expiresInSeconds * 1000,
       ),
     };
+  }
+
+  async deleteRecordingObjects(input: {
+    readonly workspaceId: WorkspaceId;
+    readonly recordingId: RecordingId;
+  }): Promise<void> {
+    const Prefix = buildRecordingObjectPrefix(input);
+    let ContinuationToken: string | undefined;
+    do {
+      const page = await this.#client.send(
+        new ListObjectsV2Command({
+          Bucket: this.#bucketName,
+          Prefix,
+          ContinuationToken,
+        }),
+      );
+      const keys = (page.Contents ?? [])
+        .map((object) => object.Key)
+        .filter((key): key is string => Boolean(key));
+      if (keys.length > 0) {
+        await this.#client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.#bucketName,
+            Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+      }
+      ContinuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+    } while (ContinuationToken);
   }
 }

@@ -348,6 +348,14 @@ button:disabled {
   margin-left: auto;
   width: 140px;
 }
+.admin-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
 .library-panel,
 .viewer-shell {
   padding-top: 48px;

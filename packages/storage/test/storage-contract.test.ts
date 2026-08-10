@@ -9,6 +9,7 @@ import {
   assertManagedMediaObjectKey,
   assertPlaybackExpirySeconds,
   assertPresignExpirySeconds,
+  buildRecordingObjectPrefix,
   buildSourceMediaObjectKey,
   multipartUploadId,
 } from "../src/index";
@@ -25,6 +26,15 @@ describe("storage security contract", () => {
     ).toBe(
       "workspaces/workspace_1/recordings/recording_1/source/attempt_1.webm",
     );
+  });
+
+  it("builds a recording's object prefix for retention purge", () => {
+    expect(
+      buildRecordingObjectPrefix({
+        workspaceId: workspaceId("workspace_1"),
+        recordingId: recordingId("recording_1"),
+      }),
+    ).toBe("workspaces/workspace_1/recordings/recording_1/");
   });
 
   it("rejects traversal and keys outside the managed namespace", () => {

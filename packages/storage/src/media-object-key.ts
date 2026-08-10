@@ -38,6 +38,14 @@ const sourceExtensions: Readonly<Record<SourceMediaType, string>> = {
  * Each attempt gets a fresh immutable key. User-provided filenames and titles
  * are intentionally absent from the key.
  */
+/** The full namespace a recording's objects live under, for prefix-scoped deletion. */
+export function buildRecordingObjectPrefix(input: {
+  readonly workspaceId: WorkspaceId;
+  readonly recordingId: RecordingId;
+}): string {
+  return `workspaces/${input.workspaceId}/recordings/${input.recordingId}/`;
+}
+
 export function buildSourceMediaObjectKey(input: {
   readonly workspaceId: WorkspaceId;
   readonly recordingId: RecordingId;

@@ -1,11 +1,10 @@
 import { ZodError } from "zod";
 import { AuthenticationError, AuthorizationError } from "../auth/authorization";
-import { RecordingServiceError } from "./service";
 
-export function recordingError(error: unknown) {
+export function retentionError(error: unknown): Response {
   if (error instanceof ZodError)
     return Response.json(
-      { error: { code: "VALIDATION_ERROR", issues: error.flatten() } },
+      { error: { code: "VALIDATION_ERROR" } },
       { status: 400 },
     );
   if (error instanceof AuthenticationError)
@@ -15,14 +14,9 @@ export function recordingError(error: unknown) {
     );
   if (error instanceof AuthorizationError)
     return Response.json({ error: { code: "FORBIDDEN" } }, { status: 403 });
-  if (error instanceof RecordingServiceError)
-    return Response.json(
-      { error: { code: error.code } },
-      { status: error.status },
-    );
-  console.error("recording route failed", error);
+  console.error("retention request failed", error);
   return Response.json(
-    { error: { code: "RECORDING_REQUEST_FAILED" } },
+    { error: { code: "RETENTION_REQUEST_FAILED" } },
     { status: 500 },
   );
 }

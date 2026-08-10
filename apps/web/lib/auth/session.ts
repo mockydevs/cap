@@ -30,6 +30,31 @@ export async function createSession(userId: string, workspaceId: string) {
   return token;
 }
 
+export async function switchActiveWorkspace(
+  token: string,
+  userId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  const [membership] = await db()
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!membership) return false;
+  await db()
+    .update(sessions)
+    .set({ activeWorkspaceId: workspaceId })
+    .where(
+      and(eq(sessions.tokenHash, hashSessionToken(token)), eq(sessions.userId, userId)),
+    );
+  return true;
+}
+
 export async function revokeSession(token: string | undefined) {
   if (token)
     await db()

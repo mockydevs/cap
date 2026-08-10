@@ -2,7 +2,9 @@ import { and, eq, ne } from "drizzle-orm";
 import { db } from "../../../../db/client";
 import { recordingAssets, recordings } from "../../../../db/schema";
 import { requireActor } from "../../../../lib/auth/authorization";
+import { hasTrustedOrigin } from "../../../../lib/auth/origin";
 import { recordingError } from "../../../../lib/recordings/http";
+import { deleteRecording } from "../../../../lib/recordings/service";
 import { recordingParamsSchema } from "../../../../lib/recordings/validation";
 
 export const runtime = "nodejs";
@@ -55,6 +57,25 @@ export async function GET(
       updatedAt: recording.updatedAt.toISOString(),
       assets,
     });
+  } catch (error) {
+    return recordingError(error);
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ recordingId: string }> },
+) {
+  try {
+    if (!hasTrustedOrigin(request))
+      return Response.json(
+        { error: { code: "INVALID_ORIGIN" } },
+        { status: 403 },
+      );
+    const actor = await requireActor(request, "MEMBER");
+    const { recordingId } = recordingParamsSchema.parse(await context.params);
+    await deleteRecording(actor, recordingId);
+    return Response.json({ status: "DELETED" });
   } catch (error) {
     return recordingError(error);
   }

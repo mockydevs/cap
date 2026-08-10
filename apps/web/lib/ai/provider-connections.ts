@@ -3,6 +3,7 @@ import { DecryptCommand, EncryptCommand, KMSClient } from "@aws-sdk/client-kms";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { aiProviderConnections, aiProviderRoutes } from "../../db/schema";
+import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
 import { AiServiceError } from "./service";
 
@@ -126,8 +127,8 @@ export async function createProviderConnection(
     actor.workspaceId,
     input.apiKey,
   );
-  return (
-    await db()
+  return db().transaction(async (tx) => {
+    const [created] = await tx
       .insert(aiProviderConnections)
       .values({
         workspaceId: actor.workspaceId,
@@ -144,28 +145,46 @@ export async function createProviderConnection(
         lastValidatedAt: new Date(),
         createdBy: actor.userId,
       })
-      .returning({ id: aiProviderConnections.id })
-  )[0]!;
+      .returning({ id: aiProviderConnections.id });
+    await recordAuditEvent(tx, {
+      workspaceId: actor.workspaceId,
+      actorUserId: actor.userId,
+      action: "ai_provider_connection.created",
+      targetType: "ai_provider_connection",
+      targetId: created!.id,
+      metadata: { provider: input.provider, displayName: input.displayName },
+    });
+    return created!;
+  });
 }
 
 export async function revokeProviderConnection(actor: Actor, id: string) {
-  const [updated] = await db()
-    .update(aiProviderConnections)
-    .set({
-      status: "REVOKED",
-      encryptedCredential: "revoked",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(aiProviderConnections.id, id),
-        eq(aiProviderConnections.workspaceId, actor.workspaceId),
-        eq(aiProviderConnections.status, "ACTIVE"),
-      ),
-    )
-    .returning({ id: aiProviderConnections.id });
-  if (!updated) throw new AiServiceError("AI_NOT_FOUND", 404);
-  return updated;
+  return db().transaction(async (tx) => {
+    const [updated] = await tx
+      .update(aiProviderConnections)
+      .set({
+        status: "REVOKED",
+        encryptedCredential: "revoked",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(aiProviderConnections.id, id),
+          eq(aiProviderConnections.workspaceId, actor.workspaceId),
+          eq(aiProviderConnections.status, "ACTIVE"),
+        ),
+      )
+      .returning({ id: aiProviderConnections.id });
+    if (!updated) throw new AiServiceError("AI_NOT_FOUND", 404);
+    await recordAuditEvent(tx, {
+      workspaceId: actor.workspaceId,
+      actorUserId: actor.userId,
+      action: "ai_provider_connection.revoked",
+      targetType: "ai_provider_connection",
+      targetId: updated.id,
+    });
+    return updated;
+  });
 }
 
 export async function setProviderRoute(

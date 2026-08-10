@@ -85,6 +85,27 @@
       "when": 1786403600000,
       "tag": "0011_transcript_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786407200000,
+      "tag": "0012_drop_search_index_capability",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786410800000,
+      "tag": "0013_audit_and_membership",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786414400000,
+      "tag": "0014_retention_policies",
+      "breakpoints": true
     }
   ]
 }
