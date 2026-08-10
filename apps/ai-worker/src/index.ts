@@ -117,16 +117,29 @@ async function processJob(job: Job<AiJob>) {
     });
     const transaction = await pool.connect();
     try {
+      const artifactId = randomUUID();
       await transaction.query("BEGIN");
       await transaction.query(
         "INSERT INTO ai_artifacts(id,job_id,workspace_id,recording_id,capability,content) VALUES($1,$2,$3,$4,$5,$6)",
         [
-          randomUUID(),
+          artifactId,
           data.jobId,
           data.workspaceId,
           data.recordingId,
           data.capability,
           result.content,
+        ],
+      );
+      await transaction.query(
+        "INSERT INTO webhook_outbox (event, workspace_id, aggregate_id, payload) VALUES ('ai_artifact.created', $1, $2, $3::jsonb)",
+        [
+          data.workspaceId,
+          artifactId,
+          JSON.stringify({
+            artifactId,
+            recordingId: data.recordingId,
+            capability: data.capability,
+          }),
         ],
       );
       if (data.jobId)

@@ -29,8 +29,26 @@ type AuditEvent = {
   actorEmail: string | null;
   actorDisplayName: string | null;
 };
+type WebhookEndpoint = {
+  id: string;
+  url: string;
+  description: string | null;
+  secretFingerprint: string;
+  enabledEvents: string[];
+  status: "ACTIVE" | "DISABLED";
+  createdAt: string;
+  lastDeliveryAt: string | null;
+  lastDeliveryStatus: string | null;
+};
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+const WEBHOOK_EVENTS = [
+  "recording.ready",
+  "recording.deleted",
+  "transcript.ready",
+  "ai_artifact.created",
+  "comment.created",
+] as const;
 
 export function AdminPanel() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -43,6 +61,12 @@ export function AdminPanel() {
   const [inviteLink, setInviteLink] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [isAdmin, setIsAdmin] = useState(true);
+  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookEvents, setWebhookEvents] = useState<string[]>([
+    "recording.ready",
+  ]);
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string>();
 
   const refreshMembers = useCallback(async () => {
     const response = await fetch("/api/workspace/members", {
@@ -87,12 +111,51 @@ export function AdminPanel() {
     setAuditCursor(page.nextCursor);
   }, []);
 
+  const refreshWebhooks = useCallback(async () => {
+    const response = await fetch("/api/workspace/webhooks", {
+      cache: "no-store",
+    });
+    if (response.ok)
+      setWebhooks((await response.json() as { items: WebhookEndpoint[] }).items);
+  }, []);
+
   useEffect(() => {
     void refreshMembers();
     void refreshInvitations();
     void refreshRetention();
     void loadAuditEvents();
-  }, [refreshMembers, refreshInvitations, refreshRetention, loadAuditEvents]);
+    void refreshWebhooks();
+  }, [
+    refreshMembers,
+    refreshInvitations,
+    refreshRetention,
+    loadAuditEvents,
+    refreshWebhooks,
+  ]);
+
+  const createWebhook = async () => {
+    setNewWebhookSecret(undefined);
+    const response = await fetch("/api/workspace/webhooks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: webhookUrl, enabledEvents: webhookEvents }),
+    });
+    if (!response.ok) {
+      setMessage("Could not create that webhook. The URL must be HTTPS.");
+      return;
+    }
+    const created = (await response.json()) as { secret: string };
+    setNewWebhookSecret(created.secret);
+    setWebhookUrl("");
+    void refreshWebhooks();
+  };
+
+  const deleteWebhook = async (id: string) => {
+    const response = await fetch(`/api/workspace/webhooks/${id}`, {
+      method: "DELETE",
+    });
+    if (response.ok) void refreshWebhooks();
+  };
 
   const inviteMember = async () => {
     setMessage(undefined);
@@ -286,6 +349,63 @@ export function AdminPanel() {
           </button>
         </section>
       )}
+
+      <section>
+        <h2>Webhooks</h2>
+        {webhooks.map((webhook) => (
+          <div key={webhook.id} className="admin-row">
+            <span>
+              {webhook.url} — {webhook.enabledEvents.join(", ")} — secret
+              …{webhook.secretFingerprint}
+              {webhook.lastDeliveryStatus
+                ? ` — last delivery ${webhook.lastDeliveryStatus.toLowerCase()}`
+                : ""}
+            </span>
+            <button type="button" onClick={() => void deleteWebhook(webhook.id)}>
+              Delete
+            </button>
+          </div>
+        ))}
+        <label>
+          Endpoint URL (HTTPS)
+          <input
+            type="url"
+            value={webhookUrl}
+            onChange={(event) => setWebhookUrl(event.target.value)}
+            placeholder="https://example.com/webhooks/cap"
+          />
+        </label>
+        <fieldset>
+          {WEBHOOK_EVENTS.map((event) => (
+            <label key={event}>
+              <input
+                type="checkbox"
+                checked={webhookEvents.includes(event)}
+                onChange={(changeEvent) =>
+                  setWebhookEvents((current) =>
+                    changeEvent.target.checked
+                      ? [...current, event]
+                      : current.filter((value) => value !== event),
+                  )
+                }
+              />
+              {event}
+            </label>
+          ))}
+        </fieldset>
+        <button
+          type="button"
+          disabled={!webhookUrl || webhookEvents.length === 0}
+          onClick={() => void createWebhook()}
+        >
+          Add webhook
+        </button>
+        {newWebhookSecret && (
+          <p className="hint">
+            Signing secret (shown once, store it now): {newWebhookSecret}
+          </p>
+        )}
+      </section>
 
       <section>
         <h2>Audit log</h2>

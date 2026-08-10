@@ -57,3 +57,7 @@ Workspace administrators explicitly enable AI, choose either an external OpenAI-
 Workspace BYOK setup for OpenAI, Anthropic Claude, and compatible private endpoints is documented in [docs/AI_PROVIDERS.md](docs/AI_PROVIDERS.md).
 
 Desktop installers and the Chrome, Edge, and Firefox companion extension are published through tagged GitHub Releases. See [docs/DESKTOP.md](docs/DESKTOP.md) and [docs/BROWSER_EXTENSION.md](docs/BROWSER_EXTENSION.md).
+
+## Administration and integrations
+
+Workspace owners and admins manage members, invitations, recording retention, and webhooks at `/admin`; every sensitive workspace action is recorded to an audit log visible there. Webhook events, delivery, and signature verification are documented in [docs/WEBHOOKS.md](docs/WEBHOOKS.md).

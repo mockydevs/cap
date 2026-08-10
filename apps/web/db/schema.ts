@@ -1348,3 +1348,103 @@ export const retentionPolicies = pgTable("retention_policies", {
     .notNull()
     .defaultNow(),
 });
+
+export const webhookEvent = pgEnum("webhook_event", [
+  "recording.ready",
+  "recording.deleted",
+  "transcript.ready",
+  "ai_artifact.created",
+  "comment.created",
+]);
+export const webhookEndpointStatus = pgEnum("webhook_endpoint_status", [
+  "ACTIVE",
+  "DISABLED",
+]);
+export const webhookDeliveryStatus = pgEnum("webhook_delivery_status", [
+  "PENDING",
+  "SUCCEEDED",
+  "FAILED",
+]);
+
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    description: text("description"),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    secretKeyArn: text("secret_key_arn").notNull(),
+    secretFingerprint: text("secret_fingerprint").notNull(),
+    enabledEvents: jsonb("enabled_events").$type<string[]>().notNull(),
+    status: webhookEndpointStatus("status").notNull().default("ACTIVE"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastDeliveryAt: timestamp("last_delivery_at", { withTimezone: true }),
+    lastDeliveryStatus: webhookDeliveryStatus("last_delivery_status"),
+  },
+  (table) => [
+    index("webhook_endpoints_workspace_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+  ],
+);
+
+export const webhookOutbox = pgTable(
+  "webhook_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    event: webhookEvent("event").notNull(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    aggregateId: text("aggregate_id").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("webhook_outbox_pending_idx").on(
+      table.publishedAt,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    webhookEndpointId: uuid("webhook_endpoint_id")
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    event: webhookEvent("event").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: webhookDeliveryStatus("status").notNull().default("PENDING"),
+    attempts: integer("attempts").notNull().default(0),
+    responseStatus: integer("response_status"),
+    responseExcerpt: text("response_excerpt"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("webhook_deliveries_endpoint_idx").on(
+      table.webhookEndpointId,
+      table.createdAt,
+    ),
+  ],
+);

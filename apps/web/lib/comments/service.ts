@@ -4,6 +4,7 @@ import { db } from "../../db/client";
 import { commentReactions, comments, recordings, users } from "../../db/schema";
 import type { Actor } from "../auth/session";
 import { authorizeSharePlayback } from "../sharing/service";
+import { emitWebhookEvent } from "../webhooks/service";
 
 type Identity =
   | { actor: Actor; actorKeyHash: string }
@@ -135,22 +136,30 @@ export async function createComment(
   timestampMs: number,
 ) {
   const recording = await requireRecording(recordingId, identity);
-  const [created] = await db()
-    .insert(comments)
-    .values({
+  return db().transaction(async (tx) => {
+    const [created] = await tx
+      .insert(comments)
+      .values({
+        workspaceId: recording.workspaceId,
+        recordingId,
+        body,
+        timestampMs,
+        ...("actor" in identity
+          ? { authorUserId: identity.actor.userId }
+          : {
+              guestName: identity.guestName,
+              guestKeyHash: identity.guestKeyHash,
+            }),
+      })
+      .returning({ id: comments.id });
+    await emitWebhookEvent(tx, {
+      event: "comment.created",
       workspaceId: recording.workspaceId,
-      recordingId,
-      body,
-      timestampMs,
-      ...("actor" in identity
-        ? { authorUserId: identity.actor.userId }
-        : {
-            guestName: identity.guestName,
-            guestKeyHash: identity.guestKeyHash,
-          }),
-    })
-    .returning({ id: comments.id });
-  return created!;
+      aggregateId: created!.id,
+      payload: { commentId: created!.id, recordingId, timestampMs },
+    });
+    return created!;
+  });
 }
 export async function changeComment(
   recordingId: string,

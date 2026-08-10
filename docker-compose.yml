@@ -102,6 +102,21 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+  webhook-worker:
+    build:
+      context: .
+      dockerfile: apps/webhook-worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://cap:cap@postgres:5432/cap
+      REDIS_URL: redis://redis:6379
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      WEBHOOK_WORKER_CONCURRENCY: ${WEBHOOK_WORKER_CONCURRENCY:-4}
+      WEBHOOK_WORKER_HEALTH_PORT: 8085
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 volumes:
   postgres-data:
   redis-data:

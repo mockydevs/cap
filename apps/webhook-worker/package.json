@@ -1,0 +1,25 @@
+{
+  "name": "@cap/webhook-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-kms": "^3.758.0",
+    "@cap/queue": "workspace:*",
+    "bullmq": "^5.58.5",
+    "pg": "^8.15.6",
+    "tsx": "^4.19.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.11.13",
+    "vitest": "^3.1.4"
+  }
+}

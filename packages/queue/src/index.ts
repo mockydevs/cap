@@ -7,6 +7,7 @@ export const MEDIA_PROCESSING_QUEUE = "media-processing";
 export const TRANSCRIPTION_QUEUE = "transcription";
 export const RENDER_QUEUE = "render";
 export const AI_QUEUE = "ai";
+export const WEBHOOK_DELIVERY_QUEUE = "webhook-delivery";
 export { aiJobSchema, type AiJob };
 export const renderJobSchema = z.object({
   renderJobId: z.string().uuid(),
@@ -72,6 +73,27 @@ export function transcriptionJobOptions(
     jobId: `transcription:${recordingId}:v${processingVersion}`,
     attempts: 5,
     backoff: { type: "exponential", delay: 10_000 },
+    removeOnComplete: { age: 604_800 },
+    removeOnFail: { age: 2_592_000 },
+  };
+}
+
+export const webhookDeliveryJobSchema = z.object({
+  deliveryId: z.string().uuid(),
+});
+export type WebhookDeliveryJob = z.infer<typeof webhookDeliveryJobSchema>;
+
+export function createWebhookDeliveryQueue(
+  connection: IORedis,
+): Queue<WebhookDeliveryJob> {
+  return new Queue<WebhookDeliveryJob>(WEBHOOK_DELIVERY_QUEUE, { connection });
+}
+
+export function webhookDeliveryJobOptions(deliveryId: string): JobsOptions {
+  return {
+    jobId: `webhook-delivery:${deliveryId}`,
+    attempts: 6,
+    backoff: { type: "exponential", delay: 30_000 },
     removeOnComplete: { age: 604_800 },
     removeOnFail: { age: 2_592_000 },
   };

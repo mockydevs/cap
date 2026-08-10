@@ -176,6 +176,14 @@ async function processMedia(
           metadata.height,
         ],
       );
+      await pool.query(
+        "INSERT INTO webhook_outbox (event, workspace_id, aggregate_id, payload) VALUES ('recording.ready', $1, $2, $3::jsonb)",
+        [
+          data.workspaceId,
+          data.recordingId,
+          JSON.stringify({ recordingId: data.recordingId }),
+        ],
+      );
       await pool.query("COMMIT");
       await transcriptionQueue.add(
         "transcribe",

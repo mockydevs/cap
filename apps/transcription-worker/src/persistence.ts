@@ -179,6 +179,13 @@ export class PostgresTranscriptPersistence implements TranscriptPersistence {
         "UPDATE transcripts SET status='READY', approved_language=$2, updated_at=now() WHERE id=$1",
         [command.transcriptId, command.providerResult.language],
       );
+      await client.query(
+        `INSERT INTO webhook_outbox (event, workspace_id, aggregate_id, payload)
+         SELECT 'transcript.ready', t.workspace_id, t.recording_id,
+                jsonb_build_object('transcriptId', t.id, 'recordingId', t.recording_id)
+         FROM transcripts t WHERE t.id = $1`,
+        [command.transcriptId],
+      );
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

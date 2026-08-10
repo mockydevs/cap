@@ -6,6 +6,7 @@ import { recordAuditEvent } from "../audit/service";
 import { AuthorizationError } from "../auth/authorization";
 import type { Actor } from "../auth/session";
 import { uploadStorage } from "../uploads/storage";
+import { emitWebhookEvent } from "../webhooks/service";
 
 export class RecordingServiceError extends Error {
   readonly code: "RECORDING_NOT_FOUND";
@@ -49,6 +50,12 @@ export async function deleteRecording(actor: Actor, targetRecordingId: string) {
       action: "recording.deleted",
       targetType: "recording",
       targetId: recording.id,
+    });
+    await emitWebhookEvent(tx, {
+      event: "recording.deleted",
+      workspaceId: actor.workspaceId,
+      aggregateId: recording.id,
+      payload: { recordingId: recording.id },
     });
   });
 }
@@ -109,6 +116,12 @@ export async function deleteRecordingSystem(
       action: "recording.retention_auto_deleted",
       targetType: "recording",
       targetId: targetRecordingId,
+    });
+    await emitWebhookEvent(tx, {
+      event: "recording.deleted",
+      workspaceId: targetWorkspaceId,
+      aggregateId: targetRecordingId,
+      payload: { recordingId: targetRecordingId, reason: "retention_policy" },
     });
   });
 }
