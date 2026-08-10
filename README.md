@@ -42,6 +42,8 @@ pnpm --filter @cap/web test:integration
 docker compose -f docker-compose.test.yml down
 ```
 
+Real-browser end-to-end tests against the full running stack live in [tests/e2e](tests/e2e/README.md).
+
 ## AWS object storage
 
 Production media belongs in a private AWS S3 bucket. Use `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_KMS_KEY_ARN`, and workload-scoped credentials; do not expose S3 credentials with `NEXT_PUBLIC_` variables. The API generates short-lived multipart presigned requests after workspace authorization. See [infra/README.md](infra/README.md) for the required bucket posture and Coolify variables.
