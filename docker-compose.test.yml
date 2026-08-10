@@ -1,0 +1,27 @@
+services:
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: cap_test
+      POSTGRES_USER: cap
+      POSTGRES_PASSWORD: cap
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cap -d cap_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  # LocalStack, not MinIO: @cap/storage requires a real KMS key ARN for
+  # SSE-KMS on every object, and LocalStack emulates KMS alongside S3 so
+  # that requirement doesn't have to be relaxed just to make tests pass.
+  localstack-test:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: s3,kms
+      DEFAULT_REGION: us-east-1
+    ports: ["4566:4566"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

@@ -34,6 +34,14 @@ pnpm test
 pnpm build
 ```
 
+`pnpm test` is unit-only and needs no external services. Integration tests exercise the real multipart-upload lifecycle and Google-account-linking logic against a live Postgres and an S3/KMS-compatible backend (LocalStack — not MinIO, since `@cap/storage` requires a real KMS key ARN for SSE-KMS on every object):
+
+```bash
+docker compose -f docker-compose.test.yml up -d --wait
+pnpm --filter @cap/web test:integration
+docker compose -f docker-compose.test.yml down
+```
+
 ## AWS object storage
 
 Production media belongs in a private AWS S3 bucket. Use `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_KMS_KEY_ARN`, and workload-scoped credentials; do not expose S3 credentials with `NEXT_PUBLIC_` variables. The API generates short-lived multipart presigned requests after workspace authorization. See [infra/README.md](infra/README.md) for the required bucket posture and Coolify variables.
