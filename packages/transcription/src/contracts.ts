@@ -79,6 +79,10 @@ export interface TranscriptionProvider {
   ): Promise<TranscriptionProviderResult>;
 }
 
+/** Bounds the O(segments^2 + words^2) transcript merge to a tractable input size. */
+const MAX_SEGMENTS = 50_000;
+const MAX_WORDS_PER_SEGMENT = 1_000;
+
 export function validateProviderResult(
   result: TranscriptionProviderResult,
 ): void {
@@ -112,10 +116,20 @@ export function validateProviderResult(
   ) {
     throw new TranscriptionContractError("Provider cost is invalid");
   }
+  if (result.segments.length > MAX_SEGMENTS) {
+    throw new TranscriptionContractError(
+      `Provider returned too many segments (max ${MAX_SEGMENTS})`,
+    );
+  }
   let previousEnd = 0;
   const keys = new Set<string>();
   for (const segment of result.segments) {
     validateTimedText(segment.startMs, segment.endMs, segment.text);
+    if (segment.words.length > MAX_WORDS_PER_SEGMENT) {
+      throw new TranscriptionContractError(
+        `Provider segment has too many words (max ${MAX_WORDS_PER_SEGMENT})`,
+      );
+    }
     if (segment.startMs < previousEnd)
       throw new TranscriptionContractError(
         "Provider segments must be ordered and non-overlapping",

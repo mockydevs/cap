@@ -20,17 +20,25 @@ async function execute(
     });
     let output = "";
     child.stdout.on("data", (chunk: Buffer) => {
-      output += chunk.toString();
+      output = (output + chunk.toString()).slice(-8_000);
     });
     child.stderr.on("data", (chunk: Buffer) => {
-      output += chunk.toString();
+      output = (output + chunk.toString()).slice(-8_000);
     });
-    child.once("error", reject);
-    child.once("close", (code) =>
+    const timer = setTimeout(
+      () => child.kill("SIGKILL"),
+      Number(process.env.FFMPEG_TIMEOUT_MS ?? "1800000"),
+    );
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
       code === 0
         ? resolve(output)
-        : reject(new MediaCommandError(command, output.slice(-8_000))),
-    );
+        : reject(new MediaCommandError(command, output));
+    });
   });
 }
 
@@ -75,6 +83,9 @@ export async function createPlaybackAssets(
 ): Promise<void> {
   await mkdir(outputDirectory, { recursive: true });
   await execute("ffmpeg", [
+    "-hide_banner",
+    "-loglevel",
+    "error",
     "-y",
     "-i",
     inputPath,
@@ -99,6 +110,9 @@ export async function createPlaybackAssets(
     `${outputDirectory}/playback.mp4`,
   ]);
   await execute("ffmpeg", [
+    "-hide_banner",
+    "-loglevel",
+    "error",
     "-y",
     "-i",
     inputPath,
@@ -125,6 +139,9 @@ export async function createPlaybackAssets(
     `${outputDirectory}/master.m3u8`,
   ]);
   await execute("ffmpeg", [
+    "-hide_banner",
+    "-loglevel",
+    "error",
     "-y",
     "-ss",
     "00:00:01",

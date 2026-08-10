@@ -1,6 +1,6 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { createServer } from "node:http";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -154,7 +154,7 @@ async function processMedia(
             asset.kind,
             asset.objectKey,
             asset.contentType,
-            (await readFile(asset.filePath)).byteLength,
+            (await stat(asset.filePath)).size,
           ],
         );
       await pool.query(

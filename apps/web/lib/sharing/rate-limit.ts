@@ -14,7 +14,7 @@ function connection(): Redis {
   return redis;
 }
 
-function requestAddress(request: Request): string {
+export function requestAddress(request: Request): string {
   const realIp = request.headers.get("x-real-ip");
   if (realIp) return realIp;
   const forwarded = request.headers

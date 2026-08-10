@@ -31,13 +31,21 @@ export function extractNormalizedAudio(
     child.stderr.on("data", (chunk) => {
       stderr = `${stderr}${String(chunk)}`.slice(-4000);
     });
-    child.on("error", reject);
-    child.on("close", (code) =>
+    const timer = setTimeout(
+      () => child.kill("SIGKILL"),
+      Number(process.env.FFMPEG_TIMEOUT_MS ?? "1800000"),
+    );
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
       code === 0
         ? resolve()
         : reject(
             new Error(`FFmpeg audio extraction failed (${code}): ${stderr}`),
-          ),
-    );
+          );
+    });
   });
 }

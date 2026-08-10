@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "../../../../db/client";
@@ -13,6 +14,10 @@ import {
   sessionCookieName,
   sessionCookieOptions,
 } from "../../../../lib/auth/session";
+import {
+  enforceFixedWindowRateLimit,
+  requestAddress,
+} from "../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -25,6 +30,10 @@ export async function POST(request: Request) {
     const input = loginSchema.parse(
       Object.fromEntries(await request.formData()),
     );
+    const limitKey = createHash("sha256")
+      .update(`${requestAddress(request)}:${input.email}`)
+      .digest("hex");
+    await enforceFixedWindowRateLimit(`web-login:${limitKey}`, 10, 15 * 60);
     const [user] = await db()
       .select()
       .from(users)

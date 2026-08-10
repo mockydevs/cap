@@ -9,6 +9,10 @@ import {
   sessionCookieName,
   sessionCookieOptions,
 } from "../../../../lib/auth/session";
+import {
+  enforceFixedWindowRateLimit,
+  requestAddress,
+} from "../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -18,6 +22,11 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   try {
+    await enforceFixedWindowRateLimit(
+      `web-signup:${requestAddress(request)}`,
+      10,
+      15 * 60,
+    );
     const form = await request.formData();
     const input = signupSchema.parse(Object.fromEntries(form));
     const userId = randomUUID();

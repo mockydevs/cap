@@ -133,6 +133,20 @@ export async function verifyGoogleIdToken(
   };
 }
 
+/**
+ * Thrown when a Google identity's verified email matches an existing account that
+ * was never linked to this Google subject. Auto-linking on email match alone would
+ * let anyone who controls a Google-verified mailbox (e.g. a recycled address) take
+ * over the matching password account, so we require the user to sign in with their
+ * password instead of silently granting access.
+ */
+export class GoogleAccountConflictError extends Error {
+  constructor() {
+    super("GOOGLE_ACCOUNT_EMAIL_CONFLICT");
+    this.name = "GoogleAccountConflictError";
+  }
+}
+
 export async function findOrCreateGoogleUser(identity: GoogleIdentity) {
   const [linked] = await db()
     .select({ userId: oauthAccounts.userId })
@@ -151,29 +165,28 @@ export async function findOrCreateGoogleUser(identity: GoogleIdentity) {
       .from(users)
       .where(eq(users.email, identity.email))
       .limit(1);
-    userId = existing?.id ?? randomUUID();
+    if (existing) throw new GoogleAccountConflictError();
+    userId = randomUUID();
     const workspaceId = randomUUID();
-    const passwordHash = existing
-      ? undefined
-      : await hashPassword(randomBytes(48).toString("base64url"));
+    const passwordHash = await hashPassword(
+      randomBytes(48).toString("base64url"),
+    );
     await db().transaction(async (transaction) => {
-      if (passwordHash) {
-        await transaction.insert(users).values({
-          id: userId!,
-          email: identity.email,
-          passwordHash,
-          displayName: identity.displayName,
-        });
-        await transaction.insert(workspaces).values({
-          id: workspaceId,
-          name: `${identity.displayName}'s workspace`.slice(0, 100),
-        });
-        await transaction.insert(workspaceMembers).values({
-          userId: userId!,
-          workspaceId,
-          role: "OWNER",
-        });
-      }
+      await transaction.insert(users).values({
+        id: userId!,
+        email: identity.email,
+        passwordHash,
+        displayName: identity.displayName,
+      });
+      await transaction.insert(workspaces).values({
+        id: workspaceId,
+        name: `${identity.displayName}'s workspace`.slice(0, 100),
+      });
+      await transaction.insert(workspaceMembers).values({
+        userId: userId!,
+        workspaceId,
+        role: "OWNER",
+      });
       await transaction.insert(oauthAccounts).values({
         id: randomUUID(),
         userId: userId!,

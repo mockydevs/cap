@@ -22,7 +22,9 @@ export function AuthForm({
           <p className="form-error" role="alert">
             {error === "google"
               ? "Google sign-in could not be completed. Please try again."
-              : signup
+              : error === "google-account-exists"
+                ? "An account with that email already exists. Sign in with your password instead."
+                : signup
                 ? "That account could not be created. The email may already be registered."
                 : "Email or password was incorrect."}
           </p>

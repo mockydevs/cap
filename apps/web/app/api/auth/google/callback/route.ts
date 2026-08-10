@@ -3,6 +3,7 @@ import {
   exchangeGoogleCode,
   findOrCreateGoogleUser,
   googleCookieNames,
+  GoogleAccountConflictError,
 } from "../../../../../lib/auth/google";
 import {
   createSession,
@@ -39,9 +40,13 @@ export async function GET(request: Request) {
     for (const name of Object.values(googleCookieNames))
       response.cookies.set(name, "", { path: "/", maxAge: 0 });
     return response;
-  } catch {
+  } catch (error) {
+    const errorCode =
+      error instanceof GoogleAccountConflictError
+        ? "google-account-exists"
+        : "google";
     const response = NextResponse.redirect(
-      new URL("/login?error=google", request.url),
+      new URL(`/login?error=${errorCode}`, request.url),
     );
     for (const name of Object.values(googleCookieNames))
       response.cookies.set(name, "", { path: "/", maxAge: 0 });

@@ -48,9 +48,7 @@ function normalizedTokens(value: string): Set<string> {
   return new Set(value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
 }
 
-function textSimilarity(left: string, right: string): number {
-  const a = normalizedTokens(left);
-  const b = normalizedTokens(right);
+function tokenSimilarity(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let intersection = 0;
   for (const token of a) if (b.has(token)) intersection += 1;
@@ -71,15 +69,17 @@ function temporalOverlap(
 }
 
 function segmentScore(
-  previous: CanonicalSegment,
+  previous: { startMs: number; endMs: number },
+  previousTokens: Set<string>,
   next: ProviderSegment,
+  nextTokens: Set<string>,
 ): number {
   const overlap = temporalOverlap(previous, next);
-  const text = textSimilarity(previous.providerText, next.text);
   const midpointDistance = Math.abs(
     (previous.startMs + previous.endMs) / 2 - (next.startMs + next.endMs) / 2,
   );
   if (overlap < 0.2 && midpointDistance > 1_000) return 0;
+  const text = tokenSimilarity(previousTokens, nextTokens);
   return overlap * 0.7 + text * 0.3;
 }
 
@@ -152,6 +152,9 @@ export function mergeTranscriptPreservingCorrections(
   for (const segment of next)
     validateTimedText(segment.startMs, segment.endMs, segment.text);
   const unmatched = new Set(previous.map((_, index) => index));
+  const previousTokens = previous.map((segment) =>
+    normalizedTokens(segment.providerText),
+  );
   const merged: CanonicalSegment[] = [...next]
     .sort(
       (left, right) =>
@@ -159,12 +162,18 @@ export function mergeTranscriptPreservingCorrections(
         left.providerKey.localeCompare(right.providerKey),
     )
     .map((segment) => {
+      const segmentTokens = normalizedTokens(segment.text);
       let matchIndex: number | undefined;
       let best = 0;
       for (const index of unmatched) {
         const candidate = previous[index];
         if (!candidate) continue;
-        const score = segmentScore(candidate, segment);
+        const score = segmentScore(
+          candidate,
+          previousTokens[index]!,
+          segment,
+          segmentTokens,
+        );
         if (
           score > best ||
           (score === best &&
