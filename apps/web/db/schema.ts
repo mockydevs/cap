@@ -1477,3 +1477,35 @@ export const apiKeys = pgTable(
   },
   (table) => [index("api_keys_workspace_idx").on(table.workspaceId)],
 );
+
+export const editorTemplateKind = pgEnum("editor_template_kind", [
+  "INTRO",
+  "OUTRO",
+  "GENERAL",
+]);
+
+export const editorTemplates = pgTable(
+  "editor_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: editorTemplateKind("kind").notNull(),
+    /** An EditorTemplateFragment (see @cap/editor-domain): sourceAssetIds, clips, overlays, durationMs. */
+    fragment: jsonb("fragment").$type<Record<string, unknown>>().notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("editor_templates_workspace_idx").on(table.workspaceId, table.kind),
+  ],
+);

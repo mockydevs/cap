@@ -16,3 +16,18 @@ export const editorProjectParamsSchema = z.object({
 export const renderParamsSchema = z.object({
   renderJobId: z.string().uuid(),
 });
+
+export const createTemplateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    kind: z.enum(["INTRO", "OUTRO", "GENERAL"]),
+  })
+  .strict();
+
+export const applyTemplateSchema = z
+  .object({ position: z.enum(["INTRO", "OUTRO"]) })
+  .strict();
+
+export const templateParamsSchema = z.object({
+  templateId: z.string().uuid(),
+});

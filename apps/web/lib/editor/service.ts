@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  applyTemplate,
   assertExecutableRenderManifest,
+  captureTemplateFragment,
   compileRenderManifest,
+  editorTemplateFragmentSchema,
   initializeEditorDocument,
   stableSerializeRenderManifest,
   validateEditDocument,
@@ -17,6 +20,7 @@ import { db } from "../../db/client";
 import {
   editorProjects,
   editorRevisions,
+  editorTemplates,
   recordingAssets,
   recordings,
   renderJobs,
@@ -39,7 +43,8 @@ export class EditorError extends Error {
       | "EDITOR_CONFLICT"
       | "RENDER_NOT_FOUND"
       | "RENDER_NOT_READY"
-      | "RENDER_QUEUE_NOT_CONFIGURED",
+      | "RENDER_QUEUE_NOT_CONFIGURED"
+      | "TEMPLATE_NOT_FOUND",
     readonly status: number,
   ) {
     super(code);
@@ -433,4 +438,95 @@ function serializeRender(render: typeof renderJobs.$inferSelect) {
     completedAt: render.completedAt?.toISOString() ?? null,
     outputAssetId: render.outputAssetId,
   };
+}
+
+async function currentProjectDocument(projectId: string, actor: Actor) {
+  const project = await projectForWorkspace(projectId, actor.workspaceId);
+  const [revision] = await db()
+    .select()
+    .from(editorRevisions)
+    .where(
+      and(
+        eq(editorRevisions.projectId, project.id),
+        eq(editorRevisions.revision, project.currentRevision),
+      ),
+    )
+    .limit(1);
+  if (!revision) throw new EditorError("EDITOR_NOT_FOUND", 404);
+  return { project, document: validateEditDocument(revision.document) };
+}
+
+export async function listTemplates(workspaceId: string) {
+  return db()
+    .select({
+      id: editorTemplates.id,
+      name: editorTemplates.name,
+      kind: editorTemplates.kind,
+      createdAt: editorTemplates.createdAt,
+      updatedAt: editorTemplates.updatedAt,
+    })
+    .from(editorTemplates)
+    .where(eq(editorTemplates.workspaceId, workspaceId))
+    .orderBy(desc(editorTemplates.createdAt));
+}
+
+/** Captures a project's current timeline as a reusable, workspace-owned template. */
+export async function createTemplateFromProject(
+  actor: Actor,
+  projectId: string,
+  input: { name: string; kind: "INTRO" | "OUTRO" | "GENERAL" },
+) {
+  const { document } = await currentProjectDocument(projectId, actor);
+  const fragment = captureTemplateFragment(document);
+  const [created] = await db()
+    .insert(editorTemplates)
+    .values({
+      workspaceId: actor.workspaceId,
+      name: input.name,
+      kind: input.kind,
+      fragment,
+      createdBy: actor.userId,
+    })
+    .returning({ id: editorTemplates.id });
+  return created!;
+}
+
+export async function deleteTemplate(actor: Actor, templateId: string) {
+  const [deleted] = await db()
+    .delete(editorTemplates)
+    .where(
+      and(
+        eq(editorTemplates.id, templateId),
+        eq(editorTemplates.workspaceId, actor.workspaceId),
+      ),
+    )
+    .returning({ id: editorTemplates.id });
+  if (!deleted) throw new EditorError("TEMPLATE_NOT_FOUND", 404);
+}
+
+/** Splices a saved template into a project's timeline and saves it as a new revision. */
+export async function applyTemplateToProject(
+  actor: Actor,
+  projectId: string,
+  templateId: string,
+  position: "INTRO" | "OUTRO",
+) {
+  const [template] = await db()
+    .select({ fragment: editorTemplates.fragment })
+    .from(editorTemplates)
+    .where(
+      and(
+        eq(editorTemplates.id, templateId),
+        eq(editorTemplates.workspaceId, actor.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!template) throw new EditorError("TEMPLATE_NOT_FOUND", 404);
+  const fragment = editorTemplateFragmentSchema.parse(template.fragment);
+  const { project, document } = await currentProjectDocument(projectId, actor);
+  const applied = applyTemplate(document, fragment, position, {
+    clipId: () => randomUUID() as never,
+    overlayId: () => randomUUID() as never,
+  });
+  return saveEditor(project.id, actor, project.currentRevision, applied);
 }
