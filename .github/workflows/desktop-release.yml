@@ -22,7 +22,16 @@ jobs:
             args: --target aarch64-apple-darwin --bundles dmg
           - platform: macos-13
             args: --target x86_64-apple-darwin --bundles dmg
-          - platform: ubuntu-22.04
+          # ubuntu-24.04, not -22.04: xcap (screen-source enumeration) pulls
+          # in pipewire-rs/libspa 0.8.0, whose bindgen-generated structs
+          # assume header fields (e.g. spa_video_info_raw.flags) that
+          # 22.04's PipeWire 0.3.48 doesn't define — a real build failure,
+          # not a config issue. 24.04's newer PipeWire has them. Tradeoff:
+          # the resulting .deb links against 24.04's newer glibc, so it
+          # needs a comparably recent host to run — worth reconsidering for
+          # a final non-beta release if broader Linux compatibility matters
+          # more than avoiding this dependency pin.
+          - platform: ubuntu-24.04
             args: --bundles deb
           - platform: windows-2022
             args: --bundles nsis
@@ -37,7 +46,7 @@ jobs:
         with:
           targets: ${{ contains(matrix.args, '--target') && (contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
       - if: startsWith(matrix.platform, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cap/desktop typecheck
       - uses: tauri-apps/tauri-action@v0
