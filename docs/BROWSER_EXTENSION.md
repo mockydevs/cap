@@ -30,3 +30,13 @@ This feature was implemented without access to a real Chrome/Edge GUI (no browse
 - [ ] Kill the service worker mid-recording (`chrome://extensions` → the extension's "service worker" link → DevTools → close) and observe whether the offscreen document/recording survives — MV3 service worker lifecycle interaction with an active offscreen `MediaRecorder` is unverified.
 - [ ] Confirm the Firefox package is behaviorally unchanged from before this feature (same files, same permissions, same UI).
 - [ ] Confirm `pnpm --filter @cap/browser-extension test` and both `bash scripts/package.sh chromium`/`firefox` pass.
+
+## Store publication and the desktop app's "Get it for..." buttons
+
+Browsers deliberately block installing an extension from anywhere but their own store outside of developer mode — there's no supported way to make a downloaded zip "just install" with one click, and building a workaround (e.g. a desktop app silently writing OS-level browser policy to force-install) risks the *desktop app* itself being flagged as unwanted software by Microsoft Defender or losing Apple notarization, since that's a known adware/PUP technique both platforms actively scan for. The only safe one-click path is real store publication:
+
+- Submit the Chromium build to the [Chrome Web Store](https://chromewebstore.google.com/) and [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons) (same zip, two listings, two developer accounts, Chrome has a one-time $5 fee).
+- Submit the Firefox build to [addons.mozilla.org](https://addons.mozilla.org/).
+- Both require a privacy policy URL and a plain-language justification for the `tabCapture`/`desktopCapture`/`host_permissions` permissions during review.
+
+Once published, update the placeholder URLs in `apps/desktop/src-tauri/src/lib.rs` (`CHROME_WEB_STORE_URL`, `EDGE_ADDONS_URL`, `FIREFOX_AMO_URL`) with the real listing URLs — the desktop app's "Browser extension" menu (`open_extension_store` command) falls back to the GitHub releases page until those are filled in, so the button always does something useful, but only becomes genuinely one-click after publication.

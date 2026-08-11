@@ -505,6 +505,45 @@ fn logout() -> Result<(), String> {
     Ok(())
 }
 
+/// PLACEHOLDER — replace with the real Chrome Web Store item ID, Edge
+/// Add-ons product ID, and Firefox AMO slug once the extension is actually
+/// published (see docs/BROWSER_EXTENSION.md). Until then, `browser_store_url`
+/// deliberately falls back to the GitHub release page below instead of
+/// opening a URL that doesn't exist yet.
+const CHROME_WEB_STORE_URL: &str =
+    "https://chromewebstore.google.com/detail/REPLACE_WITH_CHROME_EXTENSION_ID";
+const EDGE_ADDONS_URL: &str =
+    "https://microsoftedge.microsoft.com/addons/detail/REPLACE_WITH_EDGE_EXTENSION_ID";
+const FIREFOX_AMO_URL: &str =
+    "https://addons.mozilla.org/firefox/addon/REPLACE_WITH_FIREFOX_SLUG/";
+const EXTENSION_RELEASES_FALLBACK_URL: &str =
+    "https://github.com/mockydevs/cap/releases?q=extension-&expanded=true";
+
+fn browser_store_url(browser: &str) -> Result<&'static str, String> {
+    let url = match browser {
+        "chrome" => CHROME_WEB_STORE_URL,
+        "edge" => EDGE_ADDONS_URL,
+        "firefox" => FIREFOX_AMO_URL,
+        _ => return Err("Unknown browser".into()),
+    };
+    Ok(if url.contains("REPLACE_WITH") {
+        EXTENSION_RELEASES_FALLBACK_URL
+    } else {
+        url
+    })
+}
+
+/// Opens the given browser's extension store listing (Chrome Web Store,
+/// Edge Add-ons, or Firefox AMO) in the system's default browser, so
+/// installing Cap's browser extension is a single click from the desktop
+/// app once it's actually published to that store. Falls back to the
+/// GitHub releases page until real store URLs are configured above.
+#[tauri::command]
+fn open_extension_store(browser: String) -> Result<(), String> {
+    let url = browser_store_url(&browser)?;
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn upload_project(app: AppHandle, project_id: String) -> Result<Project, String> {
     if Uuid::parse_str(&project_id).is_err() {
@@ -575,8 +614,27 @@ pub fn run() {
             login,
             google_login,
             logout,
-            upload_project
+            upload_project,
+            open_extension_store
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Cap desktop")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rejects_unknown_browsers() {
+        assert!(browser_store_url("safari").is_err());
+    }
+    #[test]
+    fn falls_back_to_the_releases_page_until_real_store_urls_are_configured() {
+        for browser in ["chrome", "edge", "firefox"] {
+            assert_eq!(
+                browser_store_url(browser).unwrap(),
+                EXTENSION_RELEASES_FALLBACK_URL
+            );
+        }
+    }
 }

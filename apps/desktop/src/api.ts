@@ -50,4 +50,6 @@ export const desktop = {
   upload: (projectId: string) =>
     invoke<Project>("upload_project", { projectId }),
   reveal: (projectId: string) => invoke<void>("reveal_project", { projectId }),
+  openExtensionStore: (browser: "chrome" | "edge" | "firefox") =>
+    invoke<void>("open_extension_store", { browser }),
 };

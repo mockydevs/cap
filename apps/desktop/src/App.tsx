@@ -20,6 +20,7 @@ import {
   MonitorIcon,
   PauseIcon,
   PlayIcon,
+  PuzzleIcon,
   SpeakerIcon,
   StopIcon,
   TrashIcon,
@@ -136,6 +137,7 @@ export function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [extensionMenuOpen, setExtensionMenuOpen] = useState(false);
   const recordingRef = useRef(recording);
   const optionsRef = useRef(options);
   const startedAt = useRef(0);
@@ -231,6 +233,28 @@ export function App() {
     return () => window.removeEventListener("click", close);
   }, [accountMenuOpen]);
 
+  useEffect(() => {
+    if (!extensionMenuOpen) return;
+    const close = () => setExtensionMenuOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [extensionMenuOpen]);
+
+  const installExtension = async (browser: "chrome" | "edge" | "firefox") => {
+    setExtensionMenuOpen(false);
+    try {
+      await desktop.openExtensionStore(browser);
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Could not open the extension page",
+      });
+    }
+  };
+
   const start = async () => {
     try {
       await desktop.start(options);
@@ -301,6 +325,48 @@ export function App() {
           <span className="brand-name">Cap</span>
         </div>
         <div className="topbar-spacer" />
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExtensionMenuOpen((open) => !open);
+            }}
+          >
+            <PuzzleIcon className="icon" />
+            Browser extension
+            <ChevronDownIcon className="icon" />
+          </button>
+          {extensionMenuOpen && (
+            <div className="account-menu" onClick={(e) => e.stopPropagation()}>
+              <div className="account-menu-label">
+                Record from your browser toolbar
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void installExtension("chrome")}
+              >
+                Get it for Chrome
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void installExtension("edge")}
+              >
+                Get it for Edge
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => void installExtension("firefox")}
+              >
+                Get it for Firefox
+              </button>
+            </div>
+          )}
+        </div>
         {account ? (
           <div style={{ position: "relative" }}>
             <button
