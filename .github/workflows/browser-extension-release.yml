@@ -32,4 +32,15 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/extension-v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${GITHUB_REF_NAME}" apps/browser-extension/dist/*.zip --generate-notes --title "Cap Browser Extension ${GITHUB_REF_NAME#extension-v}"
+        # A tag like extension-v0.2.0-beta.1 (semver pre-release identifier)
+        # publishes as a GitHub pre-release, so it doesn't surface as the
+        # repo's "latest" release until a plain version tag follows it.
+        run: |
+          prerelease_flag=""
+          case "${GITHUB_REF_NAME}" in
+            *-beta*|*-alpha*|*-rc*) prerelease_flag="--prerelease" ;;
+          esac
+          gh release create "${GITHUB_REF_NAME}" apps/browser-extension/dist/*.zip \
+            --generate-notes \
+            --title "Cap Browser Extension ${GITHUB_REF_NAME#extension-v}" \
+            $prerelease_flag

@@ -52,5 +52,10 @@ jobs:
           tagName: desktop-v__VERSION__
           releaseName: Cap Desktop v__VERSION__
           releaseDraft: false
-          prerelease: false
+          # A version like 0.2.0-beta.1 (semver pre-release identifier)
+          # marks the GitHub release as a pre-release, which also keeps it
+          # out of "latest" — and therefore out of the auto-updater, which
+          # points at .../releases/latest/download/latest.json — until a
+          # plain (non-pre-release) version is tagged.
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           args: ${{ matrix.args }}

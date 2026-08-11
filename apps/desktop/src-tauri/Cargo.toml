@@ -1,6 +1,6 @@
 [package]
 name = "cap-desktop"
-version = "0.1.0"
+version = "0.2.0-beta.1"
 description = "Crash-safe cross-platform Cap recorder"
 edition = "2021"
 
