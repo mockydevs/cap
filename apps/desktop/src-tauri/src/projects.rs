@@ -3,6 +3,8 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+// `AppHandle::path()` comes from this trait, not an inherent method.
+use tauri::Manager;
 
 pub fn root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let path = app

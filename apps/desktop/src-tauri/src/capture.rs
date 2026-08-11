@@ -7,37 +7,41 @@ use xcap::{Monitor, Window};
 
 pub fn capabilities() -> Result<Capabilities, String> {
     let mut sources = Vec::new();
+    // xcap 0.6's Monitor/Window accessors all return XCapResult<T>
+    // (Result<T, XCapError>), not bare values — every call below is
+    // fallibly unwrapped accordingly.
     for monitor in Monitor::all().map_err(|e| e.to_string())? {
+        let id = monitor.id().map_err(|e| e.to_string())?;
+        let x = monitor.x().map_err(|e| e.to_string())?;
+        let y = monitor.y().map_err(|e| e.to_string())?;
+        let width = monitor.width().map_err(|e| e.to_string())?;
+        let height = monitor.height().map_err(|e| e.to_string())?;
+        let name = monitor.name().map_err(|e| e.to_string())?;
         sources.push(CaptureSource {
-            id: format!(
-                "monitor:{}:{}:{}:{}:{}",
-                monitor.id(),
-                monitor.x(),
-                monitor.y(),
-                monitor.width(),
-                monitor.height()
-            ),
-            name: monitor.name().to_string(),
+            id: format!("monitor:{id}:{x}:{y}:{width}:{height}"),
+            name,
             kind: SourceKind::Monitor,
         });
     }
     for window in Window::all().map_err(|e| e.to_string())? {
-        if window.is_minimized() || window.title().trim().is_empty() {
+        let is_minimized = window.is_minimized().map_err(|e| e.to_string())?;
+        let title = window.title().map_err(|e| e.to_string())?;
+        if is_minimized || title.trim().is_empty() {
             continue;
         }
         #[cfg(not(target_os = "macos"))]
-        sources.push(CaptureSource {
-            id: format!(
-                "window:{}:{}:{}:{}:{}",
-                window.id(),
-                window.x(),
-                window.y(),
-                window.width(),
-                window.height()
-            ),
-            name: window.title().to_string(),
-            kind: SourceKind::Window,
-        });
+        {
+            let id = window.id().map_err(|e| e.to_string())?;
+            let x = window.x().map_err(|e| e.to_string())?;
+            let y = window.y().map_err(|e| e.to_string())?;
+            let width = window.width().map_err(|e| e.to_string())?;
+            let height = window.height().map_err(|e| e.to_string())?;
+            sources.push(CaptureSource {
+                id: format!("window:{id}:{x}:{y}:{width}:{height}"),
+                name: title,
+                kind: SourceKind::Window,
+            });
+        }
     }
     let (platform, permission_guidance) = platform_guidance();
     Ok(Capabilities {
