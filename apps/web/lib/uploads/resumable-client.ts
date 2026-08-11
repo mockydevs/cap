@@ -20,6 +20,32 @@ export type PendingUpload = {
   uploadedParts: UploadedPart[];
 };
 
+/**
+ * Lets a non-same-origin caller (e.g. the browser extension's background/
+ * offscreen contexts, which have no same-origin Cap page to inherit a base
+ * URL or session cookie from) point these Cap-API calls at an absolute
+ * server origin and authenticate with a bearer token instead of a cookie.
+ * Never applied to the presigned S3 PUT itself, which is already absolute
+ * and must not carry Cap's Authorization header.
+ */
+export type UploadClientConfig = {
+  baseUrl?: string;
+  authorization?: string;
+};
+
+function apiUrl(config: UploadClientConfig | undefined, path: string): string {
+  return `${config?.baseUrl ?? ""}${path}`;
+}
+
+function apiHeaders(
+  config: UploadClientConfig | undefined,
+  extra: Record<string, string>,
+): Record<string, string> {
+  return config?.authorization
+    ? { ...extra, authorization: config.authorization }
+    : extra;
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, 1);
@@ -89,10 +115,11 @@ export async function beginResumableUpload(
   title: string,
   blob: Blob,
   linkedRecordingId?: string,
+  config?: UploadClientConfig,
 ): Promise<PendingUpload> {
-  const response = await fetch("/api/upload-sessions", {
+  const response = await fetch(apiUrl(config, "/api/upload-sessions"), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: apiHeaders(config, { "content-type": "application/json" }),
     body: JSON.stringify({
       title,
       contentType: blob.type === "video/mp4" ? "video/mp4" : "video/webm",
@@ -120,6 +147,7 @@ export async function beginResumableUpload(
 export async function resumeUpload(
   initialUpload: PendingUpload,
   onProgress?: (completed: number, total: number) => void,
+  config?: UploadClientConfig,
 ) {
   let upload = initialUpload;
   // Older prototype receipts had no checksums and cannot satisfy the hardened contract.
@@ -143,10 +171,13 @@ export async function resumeUpload(
     const checksum = await checksumSha256(body);
     const isFinalPart = partNumber === totalParts;
     const sign = await fetch(
-      `/api/upload-sessions/${upload.sessionId}/parts/${partNumber}`,
+      apiUrl(
+        config,
+        `/api/upload-sessions/${upload.sessionId}/parts/${partNumber}`,
+      ),
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: apiHeaders(config, { "content-type": "application/json" }),
         body: JSON.stringify({
           contentLength: body.size,
           checksumSha256: checksum,
@@ -184,13 +215,13 @@ export async function resumeUpload(
   }
 
   const finished = await fetch(
-    `/api/upload-sessions/${upload.sessionId}/complete`,
+    apiUrl(config, `/api/upload-sessions/${upload.sessionId}/complete`),
     {
       method: "POST",
-      headers: {
+      headers: apiHeaders(config, {
         "content-type": "application/json",
         "idempotency-key": upload.completionIdempotencyKey,
-      },
+      }),
       body: JSON.stringify({
         parts: [...completed.values()].map(
           ({ partNumber, etag, checksumSha256 }) => ({
@@ -214,10 +245,12 @@ export async function resumeUpload(
 
 export async function abortResumableUpload(
   upload: PendingUpload,
+  config?: UploadClientConfig,
 ): Promise<void> {
-  const response = await fetch(`/api/upload-sessions/${upload.sessionId}`, {
-    method: "DELETE",
-  });
+  const response = await fetch(
+    apiUrl(config, `/api/upload-sessions/${upload.sessionId}`),
+    { method: "DELETE", headers: apiHeaders(config, {}) },
+  );
   if (!response.ok && response.status !== 404) {
     throw await responseError(response, "Could not abort upload");
   }

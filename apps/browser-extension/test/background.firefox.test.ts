@@ -14,15 +14,15 @@ function createChromeMock() {
   };
 }
 
-let background: typeof import("../src/background.js");
+let background: typeof import("../src/background.firefox.js");
 let chromeMock: ReturnType<typeof createChromeMock>;
 
 beforeAll(async () => {
   chromeMock = createChromeMock();
   (globalThis as Record<string, unknown>).chrome = chromeMock;
-  // background.js registers its listeners as a side effect of module
+  // background.firefox.js registers its listeners as a side effect of module
   // evaluation, so `chrome` must be in place before it is imported.
-  background = await import("../src/background.js");
+  background = await import("../src/background.firefox.js");
 });
 
 describe("server", () => {

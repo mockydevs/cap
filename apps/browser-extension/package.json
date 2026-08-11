@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "build": "node scripts/build-shared.mjs",
+    "test": "node scripts/build-shared.mjs && vitest run"
   },
   "devDependencies": {
+    "esbuild": "^0.25.12",
     "jsdom": "^25.0.1",
     "vitest": "^3.2.4"
   }

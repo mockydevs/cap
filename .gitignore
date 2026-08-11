@@ -10,3 +10,4 @@ coverage
 .env.*
 !.env.example
 .integration-env.json
+apps/browser-extension/src/vendor/

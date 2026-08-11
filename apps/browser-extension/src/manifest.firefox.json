@@ -1,11 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Cap Screen Recorder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Launch your Cap recorder and recording library from Firefox.",
   "permissions": ["storage", "tabs", "contextMenus"],
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "background": { "scripts": ["background.js"], "type": "module" },
-  "action": { "default_title": "Cap", "default_popup": "popup.html" },
+  "action": {
+    "default_title": "Cap",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" }
+  },
   "commands": {
     "start-recording": {
       "suggested_key": { "default": "Ctrl+Shift+9", "mac": "Command+Shift+9" },

@@ -7,3 +7,26 @@ Chrome and Edge use `manifest.chromium.json`; Firefox uses `manifest.firefox.jso
 For local installation, extract the ZIP. Load the directory with Chrome/Edge “Load unpacked,” or use Firefox `about:debugging` → “Load Temporary Add-on” and select `manifest.json`. Store publication requires separate Chrome Web Store, Edge Add-ons, and Firefox Add-ons developer accounts and review.
 
 Safari does not install WebExtension ZIPs directly. Apple requires `xcrun safari-web-extension-converter`, an Xcode container application, Apple signing, notarization, and App Store distribution. The shared source is suitable for conversion, but the Safari package must be produced on macOS with the organization's Apple credentials.
+
+## Chromium: real in-browser recording
+
+The Chromium build (Chrome, Edge) no longer just launches the web app — it records directly in the browser, Loom-style, and uploads to Cap through the same resumable-upload contract as `apps/web/components/capture-studio.tsx`. The Firefox build is unchanged and still only launches the web recorder/library.
+
+- **Sign-in**: the popup requires signing in (email/password, or "Sign in with Google" via `chrome.identity.launchWebAuthFlow`) against the configured Cap server before recording is offered. There is no refresh/expiry mechanism; a 401 from any Cap API call during or after upload means the user must sign in again. The extension never round-trips login through the background service worker — the popup calls `src/lib/auth.js`/`src/lib/google-auth.js` directly, since login needs no background involvement.
+- **Source types**: Current Tab (`chrome.tabCapture`), Full Screen / Window (`chrome.desktopCapture`), and Camera only (plain `getUserMedia`). Recording happens in an MV3 offscreen document (`src/offscreen.html`/`offscreen.js`), which is the only place `getUserMedia`/`MediaRecorder` can run without a visible tab.
+- **Camera bubble**: when "Include camera" is checked alongside a screen/tab/window recording, a small always-visible-attempt popup window (`src/controls.html`/`controls.js`) captures and records the camera separately, then uploads it linked to the primary recording via `linkedRecordingId`, mirroring `capture-studio.tsx`'s dual-recorder pattern. For a camera-only recording, the camera is the primary capture (done in the offscreen document) and the controls window exists only for its Pause/Resume/Stop UI.
+- **Resilience**: if a 401 arrives after an upload has already begun, the in-progress `PendingUpload` stays in IndexedDB (never deleted) so the popup's "Finish uploading" banner can resume it once the user signs in again.
+
+### Manual pre-ship checklist
+
+This feature was implemented without access to a real Chrome/Edge GUI (no browser automation available in this environment) — mirroring how an earlier, unrelated macOS ScreenCaptureKit change in this repo was handled: implemented best-effort against the documented APIs and unit-tested with mocked `chrome.*`/`MediaRecorder`/`getUserMedia`, but **none of the following has actually been exercised against a real browser**. Before shipping a Chromium build, manually verify:
+
+- [ ] Load unpacked in both Chrome and Edge (`chrome://extensions` / `edge://extensions`, Developer mode, "Load unpacked", point at the extracted `cap-chromium-extension.zip`).
+- [ ] Grant the runtime host permission (`optional_host_permissions`) against a real dev server origin via the popup's "Save and verify".
+- [ ] Sign in via both email/password and Google. For Google, first register the locally-loaded extension's `https://<extension-id>.chromiumapp.org/` redirect URI in the Google Cloud Console project backing `GOOGLE_DESKTOP_OAUTH_CLIENT_ID` — the extension ID differs between an unpacked load and a Chrome Web Store publish, so this must be redone per environment.
+- [ ] Record all four source types (Current Tab, Full Screen, Window, Camera only) end to end.
+- [ ] Confirm a linked screen+camera recording lands as two correctly-associated recordings in the library.
+- [ ] Force a 401 mid-recording (e.g. revoke the session server-side) and confirm the recording survives locally (IndexedDB `PendingUpload` intact) and resumes after re-login via the popup's banner.
+- [ ] Kill the service worker mid-recording (`chrome://extensions` → the extension's "service worker" link → DevTools → close) and observe whether the offscreen document/recording survives — MV3 service worker lifecycle interaction with an active offscreen `MediaRecorder` is unverified.
+- [ ] Confirm the Firefox package is behaviorally unchanged from before this feature (same files, same permissions, same UI).
+- [ ] Confirm `pnpm --filter @cap/browser-extension test` and both `bash scripts/package.sh chromium`/`firefox` pass.

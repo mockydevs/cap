@@ -8,13 +8,13 @@ function createChromeMock() {
   };
 }
 
-let popup: typeof import("../src/popup.js");
+let popup: typeof import("../src/popup.firefox.js");
 let chromeMock: ReturnType<typeof createChromeMock>;
 
 beforeAll(async () => {
-  // popup.js wires up #record/#library/#save/#server/#status as a side
-  // effect of module evaluation, so the DOM and `chrome` mock both need to
-  // be in place before it is imported.
+  // popup.firefox.js wires up #record/#library/#save/#server/#status as a
+  // side effect of module evaluation, so the DOM and `chrome` mock both need
+  // to be in place before it is imported.
   document.body.innerHTML = `
     <input id="server" />
     <button id="record"></button>
@@ -28,7 +28,7 @@ beforeAll(async () => {
     (defaults: Record<string, unknown>) => Promise.resolve(defaults),
   );
 
-  popup = await import("../src/popup.js");
+  popup = await import("../src/popup.firefox.js");
 });
 
 describe("normalize", () => {

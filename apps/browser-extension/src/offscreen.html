@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cap offscreen capture</title>
+  </head>
+  <body>
+    <!--
+      This page is never shown to the user. MV3 offscreen documents must be
+      a real HTML page (chrome.offscreen has no headless/no-DOM mode), but
+      it exists purely so getUserMedia/MediaRecorder can run with a DOM
+      context while the extension has no visible tab of its own.
+    -->
+    <script src="offscreen.js" type="module"></script>
+  </body>
+</html>
