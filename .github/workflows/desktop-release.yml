@@ -14,14 +14,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # --bundles pins each platform to exactly one, easy-to-install
+          # package format instead of Tauri's full per-platform default set
+          # (msi+nsis on Windows; app+dmg on macOS; deb+rpm+appimage on
+          # Linux) — .dmg, .deb, and .exe (nsis) only.
           - platform: macos-14
-            args: --target aarch64-apple-darwin
+            args: --target aarch64-apple-darwin --bundles dmg
           - platform: macos-13
-            args: --target x86_64-apple-darwin
+            args: --target x86_64-apple-darwin --bundles dmg
           - platform: ubuntu-22.04
-            args: ""
+            args: --bundles deb
           - platform: windows-2022
-            args: ""
+            args: --bundles nsis
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
