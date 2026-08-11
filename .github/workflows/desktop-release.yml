@@ -45,8 +45,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ contains(matrix.args, '--target') && (contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
+      # libgbm-dev: xcap's Wayland screen-capture path (via the gbm crate,
+      # pulled in through libwayshot-xcap) links against libgbm; without
+      # the dev package the final link step fails with "unable to find
+      # library -lgbm" even though everything compiles.
       - if: startsWith(matrix.platform, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev libgbm-dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cap/desktop typecheck
       - uses: tauri-apps/tauri-action@v0
