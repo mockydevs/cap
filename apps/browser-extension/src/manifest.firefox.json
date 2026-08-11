@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Launch your Cap recorder and recording library from Firefox.",
   "permissions": ["storage", "tabs", "contextMenus"],
-  "background": { "scripts": ["background.js"] },
+  "background": { "scripts": ["background.js"], "type": "module" },
   "action": { "default_title": "Cap", "default_popup": "popup.html" },
   "commands": {
     "start-recording": {

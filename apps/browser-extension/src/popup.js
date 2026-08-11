@@ -3,7 +3,7 @@ const api = globalThis.browser ?? globalThis.chrome;
 const serverInput = document.querySelector("#server");
 const status = document.querySelector("#status");
 
-const normalize = (value) => {
+export const normalize = (value) => {
   const url = new URL(value);
   if (
     url.protocol !== "https:" &&
@@ -23,7 +23,7 @@ const normalize = (value) => {
     );
   return url.origin;
 };
-async function currentServer() {
+export async function currentServer() {
   const saved = await api.storage.sync.get({ serverUrl: DEFAULT_SERVER });
   return normalize(String(saved.serverUrl));
 }

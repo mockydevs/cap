@@ -1,12 +1,12 @@
 const DEFAULT_SERVER = "http://localhost:3000";
 const api = globalThis.browser ?? globalThis.chrome;
 
-async function server() {
+export async function server() {
   const value = await api.storage.sync.get({ serverUrl: DEFAULT_SERVER });
   return String(value.serverUrl).replace(/\/$/, "");
 }
 
-async function open(path) {
+export async function open(path) {
   await api.tabs.create({ url: `${await server()}${path}` });
 }
 

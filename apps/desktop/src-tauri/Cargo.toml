@@ -28,3 +28,11 @@ tokio = { version = "1", features = ["fs", "io-util", "net", "process", "sync"] 
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 xcap = "0.6"
+
+# mkfifo(2) has no std wrapper; used only to create the named pipe that feeds
+# the macOS ScreenCaptureKit system-audio helper's PCM output into ffmpeg.
+# `libc` is already pulled in transitively on every platform (e.g. via
+# tauri/gtk on Linux), so this adds no new crate to the dependency tree —
+# it just exposes the one already-compiled crate directly, scoped to macOS.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

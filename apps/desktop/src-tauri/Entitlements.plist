@@ -5,4 +5,24 @@
   <key>com.apple.security.device.camera</key><true/>
   <key>com.apple.security.screen-recording</key><true/>
   <key>com.apple.security.network.client</key><true/>
+  <!--
+    Researched-but-unresolved question (added alongside the macOS
+    ScreenCaptureKit system-audio helper, macos/sck-audio-capture.swift):
+    does capturing system audio via ScreenCaptureKit from a spawned helper
+    process need any entitlement beyond what is already declared above?
+
+    This file has no `com.apple.security.app-sandbox` key, i.e. Cap does not
+    appear to run under the App Sandbox, so the App-Sandbox-specific screen
+    capture entitlement some sandboxed apps declare should not be required
+    here — non-sandboxed, hardened-runtime apps gate ScreenCaptureKit purely
+    through the TCC "Screen Recording" permission grant (the same one this
+    app's existing AVFoundation-based screen capture already requires), not
+    through an entitlement. That reasoning was NOT verified against a real
+    Xcode/macOS build; it is documentation-only, and it does not address
+    whether TCC attributes that grant to a helper binary spawned as a child
+    process the same way it does to Cap.app itself, which is exactly the
+    helper's architecture (see the "Requirements this helper cannot satisfy
+    on its own" section in sck-audio-capture.swift). Verify on real hardware
+    before shipping; do not assume this file is correct as-is.
+  -->
 </dict></plist>

@@ -77,7 +77,27 @@ fn source_geometry(id: &str) -> Result<(i32, i32, u32, u32), String> {
     ))
 }
 
-pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<Child, String> {
+/// Everything `spawn()` hands back to the caller so it can track and clean up
+/// both the ffmpeg process and (macOS only, system-audio-without-microphone
+/// only) the ScreenCaptureKit audio helper process spawned alongside it.
+///
+/// On Windows and Linux, and on macOS whenever a microphone is selected or
+/// system audio is off, `system_audio_helper`/`system_audio_fifo` are always
+/// `None` and this behaves exactly like the plain `Child` this function used
+/// to return.
+pub struct CaptureProcess {
+    pub video: Child,
+    pub system_audio_helper: Option<Child>,
+    pub system_audio_fifo: Option<std::path::PathBuf>,
+}
+
+/// What a platform's `platform_input` implementation optionally spawns as a
+/// second, independent child process to supply an ffmpeg audio input that
+/// `-f avfoundation`/`gdigrab`/`x11grab` cannot itself produce. Only the
+/// macOS branch (system audio, no microphone) ever returns `Some`.
+type AudioHelper = Option<(Child, std::path::PathBuf)>;
+
+pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, String> {
     if !(1..=60).contains(&options.frame_rate) || !(1..=51).contains(&options.quality) {
         return Err("Frame rate or quality is outside its safe range".into());
     }
@@ -92,7 +112,7 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<Child, String> {
     height = height.min(options.height).max(2) & !1;
     let mut command = Command::new("ffmpeg");
     command.arg("-hide_banner").arg("-nostdin").arg("-y");
-    platform_input(&mut command, x, y, width, height, options)?;
+    let audio_helper = platform_input(&mut command, x, y, width, height, options)?;
     command.args([
         "-map",
         "0:v:0",
@@ -117,14 +137,35 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<Child, String> {
         "+frag_keyframe+empty_moov+default_base_moof",
         output.to_string_lossy().as_ref(),
     ]);
-    command
+    let video = match command
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| {
-            format!("Could not launch FFmpeg: {e}. Install the bundled Cap media runtime.")
-        })
+    {
+        Ok(child) => child,
+        Err(e) => {
+            // ffmpeg failed to launch after we already started the audio helper
+            // (if any) — don't leak it or its pipe.
+            if let Some((mut helper, fifo)) = audio_helper {
+                let _ = helper.kill();
+                let _ = helper.wait();
+                let _ = std::fs::remove_file(fifo);
+            }
+            return Err(format!(
+                "Could not launch FFmpeg: {e}. Install the bundled Cap media runtime."
+            ));
+        }
+    };
+    let (system_audio_helper, system_audio_fifo) = match audio_helper {
+        Some((child, fifo)) => (Some(child), Some(fifo)),
+        None => (None, None),
+    };
+    Ok(CaptureProcess {
+        video,
+        system_audio_helper,
+        system_audio_fifo,
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -135,7 +176,7 @@ fn platform_input(
     w: u32,
     h: u32,
     o: &CaptureOptions,
-) -> Result<(), String> {
+) -> Result<AudioHelper, String> {
     c.args([
         "-f",
         "gdigrab",
@@ -157,7 +198,7 @@ fn platform_input(
     } else if o.system_audio {
         c.args(["-f", "dshow", "-i", "audio=virtual-audio-capturer"]);
     }
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(target_os = "macos")]
@@ -168,7 +209,7 @@ fn platform_input(
     _w: u32,
     _h: u32,
     o: &CaptureOptions,
-) -> Result<(), String> {
+) -> Result<AudioHelper, String> {
     let index = o
         .video_source_id
         .split(':')
@@ -186,8 +227,109 @@ fn platform_input(
     ]);
     if let Some(mic) = &o.microphone_id {
         c.args(["-f", "avfoundation", "-i", &format!("none:{mic}")]);
-    } else if o.system_audio {
-        return Err("macOS system audio requires the ScreenCaptureKit build; select a microphone or disable system audio".into());
+        return Ok(None);
+    }
+    if o.system_audio {
+        // *** UNVERIFIED — see macos/sck-audio-capture.swift's header comment. ***
+        // avfoundation cannot capture macOS system/desktop audio, so when the
+        // user wants system audio and picked no microphone, we spawn a
+        // separate Swift/ScreenCaptureKit helper process (built by build.rs,
+        // macOS only) that writes raw PCM into a named pipe, and feed that
+        // pipe to ffmpeg as input index 1 — exactly the input slot the
+        // microphone branch above would otherwise occupy, so the shared
+        // `-map 1:a:0` / AAC-encode logic in `spawn()` needs no changes.
+        //
+        // PCM contract with the helper (must match exactly):
+        //   32-bit float, little-endian, 48000 Hz, 2-channel interleaved.
+        let (helper, fifo) = macos_spawn_system_audio_helper()?;
+        c.args([
+            "-f",
+            "f32le",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-i",
+            &fifo.to_string_lossy(),
+        ]);
+        return Ok(Some((helper, fifo)));
+    }
+    Ok(None)
+}
+
+/// Creates the named pipe the ScreenCaptureKit helper writes to and ffmpeg
+/// reads from, then spawns the helper against it.
+///
+/// *** UNVERIFIED on real macOS hardware. ***
+#[cfg(target_os = "macos")]
+fn macos_spawn_system_audio_helper() -> Result<(Child, std::path::PathBuf), String> {
+    let helper_binary = macos_system_audio_helper_binary()?;
+    let fifo = std::env::temp_dir().join(format!("cap-system-audio-{}.pcm", uuid::Uuid::new_v4()));
+    macos_create_fifo(&fifo)?;
+    match Command::new(&helper_binary)
+        .arg(&fifo)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => Ok((child, fifo)),
+        Err(e) => {
+            let _ = std::fs::remove_file(&fifo);
+            Err(format!(
+                "Could not launch the macOS system-audio capture helper: {e}"
+            ))
+        }
+    }
+}
+
+/// Locates the compiled `sck-audio-capture` helper binary.
+///
+/// *** UNVERIFIED on real macOS hardware. *** In particular, the assumption
+/// that a `bundle.macOS.resources` entry lands at
+/// `<App>.app/Contents/Resources/<declared-relative-path>` (preserving the
+/// `macos/` prefix it was declared with in tauri.conf.json) has not been
+/// confirmed against an actual signed, bundled build — only against Tauri's
+/// documentation. This tries a couple of plausible layouts plus a
+/// development-time fallback so a wrong guess here fails soft (falls through
+/// to the next candidate, then a clear error) rather than silently pointing
+/// at nothing.
+#[cfg(target_os = "macos")]
+fn macos_system_audio_helper_binary() -> Result<std::path::PathBuf, String> {
+    let mut candidates = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        // A bundled app's executable lives at <App>.app/Contents/MacOS/<exe>.
+        if let Some(contents_dir) = exe.parent().and_then(|macos_dir| macos_dir.parent()) {
+            candidates.push(contents_dir.join("Resources/macos/sck-audio-capture"));
+            candidates.push(contents_dir.join("Resources/sck-audio-capture"));
+        }
+    }
+    // `cargo tauri dev` / a plain `cargo run` has no app bundle around it;
+    // fall back to where build.rs places the compiled binary in the source
+    // tree so local development still works.
+    candidates.push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("macos/sck-audio-capture"));
+
+    candidates.into_iter().find(|path| path.is_file()).ok_or_else(|| {
+        "The macOS system-audio capture helper is missing from this build. \
+         Select a microphone, or disable system audio, or rebuild with Xcode/swiftc installed."
+            .into()
+    })
+}
+
+/// SAFETY: `path` is converted to a NUL-terminated `CString` immediately
+/// above the call and is not mutated or retained afterward; `libc::mkfifo`
+/// only reads it and returns a plain integer status.
+#[cfg(target_os = "macos")]
+fn macos_create_fifo(path: &Path) -> Result<(), String> {
+    let c_path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())
+        .map_err(|_| "Invalid temporary path for the system-audio pipe".to_string())?;
+    let result = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+    if result != 0 {
+        return Err(format!(
+            "Could not create the system-audio pipe at {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        ));
     }
     Ok(())
 }
@@ -200,7 +342,7 @@ fn platform_input(
     w: u32,
     h: u32,
     o: &CaptureOptions,
-) -> Result<(), String> {
+) -> Result<AudioHelper, String> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("DISPLAY").is_none() {
         return Err(
             "Wayland requires an xdg-desktop-portal PipeWire stream; start Cap with portal access"
@@ -225,7 +367,7 @@ fn platform_input(
     } else if o.system_audio {
         c.args(["-f", "pulse", "-i", "@DEFAULT_MONITOR@"]);
     }
-    Ok(())
+    Ok(None)
 }
 
 #[cfg(test)]

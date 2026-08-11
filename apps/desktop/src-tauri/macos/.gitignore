@@ -1,0 +1,4 @@
+# Compiled by build.rs from sck-audio-capture.swift (macOS builds only).
+# Never commit the binary — only the .swift source is checked in.
+sck-audio-capture
+.sck-audio-capture-*

@@ -16,7 +16,7 @@ use url::Url;
 use uuid::Uuid;
 
 struct ActiveRecording {
-    child: Child,
+    process: capture::CaptureProcess,
     project: Project,
     directory: std::path::PathBuf,
     started: Instant,
@@ -73,9 +73,9 @@ fn start_recording(
         failure: None,
     };
     projects::save(&directory, &project)?;
-    let child = capture::spawn(&options, &media_path)?;
+    let process = capture::spawn(&options, &media_path)?;
     *active = Some(ActiveRecording {
-        child,
+        process,
         project: project.clone(),
         directory,
         started: Instant::now(),
@@ -121,6 +121,46 @@ fn signal_process(child: &Child, pause: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Stops the macOS ScreenCaptureKit system-audio helper (if one is running)
+/// and removes its named pipe. A no-op everywhere else, since
+/// `system_audio_helper`/`system_audio_fifo` are only ever populated by
+/// `capture::spawn` on macOS when system audio is requested with no
+/// microphone selected.
+///
+/// Sends SIGTERM rather than using `Child::kill` (which sends SIGKILL on
+/// Unix) so the helper's own signal handler gets a chance to stop its
+/// SCStream and close the pipe's write end cleanly — see
+/// macos/sck-audio-capture.swift. Falls back to a hard kill if it does not
+/// exit within a few seconds, so `stop_recording` can never hang waiting on
+/// a stuck helper. UNVERIFIED on real macOS hardware.
+fn stop_system_audio_helper(process: &mut capture::CaptureProcess) {
+    if let Some(mut helper) = process.system_audio_helper.take() {
+        #[cfg(unix)]
+        {
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &helper.id().to_string()])
+                .status();
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            match helper.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                _ => {
+                    let _ = helper.kill();
+                    let _ = helper.wait();
+                    break;
+                }
+            }
+        }
+    }
+    if let Some(fifo) = process.system_audio_fifo.take() {
+        let _ = std::fs::remove_file(fifo);
+    }
+}
+
 #[tauri::command]
 fn pause_recording(state: State<DesktopState>) -> Result<(), String> {
     let mut guard = state
@@ -129,7 +169,17 @@ fn pause_recording(state: State<DesktopState>) -> Result<(), String> {
         .map_err(|_| "Recorder state is unavailable")?;
     let active = guard.as_mut().ok_or("No active recording")?;
     if !active.paused {
-        signal_process(&active.child, true)?;
+        signal_process(&active.process.video, true)?;
+        // The macOS system-audio helper (when present) is a process
+        // independent of ffmpeg, so pausing ffmpeg alone would leave it
+        // capturing into a pipe ffmpeg has stopped draining, which fills the
+        // pipe's kernel buffer and eventually blocks the helper's audio
+        // callback. Suspending it too keeps pause semantics consistent with
+        // the microphone path, where ffmpeg being paused freezes capture
+        // entirely. UNVERIFIED: not exercised on real macOS hardware.
+        if let Some(helper) = &active.process.system_audio_helper {
+            signal_process(helper, true)?;
+        }
         active.paused = true;
     }
     Ok(())
@@ -142,7 +192,10 @@ fn resume_recording(state: State<DesktopState>) -> Result<(), String> {
         .map_err(|_| "Recorder state is unavailable")?;
     let active = guard.as_mut().ok_or("No active recording")?;
     if active.paused {
-        signal_process(&active.child, false)?;
+        signal_process(&active.process.video, false)?;
+        if let Some(helper) = &active.process.system_audio_helper {
+            signal_process(helper, false)?;
+        }
         active.paused = false;
     }
     Ok(())
@@ -157,12 +210,16 @@ fn stop_recording(app: AppHandle, state: State<DesktopState>) -> Result<Project,
         .take()
         .ok_or("No active recording")?;
     if active.paused {
-        signal_process(&active.child, false)?;
+        signal_process(&active.process.video, false)?;
+        if let Some(helper) = &active.process.system_audio_helper {
+            signal_process(helper, false)?;
+        }
     }
-    if let Some(stdin) = active.child.stdin.as_mut() {
+    if let Some(stdin) = active.process.video.stdin.as_mut() {
         stdin.write_all(b"q\n").map_err(|e| e.to_string())?;
     }
-    let status = active.child.wait().map_err(|e| e.to_string())?;
+    let status = active.process.video.wait().map_err(|e| e.to_string())?;
+    stop_system_audio_helper(&mut active.process);
     active.project.duration_ms = active.started.elapsed().as_millis() as u64;
     active.project.updated_at = Utc::now();
     active.project.status = if status.success()
