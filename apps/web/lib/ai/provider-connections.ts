@@ -1,45 +1,38 @@
-import { createHash } from "node:crypto";
-import { DecryptCommand, EncryptCommand, KMSClient } from "@aws-sdk/client-kms";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { aiProviderConnections, aiProviderRoutes } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
+import {
+  decryptCredential,
+  encryptCredential,
+  EnvelopeEncryptionError,
+  requireKeyArn,
+} from "../crypto/envelope";
 import { AiServiceError } from "./service";
 
+const PURPOSE = "ai-provider-credential";
+
 const keyArn = () => {
-  const value = process.env.AI_CREDENTIALS_KMS_KEY_ARN;
-  if (!value)
-    throw new AiServiceError("AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE", 503);
-  return value;
+  try {
+    return requireKeyArn("AI_CREDENTIALS_KMS_KEY_ARN");
+  } catch (error) {
+    if (error instanceof EnvelopeEncryptionError)
+      throw new AiServiceError("AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE", 503);
+    throw error;
+  }
 };
-const kms = () =>
-  new KMSClient(
-    process.env.AWS_REGION ? { region: process.env.AWS_REGION } : {},
-  );
-const context = (workspaceId: string) => ({
-  application: "cap",
-  workspaceId,
-  purpose: "ai-provider-credential",
-});
+
 export async function encryptProviderCredential(
   workspaceId: string,
   secret: string,
 ) {
-  const KeyId = keyArn();
-  const result = await kms().send(
-    new EncryptCommand({
-      KeyId,
-      Plaintext: Buffer.from(secret),
-      EncryptionContext: context(workspaceId),
-    }),
-  );
-  if (!result.CiphertextBlob) throw new Error("KMS returned no ciphertext");
-  return {
-    ciphertext: Buffer.from(result.CiphertextBlob).toString("base64"),
-    keyArn: result.KeyId ?? KeyId,
-    fingerprint: createHash("sha256").update(secret).digest("hex").slice(-12),
-  };
+  return encryptCredential({
+    workspaceId,
+    secret,
+    keyArn: keyArn(),
+    purpose: PURPOSE,
+  });
 }
 
 export async function decryptProviderCredential(input: {
@@ -47,15 +40,7 @@ export async function decryptProviderCredential(input: {
   ciphertext: string;
   keyArn: string;
 }) {
-  const result = await kms().send(
-    new DecryptCommand({
-      KeyId: input.keyArn,
-      CiphertextBlob: Buffer.from(input.ciphertext, "base64"),
-      EncryptionContext: context(input.workspaceId),
-    }),
-  );
-  if (!result.Plaintext) throw new Error("KMS returned no plaintext");
-  return Buffer.from(result.Plaintext).toString("utf8");
+  return decryptCredential({ ...input, purpose: PURPOSE });
 }
 
 const endpoint = (provider: string, baseUrl?: string | null) =>
@@ -64,11 +49,27 @@ const endpoint = (provider: string, baseUrl?: string | null) =>
     ? "https://api.anthropic.com"
     : "https://api.openai.com/v1");
 
+/**
+ * Best-effort parse of an OpenAI-compatible `{data: [{id}, ...]}` models
+ * list. Anthropic's `/v1/models` and every OpenAI-compatible self-hosted
+ * server follow this same shape; a provider that doesn't just yields an
+ * empty list rather than failing validation over it — the admin can still
+ * enter model names manually when this comes back empty.
+ */
+export function parseModelIds(payload: unknown): string[] {
+  const data = (payload as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((item) => (item as { id?: unknown } | null)?.id)
+    .filter((id): id is string => typeof id === "string")
+    .sort();
+}
+
 export async function validateProviderCredential(input: {
   provider: "OPENAI" | "ANTHROPIC" | "OPENAI_COMPATIBLE";
   baseUrl?: string | undefined;
   apiKey: string;
-}) {
+}): Promise<{ models: string[] }> {
   const root = endpoint(input.provider, input.baseUrl).replace(/\/$/, "");
   const response = await fetch(
     `${root}${input.provider === "ANTHROPIC" ? "/v1/models" : "/models"}`,
@@ -82,6 +83,11 @@ export async function validateProviderCredential(input: {
   );
   if (!response.ok)
     throw new AiServiceError("AI_PROVIDER_VALIDATION_FAILED", 400);
+  const models = await response
+    .json()
+    .then(parseModelIds)
+    .catch(() => []);
+  return { models };
 }
 
 export async function listProviderConnections(actor: Actor) {
@@ -180,6 +186,68 @@ export async function revokeProviderConnection(actor: Actor, id: string) {
       workspaceId: actor.workspaceId,
       actorUserId: actor.userId,
       action: "ai_provider_connection.revoked",
+      targetType: "ai_provider_connection",
+      targetId: updated.id,
+    });
+    return updated;
+  });
+}
+
+/**
+ * Replaces an existing connection's credential in place (same connection
+ * id, same allowedModels/allowedCapabilities/status) rather than requiring
+ * create-a-new-connection-then-revoke-the-old-one for a routine key
+ * rotation.
+ */
+export async function rotateProviderConnection(
+  actor: Actor,
+  id: string,
+  apiKey: string,
+) {
+  const [connection] = await db()
+    .select()
+    .from(aiProviderConnections)
+    .where(
+      and(
+        eq(aiProviderConnections.id, id),
+        eq(aiProviderConnections.workspaceId, actor.workspaceId),
+        eq(aiProviderConnections.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+  if (!connection) throw new AiServiceError("AI_NOT_FOUND", 404);
+  await validateProviderCredential({
+    provider: connection.provider,
+    baseUrl: connection.baseUrl ?? undefined,
+    apiKey,
+  });
+  const encrypted = await encryptProviderCredential(actor.workspaceId, apiKey);
+  return db().transaction(async (tx) => {
+    const [updated] = await tx
+      .update(aiProviderConnections)
+      .set({
+        encryptedCredential: encrypted.ciphertext,
+        credentialKeyArn: encrypted.keyArn,
+        credentialFingerprint: encrypted.fingerprint,
+        lastValidatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(aiProviderConnections.id, id),
+          eq(aiProviderConnections.workspaceId, actor.workspaceId),
+          eq(aiProviderConnections.status, "ACTIVE"),
+        ),
+      )
+      .returning({
+        id: aiProviderConnections.id,
+        credentialFingerprint: aiProviderConnections.credentialFingerprint,
+      });
+    if (!updated) throw new AiServiceError("AI_NOT_FOUND", 404);
+    await recordAuditEvent(tx, {
+      workspaceId: actor.workspaceId,
+      actorUserId: actor.userId,
+      action: "ai_provider_connection.rotated",
       targetType: "ai_provider_connection",
       targetId: updated.id,
     });

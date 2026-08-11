@@ -7,46 +7,73 @@ type Policy = {
   monthlyTokenLimit: number;
   monthlyCostLimitMicrounits: number;
 };
+type Usage = { tokens: number; costMicrounits: number };
+type Purpose = "ANALYSIS" | "EMBEDDINGS" | "TRANSCRIPTION";
+const PURPOSES: Purpose[] = ["ANALYSIS", "EMBEDDINGS", "TRANSCRIPTION"];
+type ProviderConnection = {
+  id: string;
+  provider: string;
+  displayName: string;
+  credentialFingerprint: string;
+  allowedCapabilities: Purpose[];
+  allowedModels: string[];
+  defaultModel: string;
+  status: string;
+};
 export function AiSettings() {
   const [policy, setPolicy] = useState<Policy>(),
+    [usage, setUsage] = useState<Usage>(),
     [message, setMessage] = useState<string>(),
-    [providers, setProviders] = useState<
-      Array<{
-        id: string;
-        provider: string;
-        displayName: string;
-        credentialFingerprint: string;
-        allowedModels: string[];
-        defaultModel: string;
-        status: string;
-      }>
-    >([]),
+    [providers, setProviders] = useState<ProviderConnection[]>([]),
+    [routesByPurpose, setRoutesByPurpose] = useState<Record<Purpose, string>>(
+      { ANALYSIS: "", EMBEDDINGS: "", TRANSCRIPTION: "" },
+    ),
+    [routeSelection, setRouteSelection] = useState<Record<Purpose, string>>({
+      ANALYSIS: "",
+      EMBEDDINGS: "",
+      TRANSCRIPTION: "",
+    }),
     [provider, setProvider] = useState<
       "OPENAI" | "ANTHROPIC" | "OPENAI_COMPATIBLE"
     >("OPENAI"),
     [displayName, setDisplayName] = useState("OpenAI"),
     [apiKey, setApiKey] = useState(""),
     [baseUrl, setBaseUrl] = useState(""),
-    [models, setModels] = useState("gpt-5-mini"),
-    [routeConnection, setRouteConnection] = useState("");
+    [capabilities, setCapabilities] = useState<Purpose[]>(["ANALYSIS"]),
+    [fetchingModels, setFetchingModels] = useState(false),
+    [fetchedModels, setFetchedModels] = useState<string[]>([]),
+    [selectedModels, setSelectedModels] = useState<string[]>([]),
+    [manualModels, setManualModels] = useState(""),
+    [defaultModel, setDefaultModel] = useState(""),
+    [rotateKeys, setRotateKeys] = useState<Record<string, string>>({});
   const refreshProviders = useCallback(async () => {
     const response = await fetch("/api/ai/providers", { cache: "no-store" });
     if (response.ok) {
       const payload = (await response.json()) as {
-        connections: typeof providers;
-        routes: Array<{ purpose: string; connectionId: string }>;
+        connections: ProviderConnection[];
+        routes: Array<{ purpose: Purpose; connectionId: string }>;
       };
       setProviders(payload.connections);
-      setRouteConnection(
-        payload.routes.find((route) => route.purpose === "ANALYSIS")
-          ?.connectionId ?? "",
-      );
+      const byPurpose: Record<Purpose, string> = {
+        ANALYSIS: "",
+        EMBEDDINGS: "",
+        TRANSCRIPTION: "",
+      };
+      for (const route of payload.routes) byPurpose[route.purpose] =
+        route.connectionId;
+      setRoutesByPurpose(byPurpose);
+      setRouteSelection(byPurpose);
     }
   }, []);
   useEffect(() => {
     void fetch("/api/ai/policy", { cache: "no-store" }).then(
       async (response) => {
         if (response.ok) setPolicy((await response.json()) as Policy);
+      },
+    );
+    void fetch("/api/ai/usage", { cache: "no-store" }).then(
+      async (response) => {
+        if (response.ok) setUsage((await response.json()) as Usage);
       },
     );
     void refreshProviders();
@@ -64,11 +91,57 @@ export function AiSettings() {
         : "Only workspace owners and admins can change AI policy.",
     );
   };
+  const toggleCapability = (capability: Purpose) => {
+    setCapabilities((current) =>
+      current.includes(capability)
+        ? current.filter((item) => item !== capability)
+        : [...current, capability],
+    );
+  };
+  const toggleModel = (model: string) => {
+    setSelectedModels((current) =>
+      current.includes(model)
+        ? current.filter((item) => item !== model)
+        : [...current, model],
+    );
+  };
+  const manualModelList = manualModels
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  const candidateModels = Array.from(
+    new Set([...selectedModels, ...manualModelList]),
+  );
+  const fetchModels = async () => {
+    setFetchingModels(true);
+    setMessage(undefined);
+    try {
+      const response = await fetch("/api/ai/providers/models", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          ...(baseUrl ? { baseUrl } : {}),
+        }),
+      });
+      if (!response.ok) {
+        setMessage("Could not reach the provider with this key/endpoint.");
+        return;
+      }
+      const payload = (await response.json()) as { models: string[] };
+      setFetchedModels(payload.models);
+      setMessage(
+        payload.models.length === 0
+          ? "Connected, but the provider didn't return a model list — enter model names manually below."
+          : "Connected. Select the models to allow below.",
+      );
+    } finally {
+      setFetchingModels(false);
+    }
+  };
   const addProvider = async () => {
-    const allowedModels = models
-      .split(",")
-      .map((model) => model.trim())
-      .filter(Boolean);
+    const allowedModels = candidateModels;
     const response = await fetch("/api/ai/providers", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -77,9 +150,9 @@ export function AiSettings() {
         displayName,
         apiKey,
         ...(baseUrl ? { baseUrl } : {}),
-        allowedCapabilities: ["ANALYSIS"],
+        allowedCapabilities: capabilities,
         allowedModels,
-        defaultModel: allowedModels[0],
+        defaultModel: defaultModel || allowedModels[0],
       }),
     });
     setApiKey("");
@@ -88,25 +161,51 @@ export function AiSettings() {
         ? "Provider connection encrypted and saved."
         : "Provider validation failed. Check the key, endpoint, permissions, and KMS configuration.",
     );
-    if (response.ok) await refreshProviders();
+    if (response.ok) {
+      setFetchedModels([]);
+      setSelectedModels([]);
+      setManualModels("");
+      setDefaultModel("");
+      await refreshProviders();
+    }
   };
-  const saveRoute = async () => {
-    const selected = providers.find((item) => item.id === routeConnection);
+  const saveRoute = async (purpose: Purpose) => {
+    const selected = providers.find(
+      (item) => item.id === routeSelection[purpose],
+    );
     if (!selected) return;
     const response = await fetch("/api/ai/routes", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        purpose: "ANALYSIS",
+        purpose,
         connectionId: selected.id,
         model: selected.defaultModel,
       }),
     });
     setMessage(
       response.ok
-        ? "Analysis provider route saved."
+        ? `${purpose} route saved.`
         : "Could not save provider route.",
     );
+    if (response.ok)
+      setRoutesByPurpose((current) => ({ ...current, [purpose]: selected.id }));
+  };
+  const rotateKey = async (connectionId: string) => {
+    const nextKey = rotateKeys[connectionId];
+    if (!nextKey) return;
+    const response = await fetch(`/api/ai/providers/${connectionId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: nextKey }),
+    });
+    setRotateKeys((current) => ({ ...current, [connectionId]: "" }));
+    setMessage(
+      response.ok
+        ? "Key rotated."
+        : "Rotation failed — check the new key and try again.",
+    );
+    if (response.ok) await refreshProviders();
   };
   return (
     <details className="ai-settings">
@@ -120,6 +219,23 @@ export function AiSettings() {
           }
         />{" "}
         Enable AI features
+      </label>
+      <label>
+        Allowed provider mode
+        <select
+          value={policy.allowedProvider}
+          onChange={(event) =>
+            setPolicy({
+              ...policy,
+              allowedProvider: event.target.value as Policy["allowedProvider"],
+            })
+          }
+        >
+          <option value="openai-compatible">
+            OpenAI-compatible (external processing controlled below)
+          </option>
+          <option value="self-hosted">Self-hosted only</option>
+        </select>
       </label>
       <label>
         <input
@@ -166,6 +282,14 @@ export function AiSettings() {
           }
         />
       </label>
+      {usage && (
+        <p>
+          Used this month: {usage.tokens.toLocaleString()} /{" "}
+          {policy.monthlyTokenLimit.toLocaleString()} tokens, $
+          {(usage.costMicrounits / 1_000_000).toFixed(2)} / $
+          {(policy.monthlyCostLimitMicrounits / 1_000_000).toFixed(2)}
+        </p>
+      )}
       <button onClick={() => void save()}>Save AI policy</button>
       <hr />
       <h3>Provider connections</h3>
@@ -188,6 +312,7 @@ export function AiSettings() {
                   ? "OpenAI"
                   : "Private AI",
             );
+            setFetchedModels([]);
           }}
         >
           <option value="OPENAI">OpenAI</option>
@@ -222,63 +347,168 @@ export function AiSettings() {
           onChange={(event) => setApiKey(event.target.value)}
         />
       </label>
+      <fieldset>
+        <legend>Use this connection for</legend>
+        {PURPOSES.map((capability) => (
+          <label key={capability}>
+            <input
+              type="checkbox"
+              checked={capabilities.includes(capability)}
+              onChange={() => toggleCapability(capability)}
+            />{" "}
+            {capability}
+          </label>
+        ))}
+      </fieldset>
+      <button
+        type="button"
+        disabled={!apiKey || fetchingModels}
+        onClick={() => void fetchModels()}
+      >
+        {fetchingModels ? "Checking…" : "Fetch available models"}
+      </button>
+      {fetchedModels.length > 0 && (
+        <fieldset>
+          <legend>Models available from this provider</legend>
+          {fetchedModels.map((model) => (
+            <label key={model}>
+              <input
+                type="checkbox"
+                checked={selectedModels.includes(model)}
+                onChange={() => toggleModel(model)}
+              />{" "}
+              {model}
+            </label>
+          ))}
+        </fieldset>
+      )}
       <label>
-        Allowed models, comma separated
+        Additional models, comma separated (used if the list above is empty
+        or incomplete)
         <input
-          value={models}
-          onChange={(event) => setModels(event.target.value)}
+          value={manualModels}
+          onChange={(event) => setManualModels(event.target.value)}
         />
       </label>
+      {candidateModels.length > 0 && (
+        <label>
+          Default model
+          <select
+            value={defaultModel}
+            onChange={(event) => setDefaultModel(event.target.value)}
+          >
+            <option value="">Select a default model</option>
+            {candidateModels.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <button
-        disabled={!apiKey || !displayName || !models}
+        disabled={
+          !apiKey ||
+          !displayName ||
+          capabilities.length === 0 ||
+          candidateModels.length === 0
+        }
         onClick={() => void addProvider()}
       >
         Test, encrypt, and add
       </button>
       {providers.length > 0 && (
         <>
-          <label>
-            Analysis provider
-            <select
-              value={routeConnection}
-              onChange={(event) => setRouteConnection(event.target.value)}
-            >
-              <option value="">Select a connection</option>
-              {providers
-                .filter((item) => item.status === "ACTIVE")
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.displayName} · {item.provider} · …
-                    {item.credentialFingerprint.slice(-4)}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <button disabled={!routeConnection} onClick={() => void saveRoute()}>
-            Use for analysis
-          </button>
+          <h4>Provider routing</h4>
+          {PURPOSES.map((purpose) => {
+            const eligible = providers.filter(
+              (item) =>
+                item.status === "ACTIVE" &&
+                item.allowedCapabilities.includes(purpose),
+            );
+            const current = providers.find(
+              (item) => item.id === routesByPurpose[purpose],
+            );
+            return (
+              <div key={purpose}>
+                <label>
+                  {purpose}
+                  <select
+                    value={routeSelection[purpose]}
+                    onChange={(event) =>
+                      setRouteSelection((prev) => ({
+                        ...prev,
+                        [purpose]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">
+                      {eligible.length === 0
+                        ? "No eligible connection"
+                        : "Select a connection"}
+                    </option>
+                    {eligible.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.displayName} · {item.provider} · …
+                        {item.credentialFingerprint.slice(-4)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  disabled={!routeSelection[purpose]}
+                  onClick={() => void saveRoute(purpose)}
+                >
+                  Use for {purpose.toLowerCase()}
+                </button>
+                {current && <span> Currently: {current.displayName}</span>}
+              </div>
+            );
+          })}
           <ul>
             {providers.map((item) => (
               <li key={item.id}>
                 {item.displayName} — {item.status} — key …
-                {item.credentialFingerprint.slice(-4)}{" "}
+                {item.credentialFingerprint.slice(-4)} —{" "}
+                {item.allowedCapabilities.join(", ")}
                 {item.status === "ACTIVE" && (
-                  <button
-                    onClick={async () => {
-                      if (
-                        !confirm(
-                          `Revoke ${item.displayName}? Existing queued jobs using it will fail.`,
+                  <>
+                    {" "}
+                    <input
+                      type="password"
+                      placeholder="New API key"
+                      autoComplete="off"
+                      value={rotateKeys[item.id] ?? ""}
+                      onChange={(event) =>
+                        setRotateKeys((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      disabled={!rotateKeys[item.id]}
+                      onClick={() => void rotateKey(item.id)}
+                    >
+                      Rotate key
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            `Revoke ${item.displayName}? Existing queued jobs using it will fail.`,
+                          )
                         )
-                      )
-                        return;
-                      await fetch(`/api/ai/providers/${item.id}`, {
-                        method: "DELETE",
-                      });
-                      await refreshProviders();
-                    }}
-                  >
-                    Revoke
-                  </button>
+                          return;
+                        await fetch(`/api/ai/providers/${item.id}`, {
+                          method: "DELETE",
+                        });
+                        await refreshProviders();
+                      }}
+                    >
+                      Revoke
+                    </button>
+                  </>
                 )}
               </li>
             ))}

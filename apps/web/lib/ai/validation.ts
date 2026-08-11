@@ -77,3 +77,21 @@ export const providerRouteSchema = z
     model: z.string().trim().min(1).max(120),
   })
   .strict();
+export const providerModelsLookupSchema = z
+  .object({
+    provider: z.enum(["OPENAI", "ANTHROPIC", "OPENAI_COMPATIBLE"]),
+    apiKey: z.string().trim().min(8).max(500),
+    baseUrl: z.string().url().startsWith("https://").max(500).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.provider === "OPENAI_COMPATIBLE" && !value.baseUrl)
+      ctx.addIssue({
+        code: "custom",
+        path: ["baseUrl"],
+        message: "A custom provider requires an HTTPS base URL",
+      });
+  });
+export const rotateProviderConnectionSchema = z
+  .object({ apiKey: z.string().trim().min(8).max(500) })
+  .strict();

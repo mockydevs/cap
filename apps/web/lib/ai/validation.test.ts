@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { providerConnectionSchema, providerRouteSchema } from "./validation";
+import {
+  providerConnectionSchema,
+  providerModelsLookupSchema,
+  providerRouteSchema,
+  rotateProviderConnectionSchema,
+} from "./validation";
 
 describe("AI provider connection validation", () => {
   it("requires custom providers to use an HTTPS endpoint", () => {
@@ -36,5 +41,49 @@ describe("AI provider connection validation", () => {
         model: "claude-sonnet-4-5",
       }).purpose,
     ).toBe("ANALYSIS");
+  });
+
+  it("accepts an embeddings or transcription route, not just analysis", () => {
+    for (const purpose of ["EMBEDDINGS", "TRANSCRIPTION"] as const) {
+      expect(
+        providerRouteSchema.parse({
+          purpose,
+          connectionId: "00000000-0000-4000-8000-000000000001",
+          model: "text-embedding-3-large",
+        }).purpose,
+      ).toBe(purpose);
+    }
+  });
+});
+
+describe("AI provider models lookup validation", () => {
+  it("requires an HTTPS base URL for a custom provider", () => {
+    expect(() =>
+      providerModelsLookupSchema.parse({
+        provider: "OPENAI_COMPATIBLE",
+        apiKey: "secret-key",
+      }),
+    ).toThrow();
+  });
+
+  it("does not require a base URL for OpenAI or Anthropic", () => {
+    expect(() =>
+      providerModelsLookupSchema.parse({
+        provider: "OPENAI",
+        apiKey: "secret-key",
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("AI provider connection rotation validation", () => {
+  it("rejects an empty API key", () => {
+    expect(() => rotateProviderConnectionSchema.parse({ apiKey: "" })).toThrow();
+  });
+
+  it("accepts a plausible API key", () => {
+    expect(
+      rotateProviderConnectionSchema.parse({ apiKey: "sk-rotated-key" }).apiKey,
+    ).toBe("sk-rotated-key");
   });
 });

@@ -38,6 +38,33 @@ export class AiServiceError extends Error {
   }
 }
 const approvedText = sql<string>`string_agg('['||${transcriptSegments.startMs}||'-'||${transcriptSegments.endMs}||'] '||coalesce(${transcriptSegments.correctedText},${transcriptSegments.providerText}), E'\n' ORDER BY ${transcriptSegments.ordinal})`;
+function currentMonthStart(): Date {
+  const month = new Date();
+  month.setUTCDate(1);
+  month.setUTCHours(0, 0, 0, 0);
+  return month;
+}
+async function monthlyUsage(workspaceId: string) {
+  const [usage] = await db()
+    .select({
+      tokens: sql<number>`coalesce(sum(coalesce(${aiJobs.inputTokens},0)+coalesce(${aiJobs.outputTokens},0)),0)::int`,
+      cost: sql<number>`coalesce(sum(${aiJobs.costMicrounits}),0)::bigint`,
+    })
+    .from(aiJobs)
+    .where(
+      and(
+        eq(aiJobs.workspaceId, workspaceId),
+        gte(aiJobs.createdAt, currentMonthStart()),
+      ),
+    );
+  return { tokens: usage?.tokens ?? 0, costMicrounits: usage?.cost ?? 0 };
+}
+/** Exposes the same monthly consumption `createAiJob` enforces against, so
+ * the admin settings screen can show spend instead of leaving the
+ * configured ceiling as write-only. */
+export async function getMonthlyUsage(actor: Actor) {
+  return monthlyUsage(actor.workspaceId);
+}
 export async function createAiJob(
   recordingId: string,
   actor: Actor,
@@ -58,24 +85,10 @@ export async function createAiJob(
     !policy.allowExternalProcessing
   )
     throw new AiServiceError("EXTERNAL_AI_DISABLED", 403);
-  const month = new Date();
-  month.setUTCDate(1);
-  month.setUTCHours(0, 0, 0, 0);
-  const [usage] = await db()
-    .select({
-      tokens: sql<number>`coalesce(sum(coalesce(${aiJobs.inputTokens},0)+coalesce(${aiJobs.outputTokens},0)),0)::int`,
-      cost: sql<number>`coalesce(sum(${aiJobs.costMicrounits}),0)::bigint`,
-    })
-    .from(aiJobs)
-    .where(
-      and(
-        eq(aiJobs.workspaceId, actor.workspaceId),
-        gte(aiJobs.createdAt, month),
-      ),
-    );
+  const usage = await monthlyUsage(actor.workspaceId);
   if (
-    (usage?.tokens ?? 0) >= policy.monthlyTokenLimit ||
-    (usage?.cost ?? 0) >= policy.monthlyCostLimitMicrounits
+    usage.tokens >= policy.monthlyTokenLimit ||
+    usage.costMicrounits >= policy.monthlyCostLimitMicrounits
   )
     throw new AiServiceError("AI_QUOTA_EXCEEDED", 429);
   const [source] = await db()
