@@ -85,7 +85,7 @@ export function AdminPanel() {
       cache: "no-store",
     });
     if (response.ok)
-      setMembers((await response.json() as { items: Member[] }).items);
+      setMembers(((await response.json()) as { items: Member[] }).items);
   }, []);
 
   const refreshInvitations = useCallback(async () => {
@@ -97,7 +97,9 @@ export function AdminPanel() {
       return;
     }
     if (response.ok)
-      setInvitations((await response.json() as { items: Invitation[] }).items);
+      setInvitations(
+        ((await response.json()) as { items: Invitation[] }).items,
+      );
   }, []);
 
   const refreshRetention = useCallback(async () => {
@@ -128,7 +130,9 @@ export function AdminPanel() {
       cache: "no-store",
     });
     if (response.ok)
-      setWebhooks((await response.json() as { items: WebhookEndpoint[] }).items);
+      setWebhooks(
+        ((await response.json()) as { items: WebhookEndpoint[] }).items,
+      );
   }, []);
 
   const refreshApiKeys = useCallback(async () => {
@@ -136,7 +140,7 @@ export function AdminPanel() {
       cache: "no-store",
     });
     if (response.ok)
-      setApiKeys((await response.json() as { items: ApiKey[] }).items);
+      setApiKeys(((await response.json()) as { items: ApiKey[] }).items);
   }, []);
 
   useEffect(() => {
@@ -216,8 +220,7 @@ export function AdminPanel() {
       return;
     }
     const result = (await response.json()) as
-      | { status: "ADDED" }
-      | { status: "INVITED"; token: string };
+      { status: "ADDED" } | { status: "INVITED"; token: string };
     if (result.status === "ADDED") {
       setMessage(`${inviteEmail} was added to the workspace.`);
       void refreshMembers();
@@ -252,10 +255,9 @@ export function AdminPanel() {
   };
 
   const revokeInvitation = async (invitationId: string) => {
-    const response = await fetch(
-      `/api/workspace/invitations/${invitationId}`,
-      { method: "DELETE" },
-    );
+    const response = await fetch(`/api/workspace/invitations/${invitationId}`, {
+      method: "DELETE",
+    });
     if (response.ok) void refreshInvitations();
   };
 
@@ -276,14 +278,22 @@ export function AdminPanel() {
   if (!isAdmin)
     return (
       <section className="ai-settings">
-        <p>You need the admin or owner role to view workspace administration.</p>
+        <p>
+          You need the admin or owner role to view workspace administration.
+        </p>
       </section>
     );
 
   return (
     <div className="ai-settings">
-      <section>
-        <h2>Members</h2>
+      <section className="admin-section admin-section-members" id="members">
+        <header className="admin-section-heading">
+          <div>
+            <span>01</span>
+            <h2>Members</h2>
+          </div>
+          <p>Control who can access this workspace and what they can do.</p>
+        </header>
         {members.map((member) => (
           <div key={member.userId} className="admin-row">
             <span>
@@ -301,46 +311,66 @@ export function AdminPanel() {
                 </option>
               ))}
             </select>
-            <button type="button" onClick={() => void removeMember(member.userId)}>
+            <button
+              type="button"
+              onClick={() => void removeMember(member.userId)}
+            >
               Remove
             </button>
           </div>
         ))}
       </section>
 
-      <section>
-        <h2>Invite a member</h2>
-        <label>
-          Email
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(event) => setInviteEmail(event.target.value)}
-          />
-        </label>
-        <label>
-          Role
-          <select
-            value={inviteRole}
-            onChange={(event) => setInviteRole(event.target.value as Role)}
+      <section className="admin-section admin-section-invite">
+        <header className="admin-section-heading compact">
+          <div>
+            <span>+</span>
+            <h2>Invite a member</h2>
+          </div>
+          <p>Add a teammate using their email address.</p>
+        </header>
+        <div className="admin-form-row">
+          <label className="admin-field admin-field-grow">
+            Email
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+            />
+          </label>
+          <label className="admin-field">
+            Role
+            <select
+              value={inviteRole}
+              onChange={(event) => setInviteRole(event.target.value as Role)}
+            >
+              {ROLES.filter((role) => role !== "OWNER").map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="admin-form-action"
+            type="button"
+            onClick={() => void inviteMember()}
           >
-            {ROLES.filter((role) => role !== "OWNER").map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={() => void inviteMember()}>
-          Invite
-        </button>
+            Invite
+          </button>
+        </div>
         {inviteLink && <p className="hint">{inviteLink}</p>}
         {message && <p className="hint">{message}</p>}
       </section>
 
       {invitations.length > 0 && (
-        <section>
-          <h2>Pending invitations</h2>
+        <section className="admin-section admin-section-invitations">
+          <header className="admin-section-heading compact">
+            <div>
+              <span>↗</span>
+              <h2>Pending invitations</h2>
+            </div>
+          </header>
           {invitations.map((invitation) => (
             <div key={invitation.id} className="admin-row">
               <span>
@@ -358,61 +388,87 @@ export function AdminPanel() {
       )}
 
       {retention && (
-        <section>
-          <h2>Retention policy</h2>
-          <label>
-            Auto-delete recordings after (days, blank = keep forever)
-            <input
-              type="number"
-              min={1}
-              value={retention.recordingRetentionDays ?? ""}
-              onChange={(event) =>
-                setRetention({
-                  ...retention,
-                  recordingRetentionDays: event.target.value
-                    ? Number(event.target.value)
-                    : null,
-                })
-              }
-            />
-          </label>
-          <label>
-            Permanently purge deleted recordings after (days)
-            <input
-              type="number"
-              min={1}
-              value={retention.deletedRecordingPurgeDays}
-              onChange={(event) =>
-                setRetention({
-                  ...retention,
-                  deletedRecordingPurgeDays: Number(event.target.value),
-                })
-              }
-            />
-          </label>
-          <button type="button" onClick={() => void saveRetention()}>
+        <section className="admin-section admin-section-retention">
+          <header className="admin-section-heading">
+            <div>
+              <span>02</span>
+              <h2>Retention policy</h2>
+            </div>
+            <p>
+              Choose how long recordings and deleted items remain available.
+            </p>
+          </header>
+          <div className="admin-field-stack">
+            <label className="admin-field admin-field-inline">
+              Auto-delete recordings after (days, blank = keep forever)
+              <input
+                type="number"
+                min={1}
+                value={retention.recordingRetentionDays ?? ""}
+                onChange={(event) =>
+                  setRetention({
+                    ...retention,
+                    recordingRetentionDays: event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  })
+                }
+              />
+            </label>
+            <label className="admin-field admin-field-inline">
+              Permanently purge deleted recordings after (days)
+              <input
+                type="number"
+                min={1}
+                value={retention.deletedRecordingPurgeDays}
+                onChange={(event) =>
+                  setRetention({
+                    ...retention,
+                    deletedRecordingPurgeDays: Number(event.target.value),
+                  })
+                }
+              />
+            </label>
+          </div>
+          <button
+            className="admin-secondary-action"
+            type="button"
+            onClick={() => void saveRetention()}
+          >
             Save retention policy
           </button>
         </section>
       )}
 
-      <section>
-        <h2>Webhooks</h2>
+      <section
+        className="admin-section admin-section-webhooks"
+        id="integrations"
+      >
+        <header className="admin-section-heading">
+          <div>
+            <span>03</span>
+            <h2>Webhooks</h2>
+          </div>
+          <p>Send recording events to your own HTTPS endpoint.</p>
+        </header>
         {webhooks.map((webhook) => (
           <div key={webhook.id} className="admin-row">
             <span>
-              {webhook.url} — {webhook.enabledEvents.join(", ")} — secret
-              …{webhook.secretFingerprint}
+              {webhook.url} — {webhook.enabledEvents.join(", ")} — secret …
+              {webhook.secretFingerprint}
               {webhook.lastDeliveryStatus
                 ? ` — last delivery ${webhook.lastDeliveryStatus.toLowerCase()}`
                 : ""}
             </span>
-            <button type="button" onClick={() => void deleteWebhook(webhook.id)}>
+            <button
+              type="button"
+              onClick={() => void deleteWebhook(webhook.id)}
+            >
               Delete
             </button>
           </div>
         ))}
-        <label>
+        <label className="admin-field">
           Endpoint URL (HTTPS)
           <input
             type="url"
@@ -421,7 +477,7 @@ export function AdminPanel() {
             placeholder="https://example.com/webhooks/cap"
           />
         </label>
-        <fieldset>
+        <fieldset className="webhook-event-grid">
           {WEBHOOK_EVENTS.map((event) => (
             <label key={event}>
               <input
@@ -453,8 +509,14 @@ export function AdminPanel() {
         )}
       </section>
 
-      <section>
-        <h2>API keys</h2>
+      <section className="admin-section admin-section-api" id="security">
+        <header className="admin-section-heading">
+          <div>
+            <span>04</span>
+            <h2>API keys</h2>
+          </div>
+          <p>Create scoped credentials for trusted tools and integrations.</p>
+        </header>
         {apiKeys.map((apiKey) => (
           <div key={apiKey.id} className="admin-row">
             <span>
@@ -466,13 +528,16 @@ export function AdminPanel() {
                   : " — never used"}
             </span>
             {!apiKey.revokedAt && (
-              <button type="button" onClick={() => void revokeApiKey(apiKey.id)}>
+              <button
+                type="button"
+                onClick={() => void revokeApiKey(apiKey.id)}
+              >
                 Revoke
               </button>
             )}
           </div>
         ))}
-        <label>
+        <label className="admin-field">
           Key name
           <input
             value={apiKeyName}
@@ -492,8 +557,14 @@ export function AdminPanel() {
         )}
       </section>
 
-      <section>
-        <h2>Audit log</h2>
+      <section className="admin-section admin-section-audit">
+        <header className="admin-section-heading">
+          <div>
+            <span>05</span>
+            <h2>Audit log</h2>
+          </div>
+          <p>A chronological record of important workspace activity.</p>
+        </header>
         {auditEvents.map((event) => (
           <div key={event.id} className="admin-row">
             <span>
@@ -504,7 +575,10 @@ export function AdminPanel() {
           </div>
         ))}
         {auditCursor && (
-          <button type="button" onClick={() => void loadAuditEvents(auditCursor)}>
+          <button
+            type="button"
+            onClick={() => void loadAuditEvents(auditCursor)}
+          >
             Load more
           </button>
         )}

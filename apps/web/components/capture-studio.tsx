@@ -200,46 +200,70 @@ export function CaptureStudio() {
 
   return (
     <section className="studio" aria-live="polite">
-      <div className="recording-panel">
+      <header className="studio-heading">
         <div>
-          <p className="status">
-            {state === "recording" ? "● Recording" : state.replace("ing", "")}
-          </p>
+          <p className="eyebrow">Capture setup</p>
+          <h2>Ready when you are</h2>
+        </div>
+        <span className={`studio-state studio-state-${state}`}>
+          <span aria-hidden="true" />
+          {state === "recording" ? "Recording" : state.replace("ing", "")}
+        </span>
+      </header>
+      <div className="recording-panel">
+        <div className="timer-block">
+          <span>Duration</span>
           <strong className="timer">{formatDuration(elapsed)}</strong>
         </div>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={includeMic}
-            disabled={state === "recording" || state === "requesting"}
-            onChange={(event) => setIncludeMic(event.target.checked)}
-          />{" "}
-          Include microphone
-        </label>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={includeCamera}
-            disabled={state === "recording" || state === "requesting"}
-            onChange={(event) => setIncludeCamera(event.target.checked)}
-          />{" "}
-          Include camera
-        </label>
-        {state === "recording" || state === "stopping" ? (
-          <button
-            className="stop"
-            onClick={stop}
-            disabled={state === "stopping"}
-          >
-            Stop recording
-          </button>
-        ) : (
-          <button onClick={start} disabled={state === "requesting"}>
-            Start capture
-          </button>
-        )}
+        <div className="capture-options">
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={includeMic}
+              disabled={state === "recording" || state === "requesting"}
+              onChange={(event) => setIncludeMic(event.target.checked)}
+            />
+            <span>
+              <strong>Microphone</strong>
+              <small>Include your voice</small>
+            </span>
+          </label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={includeCamera}
+              disabled={state === "recording" || state === "requesting"}
+              onChange={(event) => setIncludeCamera(event.target.checked)}
+            />
+            <span>
+              <strong>Camera</strong>
+              <small>Add a separate camera track</small>
+            </span>
+          </label>
+        </div>
+        <div className="capture-primary-action">
+          {state === "recording" || state === "stopping" ? (
+            <button
+              className="stop"
+              onClick={stop}
+              disabled={state === "stopping"}
+            >
+              <span aria-hidden="true" className="stop-icon" />
+              Stop recording
+            </button>
+          ) : (
+            <button onClick={start} disabled={state === "requesting"}>
+              <span aria-hidden="true" className="capture-icon" />
+              {state === "requesting" ? "Choose a screen…" : "Start capture"}
+            </button>
+          )}
+          <small>No download or extension required</small>
+        </div>
       </div>
-      <p className="hint">{message}</p>
+      <p className="hint">
+        <span aria-hidden="true" />
+        {message}
+      </p>
       {recordingUrl && (
         <div className="preview">
           <video controls src={recordingUrl} />

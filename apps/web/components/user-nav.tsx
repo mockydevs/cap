@@ -29,16 +29,26 @@ export function UserNav() {
         </Link>
       </nav>
     );
+  const initials = session.user.displayName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
   return (
     <div className="user-nav">
       <Link href="/record">Record</Link>
       <Link href="/library">Library</Link>
       {(session.workspace.role === "OWNER" ||
-        session.workspace.role === "ADMIN") && (
-        <Link href="/admin">Admin</Link>
-      )}
-      <span>
-        {session.user.displayName} · {session.workspace.role.toLowerCase()}
+        session.workspace.role === "ADMIN") && <Link href="/admin">Admin</Link>}
+      <span className="account-pill">
+        <span className="account-avatar" aria-hidden="true">
+          {initials}
+        </span>
+        <span className="account-copy">
+          <strong>{session.user.displayName}</strong>
+          <small>{session.workspace.role.toLowerCase()}</small>
+        </span>
       </span>
       <form method="post" action="/api/auth/logout">
         <button className="nav-link" type="submit">
