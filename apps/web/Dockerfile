@@ -3,11 +3,15 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS dependencies
-COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json apps/web/package.json
-COPY packages/config/package.json packages/config/package.json
+COPY packages/ai/package.json packages/ai/package.json
+COPY packages/domain/package.json packages/domain/package.json
+COPY packages/editor-domain/package.json packages/editor-domain/package.json
+COPY packages/queue/package.json packages/queue/package.json
 COPY packages/recording/package.json packages/recording/package.json
-RUN pnpm install --no-frozen-lockfile
+COPY packages/storage/package.json packages/storage/package.json
+RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
 COPY . .
