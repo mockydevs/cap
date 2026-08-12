@@ -16,6 +16,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    expose:
+      - "3000"
     restart: unless-stopped
     environment:
       <<: *app-environment
