@@ -183,7 +183,13 @@ describe("manifest execution guard", () => {
   };
 
   for (const overlay of [
-    { ...overlayBase, kind: "TEXT", text: "hi", color: "#FFFFFF", fontSize: 24 },
+    {
+      ...overlayBase,
+      kind: "TEXT",
+      text: "hi",
+      color: "#FFFFFF",
+      fontSize: 24,
+    },
     { ...overlayBase, kind: "IMAGE", assetId: "asset_a", fit: "CONTAIN" },
     {
       ...overlayBase,
@@ -237,7 +243,12 @@ describe("manifest execution guard", () => {
       ...base,
       canvas: {
         ...base.canvas,
-        background: { kind: "GRADIENT", from: "#000000", to: "#FFFFFF", angleDegrees: 0 },
+        background: {
+          kind: "GRADIENT",
+          from: "#000000",
+          to: "#FFFFFF",
+          angleDegrees: 0,
+        },
       },
     };
     expect(() => assertExecutableManifest(manifest)).toThrow(
@@ -367,7 +378,7 @@ describe("renderArguments end-to-end graph assembly", () => {
   it("writes the overlay text to a file rather than inlining it in the graph", async () => {
     workDir = await mkdtemp(join(tmpdir(), "cap-render-test-"));
     const base = baseManifest();
-    const trickyText = "It's a \"quoted\", colon: and comma, test";
+    const trickyText = 'It\'s a "quoted", colon: and comma, test';
     const manifest: FfmpegRenderManifest = {
       ...base,
       overlays: [
@@ -397,9 +408,9 @@ describe("renderArguments end-to-end graph assembly", () => {
       workDir,
     );
     const graph = args[args.indexOf("-filter_complex") + 1]!;
-    const match = graph.match(/textfile=([^:]+)/);
-    expect(match).not.toBeNull();
-    const written = await readFile(match![1]!, "utf8");
+    const textFile = join(workDir, "overlay-text-1.txt");
+    expect(graph).toContain(`textfile=${textFile}`);
+    const written = await readFile(textFile, "utf8");
     expect(written).toBe(trickyText);
   });
 

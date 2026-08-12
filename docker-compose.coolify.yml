@@ -1,0 +1,170 @@
+name: cap
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the private PostgreSQL connection string}
+  REDIS_URL: ${REDIS_URL:?Set REDIS_URL to the private Redis connection string}
+  AWS_REGION: ${AWS_REGION:?Set AWS_REGION}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}
+  AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:?Set AWS_S3_BUCKET_NAME}
+  AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+  AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cap}
+      POSTGRES_USER: ${POSTGRES_USER:-cap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-cap} -d $${POSTGRES_DB:-cap}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [cap-internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"',
+      ]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a strong REDIS_PASSWORD}
+    networks: [cap-internal]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?Set the public HTTPS application URL}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?Set the Google web OAuth client ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?Set the Google web OAuth client secret}
+      GOOGLE_DESKTOP_OAUTH_CLIENT_ID: ${GOOGLE_DESKTOP_OAUTH_CLIENT_ID:-}
+      ANALYTICS_HASH_SECRET: ${ANALYTICS_HASH_SECRET:?Set a random secret of at least 32 characters}
+      AWS_CLOUDFRONT_DOMAIN: ${AWS_CLOUDFRONT_DOMAIN:-}
+      AWS_CLOUDFRONT_DISTRIBUTION_ID: ${AWS_CLOUDFRONT_DISTRIBUTION_ID:-}
+      WEBHOOK_SECRETS_KMS_KEY_ARN: ${WEBHOOK_SECRETS_KMS_KEY_ARN:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
+      AI_ALLOW_DEPLOYMENT_CREDENTIAL: ${AI_ALLOW_DEPLOYMENT_CREDENTIAL:-false}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+  media-worker:
+    build:
+      context: .
+      dockerfile: apps/media-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      MEDIA_WORKER_CONCURRENCY: ${MEDIA_WORKER_CONCURRENCY:-1}
+      MEDIA_WORKER_HEALTH_PORT: 8081
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+  transcription-worker:
+    build:
+      context: .
+      dockerfile: apps/transcription-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-openai-compatible}
+      TRANSCRIPTION_BASE_URL: ${TRANSCRIPTION_BASE_URL:-https://api.openai.com/v1}
+      TRANSCRIPTION_API_KEY: ${TRANSCRIPTION_API_KEY:?Set TRANSCRIPTION_API_KEY}
+      TRANSCRIPTION_MODEL: ${TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
+      TRANSCRIPTION_WORKER_CONCURRENCY: ${TRANSCRIPTION_WORKER_CONCURRENCY:-2}
+      TRANSCRIPTION_WORKER_HEALTH_PORT: 8082
+      TRANSCRIPTION_CONSENT_BASIS: ${TRANSCRIPTION_CONSENT_BASIS:?Set the approved transcription consent basis}
+      TRANSCRIPTION_CONSENT_ACTOR_USER_ID: ${TRANSCRIPTION_CONSENT_ACTOR_USER_ID:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+  render-worker:
+    build:
+      context: .
+      dockerfile: apps/render-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      RENDER_WORKER_CONCURRENCY: ${RENDER_WORKER_CONCURRENCY:-1}
+      RENDER_WORKER_HEALTH_PORT: 8083
+      RENDER_TIMEOUT_MS: ${RENDER_TIMEOUT_MS:-1800000}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: apps/ai-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      AI_PROVIDER: ${AI_PROVIDER:-OPENAI}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-5-mini}
+      AI_ALLOW_DEPLOYMENT_CREDENTIAL: ${AI_ALLOW_DEPLOYMENT_CREDENTIAL:-false}
+      AI_CREDENTIALS_KMS_KEY_ARN: ${AI_CREDENTIALS_KMS_KEY_ARN:-}
+      AI_INPUT_COST_MICROUNITS_PER_MILLION: ${AI_INPUT_COST_MICROUNITS_PER_MILLION:-250000}
+      AI_OUTPUT_COST_MICROUNITS_PER_MILLION: ${AI_OUTPUT_COST_MICROUNITS_PER_MILLION:-2000000}
+      AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-2}
+      AI_WORKER_HEALTH_PORT: 8084
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+  webhook-worker:
+    build:
+      context: .
+      dockerfile: apps/webhook-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      WEBHOOK_WORKER_CONCURRENCY: ${WEBHOOK_WORKER_CONCURRENCY:-4}
+      WEBHOOK_WORKER_HEALTH_PORT: 8085
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [cap-internal]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  cap-internal:
+    driver: bridge

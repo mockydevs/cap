@@ -4,6 +4,11 @@ This runbook is the required deployment and recovery procedure for Cap. Staging 
 
 ## Deploy with Coolify
 
+Use `docker-compose.coolify.yml` as the Coolify Docker Compose file. The web
+container applies Drizzle migrations before accepting traffic; PostgreSQL and
+Redis remain private on the Compose network and only the `web` service should
+receive a Coolify domain.
+
 1. Apply `infra/aws` from a trusted CI identity authenticated through GitHub OIDC. Review the Terraform plan before every apply.
 2. Create private Coolify services for PostgreSQL and Redis. Enable persistent storage and provider-level encrypted backups.
 3. Configure the web, media, render, transcription, and AI worker containers from this repository. Only the web service is public.
