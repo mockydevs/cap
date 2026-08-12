@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const identity = await exchangeGoogleCode({ code, verifier, nonce });
     const account = await findOrCreateGoogleUser(identity);
     const token = await createSession(account.userId, account.workspaceId);
-    const response = NextResponse.redirect(publicAppUrl("/library"));
+    const response = NextResponse.redirect(publicAppUrl("/record"));
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     for (const name of Object.values(googleCookieNames))
       response.cookies.set(name, "", { path: "/", maxAge: 0 });

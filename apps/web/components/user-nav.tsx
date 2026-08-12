@@ -31,6 +31,7 @@ export function UserNav() {
     );
   return (
     <div className="user-nav">
+      <Link href="/record">Record</Link>
       <Link href="/library">Library</Link>
       {(session.workspace.role === "OWNER" ||
         session.workspace.role === "ADMIN") && (

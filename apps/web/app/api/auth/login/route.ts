@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       .limit(1);
     if (!membership) throw new Error("Account has no workspace");
     const token = await createSession(user.id, membership.workspaceId);
-    const response = NextResponse.redirect(publicAppUrl("/"), 303);
+    const response = NextResponse.redirect(publicAppUrl("/record"), 303);
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {

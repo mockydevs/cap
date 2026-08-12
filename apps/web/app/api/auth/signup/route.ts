@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         .values({ userId, workspaceId, role: "OWNER" });
     });
     const token = await createSession(userId, workspaceId);
-    const response = NextResponse.redirect(publicAppUrl("/"), 303);
+    const response = NextResponse.redirect(publicAppUrl("/record"), 303);
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {

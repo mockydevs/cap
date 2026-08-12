@@ -60,7 +60,7 @@ export function RecordingLibrary() {
           <span className="brand-mark" aria-hidden="true" />
           <span>Cap</span>
         </Link>
-        <Link className="sidebar-record" href="/">
+        <Link className="sidebar-record" href="/record">
           <span className="record-dot" aria-hidden="true" />
           New recording
         </Link>
@@ -116,7 +116,7 @@ export function RecordingLibrary() {
               Capture your first walkthrough and upload it to your private
               workspace.
             </p>
-            <Link className="nav-cta" href="/">
+            <Link className="nav-cta" href="/record">
               Start recording
             </Link>
           </div>

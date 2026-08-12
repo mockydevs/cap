@@ -10,7 +10,8 @@ export type SignedUpUser = {
 /**
  * Runs the same signup flow verified field-by-field in auth.spec.ts
  * ("Display name" / "Workspace name" / "Email" / "Password" -> "Create
- * account") and waits for the redirect to the authenticated home page ("/").
+ * account") and waits for the redirect to the authenticated recorder page
+ * ("/record").
  * A fresh signup always creates a brand-new workspace with the signer as its
  * OWNER (see apps/web/components/user-nav.tsx, which renders
  * "{displayName} · {role}"), so this also doubles as "create a workspace to
@@ -33,7 +34,7 @@ export async function signUpAndSignIn(
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL(/\/$/);
+  await page.waitForURL(/\/record$/);
   return user;
 }
 
