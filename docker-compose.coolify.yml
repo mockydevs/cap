@@ -18,6 +18,8 @@ services:
       dockerfile: apps/web/Dockerfile
     expose:
       - "3000"
+    labels:
+      - "traefik.docker.network=coolify"
     restart: unless-stopped
     environment:
       <<: *app-environment
