@@ -1,6 +1,7 @@
 import {
   authorizePlayback as authorizeSharePlayback,
   type RecordingVisibility,
+  type WorkspaceRole,
 } from "@cap/domain";
 
 /**
@@ -17,7 +18,7 @@ export type RecordingAvailability =
 
 export type PlaybackActor = {
   workspaceId: string;
-  role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
+  role: WorkspaceRole;
 };
 
 export type PlaybackAccess = {

@@ -269,6 +269,7 @@ export const recordings = pgTable(
       .notNull()
       .defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    previousStatus: recordingStatus("previous_status"),
   },
   (table) => [
     index("recordings_workspace_created_idx").on(
@@ -276,9 +277,39 @@ export const recordings = pgTable(
       table.createdAt,
     ),
     index("recordings_linked_recording_idx").on(table.linkedRecordingId),
+    index("recordings_workspace_deleted_idx").on(
+      table.workspaceId,
+      table.deletedAt,
+    ),
     check(
       "recordings_media_metadata_check",
       sql`(${table.durationMs} IS NULL AND ${table.width} IS NULL AND ${table.height} IS NULL) OR (${table.durationMs} > 0 AND ${table.width} > 0 AND ${table.height} > 0)`,
+    ),
+  ],
+);
+
+export const recordingStars = pgTable(
+  "recording_stars",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recordingId: uuid("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.recordingId] }),
+    index("recording_stars_user_workspace_idx").on(
+      table.userId,
+      table.workspaceId,
+      table.createdAt,
     ),
   ],
 );

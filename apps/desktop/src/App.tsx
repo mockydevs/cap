@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatDuration } from "@cap/recording";
 import { listen, type EventCallback } from "@tauri-apps/api/event";
 import {
   desktop,
@@ -41,17 +42,11 @@ const defaults: CaptureOptions = {
 type Notice = { kind: "error" | "success"; text: string };
 type Account = { displayName: string };
 
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function formatDuration(ms: number): string {
+/** Short clips read better in seconds; anything longer uses the mm:ss clock. */
+function formatClipLength(ms: number): string {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  return formatElapsed(ms);
+  return formatDuration(ms);
 }
 
 function formatRelative(iso: string): string {
@@ -438,7 +433,7 @@ export function App() {
             {recording && (
               <div className="timer">
                 <span className="rec-dot" />
-                {formatElapsed(elapsed)}
+                {formatDuration(elapsed)}
               </div>
             )}
           </div>
@@ -691,7 +686,7 @@ export function App() {
                           <span className="status-dot" />
                           {badge.label}
                         </span>
-                        <span>{formatDuration(project.durationMs)}</span>
+                        <span>{formatClipLength(project.durationMs)}</span>
                         <span>{formatRelative(project.createdAt)}</span>
                       </span>
                       {project.uploadProgress !== undefined && (

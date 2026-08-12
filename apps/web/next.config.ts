@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@cap/recording"],
+  transpilePackages: ["@cap/domain", "@cap/recording"],
   output: "standalone",
 };
 

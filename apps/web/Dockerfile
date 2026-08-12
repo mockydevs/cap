@@ -11,6 +11,7 @@ COPY packages/editor-domain/package.json packages/editor-domain/package.json
 COPY packages/queue/package.json packages/queue/package.json
 COPY packages/recording/package.json packages/recording/package.json
 COPY packages/storage/package.json packages/storage/package.json
+COPY packages/transcription/package.json packages/transcription/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder

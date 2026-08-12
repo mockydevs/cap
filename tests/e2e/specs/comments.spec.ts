@@ -18,8 +18,8 @@ test("adds a timestamped comment to a recording you own", async ({ page }) => {
   const commentBody = `A note left during review ${Date.now()}`;
   await page.getByLabel("Comment").fill(commentBody);
   // The submit button's label encodes the current playback position; with no
-  // video loaded yet timestampMs stays 0, so it reads "Comment at 0:00".
-  await page.getByRole("button", { name: "Comment at 0:00" }).click();
+  // video loaded yet timestampMs stays 0, so it reads "Comment at 00:00".
+  await page.getByRole("button", { name: "Comment at 00:00" }).click();
 
   await expect(page.getByText(commentBody)).toBeVisible();
   await expect(page.getByText(user.displayName)).toBeVisible();

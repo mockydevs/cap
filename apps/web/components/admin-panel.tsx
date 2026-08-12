@@ -1,18 +1,20 @@
 "use client";
+import { WORKSPACE_ROLES, type WorkspaceRole } from "@cap/domain";
 import { useCallback, useEffect, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
+import { AiSettings } from "./ai-settings";
 
-type Role = "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
 type Member = {
   userId: string;
   email: string;
   displayName: string;
-  role: Role;
+  role: WorkspaceRole;
   joinedAt: string;
 };
 type Invitation = {
   id: string;
   email: string;
-  role: Role;
+  role: WorkspaceRole;
   createdAt: string;
   expiresAt: string;
 };
@@ -50,7 +52,7 @@ type ApiKey = {
   revokedAt: string | null;
 };
 
-const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+const ROLES = WORKSPACE_ROLES;
 const WEBHOOK_EVENTS = [
   "recording.ready",
   "recording.deleted",
@@ -66,7 +68,7 @@ export function AdminPanel() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [auditCursor, setAuditCursor] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
+  const [inviteRole, setInviteRole] = useState<WorkspaceRole>("MEMBER");
   const [inviteLink, setInviteLink] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [isAdmin, setIsAdmin] = useState(true);
@@ -81,17 +83,13 @@ export function AdminPanel() {
   const [newApiKey, setNewApiKey] = useState<string>();
 
   const refreshMembers = useCallback(async () => {
-    const response = await fetch("/api/workspace/members", {
-      cache: "no-store",
-    });
+    const response = await fetchFresh("/api/workspace/members");
     if (response.ok)
       setMembers(((await response.json()) as { items: Member[] }).items);
   }, []);
 
   const refreshInvitations = useCallback(async () => {
-    const response = await fetch("/api/workspace/invitations", {
-      cache: "no-store",
-    });
+    const response = await fetchFresh("/api/workspace/invitations");
     if (response.status === 403) {
       setIsAdmin(false);
       return;
@@ -103,16 +101,13 @@ export function AdminPanel() {
   }, []);
 
   const refreshRetention = useCallback(async () => {
-    const response = await fetch("/api/workspace/retention-policy", {
-      cache: "no-store",
-    });
+    const response = await fetchFresh("/api/workspace/retention-policy");
     if (response.ok) setRetention(await response.json());
   }, []);
 
   const loadAuditEvents = useCallback(async (cursor?: string) => {
-    const response = await fetch(
+    const response = await fetchFresh(
       `/api/workspace/audit-events?limit=25${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-      { cache: "no-store" },
     );
     if (!response.ok) return;
     const page = (await response.json()) as {
@@ -126,9 +121,7 @@ export function AdminPanel() {
   }, []);
 
   const refreshWebhooks = useCallback(async () => {
-    const response = await fetch("/api/workspace/webhooks", {
-      cache: "no-store",
-    });
+    const response = await fetchFresh("/api/workspace/webhooks");
     if (response.ok)
       setWebhooks(
         ((await response.json()) as { items: WebhookEndpoint[] }).items,
@@ -136,9 +129,7 @@ export function AdminPanel() {
   }, []);
 
   const refreshApiKeys = useCallback(async () => {
-    const response = await fetch("/api/workspace/api-keys", {
-      cache: "no-store",
-    });
+    const response = await fetchFresh("/api/workspace/api-keys");
     if (response.ok)
       setApiKeys(((await response.json()) as { items: ApiKey[] }).items);
   }, []);
@@ -161,10 +152,9 @@ export function AdminPanel() {
 
   const createWebhook = async () => {
     setNewWebhookSecret(undefined);
-    const response = await fetch("/api/workspace/webhooks", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: webhookUrl, enabledEvents: webhookEvents }),
+    const response = await sendJson("/api/workspace/webhooks", "POST", {
+      url: webhookUrl,
+      enabledEvents: webhookEvents,
     });
     if (!response.ok) {
       setMessage("Could not create that webhook. The URL must be HTTPS.");
@@ -177,18 +167,14 @@ export function AdminPanel() {
   };
 
   const deleteWebhook = async (id: string) => {
-    const response = await fetch(`/api/workspace/webhooks/${id}`, {
-      method: "DELETE",
-    });
+    const response = await sendJson(`/api/workspace/webhooks/${id}`, "DELETE");
     if (response.ok) void refreshWebhooks();
   };
 
   const createApiKey = async () => {
     setNewApiKey(undefined);
-    const response = await fetch("/api/workspace/api-keys", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: apiKeyName }),
+    const response = await sendJson("/api/workspace/api-keys", "POST", {
+      name: apiKeyName,
     });
     if (!response.ok) {
       setMessage("Could not create that API key.");
@@ -201,19 +187,16 @@ export function AdminPanel() {
   };
 
   const revokeApiKey = async (id: string) => {
-    const response = await fetch(`/api/workspace/api-keys/${id}`, {
-      method: "DELETE",
-    });
+    const response = await sendJson(`/api/workspace/api-keys/${id}`, "DELETE");
     if (response.ok) void refreshApiKeys();
   };
 
   const inviteMember = async () => {
     setMessage(undefined);
     setInviteLink(undefined);
-    const response = await fetch("/api/workspace/members", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+    const response = await sendJson("/api/workspace/members", "POST", {
+      email: inviteEmail,
+      role: inviteRole,
     });
     if (!response.ok) {
       setMessage("Could not invite that member.");
@@ -236,38 +219,40 @@ export function AdminPanel() {
     setInviteEmail("");
   };
 
-  const updateRole = async (userId: string, role: Role) => {
-    const response = await fetch(`/api/workspace/members/${userId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
+  const updateRole = async (userId: string, role: WorkspaceRole) => {
+    const response = await sendJson(
+      `/api/workspace/members/${userId}`,
+      "PATCH",
+      { role },
+    );
     if (response.ok) void refreshMembers();
     else setMessage("Could not update that member's role.");
   };
 
   const removeMember = async (userId: string) => {
-    const response = await fetch(`/api/workspace/members/${userId}`, {
-      method: "DELETE",
-    });
+    const response = await sendJson(
+      `/api/workspace/members/${userId}`,
+      "DELETE",
+    );
     if (response.ok) void refreshMembers();
     else setMessage("Could not remove that member.");
   };
 
   const revokeInvitation = async (invitationId: string) => {
-    const response = await fetch(`/api/workspace/invitations/${invitationId}`, {
-      method: "DELETE",
-    });
+    const response = await sendJson(
+      `/api/workspace/invitations/${invitationId}`,
+      "DELETE",
+    );
     if (response.ok) void refreshInvitations();
   };
 
   const saveRetention = async () => {
     if (!retention) return;
-    const response = await fetch("/api/workspace/retention-policy", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(retention),
-    });
+    const response = await sendJson(
+      "/api/workspace/retention-policy",
+      "PUT",
+      retention,
+    );
     setMessage(
       response.ok
         ? "Retention policy saved."
@@ -302,7 +287,10 @@ export function AdminPanel() {
             <select
               value={member.role}
               onChange={(event) =>
-                void updateRole(member.userId, event.target.value as Role)
+                void updateRole(
+                  member.userId,
+                  event.target.value as WorkspaceRole,
+                )
               }
             >
               {ROLES.map((role) => (
@@ -342,7 +330,9 @@ export function AdminPanel() {
             Role
             <select
               value={inviteRole}
-              onChange={(event) => setInviteRole(event.target.value as Role)}
+              onChange={(event) =>
+                setInviteRole(event.target.value as WorkspaceRole)
+              }
             >
               {ROLES.filter((role) => role !== "OWNER").map((role) => (
                 <option key={role} value={role}>
@@ -509,10 +499,23 @@ export function AdminPanel() {
         )}
       </section>
 
-      <section className="admin-section admin-section-api" id="security">
+      <section className="admin-section admin-section-ai" id="ai">
         <header className="admin-section-heading">
           <div>
             <span>04</span>
+            <h2>AI providers</h2>
+          </div>
+          <p>
+            Connect providers, route each capability, and cap monthly AI spend.
+          </p>
+        </header>
+        <AiSettings />
+      </section>
+
+      <section className="admin-section admin-section-api" id="security">
+        <header className="admin-section-heading">
+          <div>
+            <span>05</span>
             <h2>API keys</h2>
           </div>
           <p>Create scoped credentials for trusted tools and integrations.</p>
@@ -560,7 +563,7 @@ export function AdminPanel() {
       <section className="admin-section admin-section-audit">
         <header className="admin-section-heading">
           <div>
-            <span>05</span>
+            <span>06</span>
             <h2>Audit log</h2>
           </div>
           <p>A chronological record of important workspace activity.</p>

@@ -1,5 +1,8 @@
 "use client";
+import { formatDuration } from "@cap/recording";
 import { useCallback, useEffect, useState } from "react";
+import { sendJson } from "../lib/http/json";
+type Share = { token: string; password: string };
 type Comment = {
   id: string;
   body: string;
@@ -17,7 +20,7 @@ export function CommentThread({
 }: {
   recordingId: string;
   timestampMs: number;
-  share?: { token: string; password: string };
+  share?: Share;
 }) {
   const [items, setItems] = useState<Comment[]>([]);
   const [body, setBody] = useState("");
@@ -34,28 +37,27 @@ export function CommentThread({
     }
     setViewerKey(key);
   }, [share]);
-  const sharedBody = useCallback(
-    (action: string, extra: object = {}) => ({
-      action,
-      guestName,
-      viewerKey,
-      password: share?.password || undefined,
-      ...extra,
-    }),
-    [guestName, viewerKey, share],
+  // Public viewers reach every comment operation through one action envelope,
+  // because a share token is all they have to prove they may see the thread.
+  const shareAction = useCallback(
+    (target: Share, action: string, extra: object = {}) =>
+      sendJson(`/api/shares/${target.token}/comments`, "POST", {
+        action,
+        guestName,
+        viewerKey,
+        password: target.password || undefined,
+        ...extra,
+      }),
+    [guestName, viewerKey],
   );
   const load = useCallback(async () => {
     if (share && (!guestName || !viewerKey)) return;
     const response = share
-      ? await fetch(`/api/shares/${share.token}/comments`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(sharedBody("list")),
-        })
+      ? await shareAction(share, "list")
       : await fetch(`/api/recordings/${recordingId}/comments`);
     if (response.ok)
       setItems(((await response.json()) as { items: Comment[] }).items);
-  }, [recordingId, share, guestName, viewerKey, sharedBody]);
+  }, [recordingId, share, guestName, viewerKey, shareAction]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -64,16 +66,12 @@ export function CommentThread({
     if (share) localStorage.setItem("cap-guest-name", guestName);
     const input = { body, timestampMs: Math.max(0, Math.floor(timestampMs)) };
     const response = share
-      ? await fetch(`/api/shares/${share.token}/comments`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(sharedBody("create", input)),
-        })
-      : await fetch(`/api/recordings/${recordingId}/comments`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
-        });
+      ? await shareAction(share, "create", input)
+      : await sendJson(
+          `/api/recordings/${recordingId}/comments`,
+          "POST",
+          input,
+        );
     if (!response.ok) {
       setError("Comment could not be added.");
       return;
@@ -84,54 +82,35 @@ export function CommentThread({
   }
   async function react(commentId: string, emoji: string, active: boolean) {
     if (share)
-      await fetch(`/api/shares/${share.token}/comments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(
-          sharedBody("reaction", { commentId, emoji, active }),
-        ),
-      });
+      await shareAction(share, "reaction", { commentId, emoji, active });
     else
-      await fetch(
+      await sendJson(
         `/api/recordings/${recordingId}/comments/${commentId}/reactions`,
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ emoji, active }),
-        },
+        "PUT",
+        { emoji, active },
       );
     await load();
   }
   async function remove(commentId: string) {
-    if (share)
-      await fetch(`/api/shares/${share.token}/comments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(sharedBody("delete", { commentId })),
-      });
+    if (share) await shareAction(share, "delete", { commentId });
     else
-      await fetch(`/api/recordings/${recordingId}/comments/${commentId}`, {
-        method: "DELETE",
-      });
+      await sendJson(
+        `/api/recordings/${recordingId}/comments/${commentId}`,
+        "DELETE",
+      );
     await load();
   }
   async function edit(comment: Comment) {
     const next = window.prompt("Edit comment", comment.body)?.trim();
     if (!next || next === comment.body) return;
     if (share)
-      await fetch(`/api/shares/${share.token}/comments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(
-          sharedBody("update", { commentId: comment.id, body: next }),
-        ),
-      });
+      await shareAction(share, "update", { commentId: comment.id, body: next });
     else
-      await fetch(`/api/recordings/${recordingId}/comments/${comment.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body: next }),
-      });
+      await sendJson(
+        `/api/recordings/${recordingId}/comments/${comment.id}`,
+        "PATCH",
+        { body: next },
+      );
     await load();
   }
   return (
@@ -163,10 +142,7 @@ export function CommentThread({
           value={body}
           onChange={(event) => setBody(event.target.value)}
         />
-        <button type="submit">
-          Comment at {Math.floor(timestampMs / 60000)}:
-          {String(Math.floor(timestampMs / 1000) % 60).padStart(2, "0")}
-        </button>
+        <button type="submit">Comment at {formatDuration(timestampMs)}</button>
       </form>
       {error && <p className="form-error">{error}</p>}
       <div className="comment-list">
@@ -174,13 +150,7 @@ export function CommentThread({
           <article className="comment" key={comment.id}>
             <header>
               <strong>{comment.authorName}</strong>
-              <span>
-                {Math.floor(comment.timestampMs / 60000)}:
-                {String(Math.floor(comment.timestampMs / 1000) % 60).padStart(
-                  2,
-                  "0",
-                )}
-              </span>
+              <span>{formatDuration(comment.timestampMs)}</span>
             </header>
             <p>{comment.body}</p>
             <footer>

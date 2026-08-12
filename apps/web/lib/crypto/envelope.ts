@@ -3,9 +3,10 @@ import { DecryptCommand, EncryptCommand, KMSClient } from "@aws-sdk/client-kms";
 
 /**
  * Shared KMS envelope encryption for workspace-scoped secrets (AI provider
- * keys, BYO storage credentials, ...). `purpose` is folded into the KMS
- * EncryptionContext so a ciphertext minted for one purpose can never be
- * decrypted under another, even if two features reuse the same key ARN.
+ * keys, BYO storage credentials, ...). Callers pass the EncryptionContext,
+ * which must come from whichever package owns that credential's contract —
+ * the same context is required to decrypt, sometimes from another process, so
+ * it cannot be assembled here.
  */
 export class EnvelopeEncryptionError extends Error {
   constructor(readonly code: "ENCRYPTION_UNAVAILABLE") {
@@ -18,12 +19,6 @@ const kms = () =>
     process.env.AWS_REGION ? { region: process.env.AWS_REGION } : {},
   );
 
-const context = (workspaceId: string, purpose: string) => ({
-  application: "cap",
-  workspaceId,
-  purpose,
-});
-
 export function requireKeyArn(envVar: string): string {
   const value = process.env[envVar];
   if (!value) throw new EnvelopeEncryptionError("ENCRYPTION_UNAVAILABLE");
@@ -31,16 +26,15 @@ export function requireKeyArn(envVar: string): string {
 }
 
 export async function encryptCredential(input: {
-  workspaceId: string;
   secret: string;
   keyArn: string;
-  purpose: string;
+  encryptionContext: Record<string, string>;
 }) {
   const result = await kms().send(
     new EncryptCommand({
       KeyId: input.keyArn,
       Plaintext: Buffer.from(input.secret),
-      EncryptionContext: context(input.workspaceId, input.purpose),
+      EncryptionContext: input.encryptionContext,
     }),
   );
   if (!result.CiphertextBlob) throw new Error("KMS returned no ciphertext");
@@ -55,16 +49,15 @@ export async function encryptCredential(input: {
 }
 
 export async function decryptCredential(input: {
-  workspaceId: string;
   ciphertext: string;
   keyArn: string;
-  purpose: string;
+  encryptionContext: Record<string, string>;
 }): Promise<string> {
   const result = await kms().send(
     new DecryptCommand({
       KeyId: input.keyArn,
       CiphertextBlob: Buffer.from(input.ciphertext, "base64"),
-      EncryptionContext: context(input.workspaceId, input.purpose),
+      EncryptionContext: input.encryptionContext,
     }),
   );
   if (!result.Plaintext) throw new Error("KMS returned no plaintext");

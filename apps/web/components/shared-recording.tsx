@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { sendJson } from "../lib/http/json";
 import { CommentThread } from "./comment-thread";
 
 type Playback = {
@@ -27,11 +28,11 @@ export function SharedRecording({
   async function open(event?: React.FormEvent) {
     event?.preventDefault();
     setError(undefined);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(password ? { password } : {}),
-    });
+    const response = await sendJson(
+      endpoint,
+      "POST",
+      password ? { password } : {},
+    );
     if (!response.ok) {
       setError(
         response.status === 401

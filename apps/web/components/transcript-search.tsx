@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { sendJson } from "../lib/http/json";
 
 type SearchHit = {
   id: string;
@@ -21,10 +22,9 @@ export function TranscriptSearch() {
     event?.preventDefault();
     if (query.trim().length < 2) return;
     const response = semantic
-      ? await fetch("/api/ai/search", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ query: query.trim(), limit: 10 }),
+      ? await sendJson("/api/ai/search", "POST", {
+          query: query.trim(),
+          limit: 10,
         })
       : await fetch(
           `/api/transcripts/search?q=${encodeURIComponent(query.trim())}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,

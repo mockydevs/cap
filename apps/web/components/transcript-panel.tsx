@@ -1,6 +1,8 @@
 "use client";
 
+import { formatDuration } from "@cap/recording";
 import { useCallback, useEffect, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
 
 type Segment = {
   id: string;
@@ -19,11 +21,6 @@ type TranscriptPage = {
   nextCursor: string | null;
 };
 
-function cueTime(milliseconds: number) {
-  const seconds = Math.floor(milliseconds / 1_000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
 export function TranscriptPanel({
   recordingId,
   onSeek,
@@ -36,9 +33,9 @@ export function TranscriptPanel({
   const [saving, setSaving] = useState<string>();
   const [language, setLanguage] = useState("");
   const load = useCallback(async () => {
-    const response = await fetch(`/api/recordings/${recordingId}/transcript`, {
-      cache: "no-store",
-    });
+    const response = await fetchFresh(
+      `/api/recordings/${recordingId}/transcript`,
+    );
     if (response.status === 404) {
       setPage({ transcript: null, items: [], nextCursor: null });
       return;
@@ -54,11 +51,11 @@ export function TranscriptPanel({
   useEffect(() => void load(), [load]);
 
   async function saveLanguage() {
-    const response = await fetch(`/api/recordings/${recordingId}/transcript`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ language: language || null }),
-    });
+    const response = await sendJson(
+      `/api/recordings/${recordingId}/transcript`,
+      "PATCH",
+      { language: language || null },
+    );
     if (!response.ok) {
       setError("Could not update transcript language.");
       return;
@@ -73,16 +70,13 @@ export function TranscriptPanel({
   ) {
     setSaving(segment.id);
     setError(undefined);
-    const response = await fetch(
+    const response = await sendJson(
       `/api/recordings/${recordingId}/transcript/segments/${segment.id}`,
+      "PATCH",
       {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text,
-          speakerLabel: speakerLabel || null,
-          expectedCorrectionRevision: page?.transcript?.correctionRevision,
-        }),
+        text,
+        speakerLabel: speakerLabel || null,
+        expectedCorrectionRevision: page?.transcript?.correctionRevision,
       },
     );
     setSaving(undefined);
@@ -157,7 +151,7 @@ export function TranscriptPanel({
         {page.items.map((segment) => (
           <li key={segment.id}>
             <button type="button" onClick={() => onSeek(segment.startMs)}>
-              {cueTime(segment.startMs)}
+              {formatDuration(segment.startMs)}
             </button>
             <TranscriptSegmentEditor
               segment={segment}

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
 type Item = {
   id: string;
   capability: string;
@@ -31,9 +32,7 @@ export function AiPanel({
     [error, setError] = useState<string>(),
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    const response = await fetch(`/api/recordings/${recordingId}/ai`, {
-      cache: "no-store",
-    });
+    const response = await fetchFresh(`/api/recordings/${recordingId}/ai`);
     if (response.ok)
       setItems(((await response.json()) as { items: Item[] }).items);
   }, [recordingId]);
@@ -45,15 +44,15 @@ export function AiPanel({
   const request = async (capability: string) => {
     setBusy(true);
     setError(undefined);
-    const response = await fetch(`/api/recordings/${recordingId}/ai`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    const response = await sendJson(
+      `/api/recordings/${recordingId}/ai`,
+      "POST",
+      {
         capability,
         ...(capability === "QUESTIONS_ANSWERS" ? { question } : {}),
         ...(capability === "TRANSLATION" ? { targetLanguage } : {}),
-      }),
-    });
+      },
+    );
     setBusy(false);
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
@@ -66,13 +65,10 @@ export function AiPanel({
     await load();
   };
   const decide = async (item: Item, status: "ACCEPTED" | "REJECTED") => {
-    await fetch(
+    await sendJson(
       `/api/recordings/${recordingId}/ai/artifacts/${item.artifactId}`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status }),
-      },
+      "PATCH",
+      { status },
     );
     await load();
   };

@@ -3,15 +3,13 @@ import { db } from "../../db/client";
 import { aiProviderConnections, aiProviderRoutes } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
+import { aiCredentialEncryptionContext } from "@cap/ai";
 import {
-  decryptCredential,
   encryptCredential,
   EnvelopeEncryptionError,
   requireKeyArn,
 } from "../crypto/envelope";
 import { AiServiceError } from "./service";
-
-const PURPOSE = "ai-provider-credential";
 
 const keyArn = () => {
   try {
@@ -28,19 +26,10 @@ export async function encryptProviderCredential(
   secret: string,
 ) {
   return encryptCredential({
-    workspaceId,
     secret,
     keyArn: keyArn(),
-    purpose: PURPOSE,
+    encryptionContext: aiCredentialEncryptionContext(workspaceId),
   });
-}
-
-export async function decryptProviderCredential(input: {
-  workspaceId: string;
-  ciphertext: string;
-  keyArn: string;
-}) {
-  return decryptCredential({ ...input, purpose: PURPOSE });
 }
 
 const endpoint = (provider: string, baseUrl?: string | null) =>

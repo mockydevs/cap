@@ -134,6 +134,13 @@
       "when": 1786428800000,
       "tag": "0018_editor_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786575023293,
+      "tag": "0019_library_views",
+      "breakpoints": true
     }
   ]
 }

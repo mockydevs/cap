@@ -3,7 +3,7 @@ import type { Job } from "bullmq";
 import type { Pool } from "pg";
 import { DecryptCommand, type KMSClient } from "@aws-sdk/client-kms";
 import { aiJobSchema, type AiJob } from "@cap/queue";
-import { transcriptInputHash } from "@cap/ai";
+import { aiCredentialEncryptionContext, transcriptInputHash } from "@cap/ai";
 import { providerFromConnection, providerFromEnvironment } from "./provider";
 
 export async function providerForJob(
@@ -40,11 +40,7 @@ export async function providerForJob(
     new DecryptCommand({
       KeyId: connection.credential_key_arn,
       CiphertextBlob: Buffer.from(connection.encrypted_credential, "base64"),
-      EncryptionContext: {
-        application: "cap",
-        workspaceId: data.workspaceId,
-        purpose: "ai-provider-credential",
-      },
+      EncryptionContext: aiCredentialEncryptionContext(data.workspaceId),
     }),
   );
   if (!decrypted.Plaintext)

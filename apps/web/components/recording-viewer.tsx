@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
 import { ShareControls } from "./share-controls";
 import { CommentThread } from "./comment-thread";
 import { TranscriptPanel } from "./transcript-panel";
@@ -43,9 +44,7 @@ export function RecordingViewer({
   const [activeTab, setActiveTab] = useState<InspectorTab>("transcript");
   const playerRef = useRef<HTMLVideoElement>(null);
   const load = useCallback(async () => {
-    const response = await fetch(`/api/recordings/${recordingId}`, {
-      cache: "no-store",
-    });
+    const response = await fetchFresh(`/api/recordings/${recordingId}`);
     if (response.status === 401) {
       router.replace("/login");
       return;
@@ -61,12 +60,11 @@ export function RecordingViewer({
     const next = (await response.json()) as Recording;
     setRecording(next);
     if (next.status === "READY") {
-      const media = await fetch(`/api/recordings/${recordingId}/playback`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        cache: "no-store",
-      });
+      const media = await sendJson(
+        `/api/recordings/${recordingId}/playback`,
+        "POST",
+        {},
+      );
       if (media.ok) setPlayback((await media.json()) as Playback);
       else setError("Playback is temporarily unavailable.");
     }

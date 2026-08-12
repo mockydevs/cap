@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import type { WorkspaceRole } from "@cap/domain";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "../../db/client";
 import { sessions, users, workspaceMembers } from "../../db/schema";
@@ -67,7 +68,7 @@ export type Actor = {
   workspaceId: string;
   email: string;
   displayName: string;
-  role: "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
+  role: WorkspaceRole;
 };
 export async function actorFromToken(
   token: string | undefined,

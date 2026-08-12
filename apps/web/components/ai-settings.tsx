@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
 type Policy = {
   enabled: boolean;
   allowExternalProcessing: boolean;
@@ -47,7 +48,7 @@ export function AiSettings() {
     [defaultModel, setDefaultModel] = useState(""),
     [rotateKeys, setRotateKeys] = useState<Record<string, string>>({});
   const refreshProviders = useCallback(async () => {
-    const response = await fetch("/api/ai/providers", { cache: "no-store" });
+    const response = await fetchFresh("/api/ai/providers");
     if (response.ok) {
       const payload = (await response.json()) as {
         connections: ProviderConnection[];
@@ -66,25 +67,17 @@ export function AiSettings() {
     }
   }, []);
   useEffect(() => {
-    void fetch("/api/ai/policy", { cache: "no-store" }).then(
-      async (response) => {
-        if (response.ok) setPolicy((await response.json()) as Policy);
-      },
-    );
-    void fetch("/api/ai/usage", { cache: "no-store" }).then(
-      async (response) => {
-        if (response.ok) setUsage((await response.json()) as Usage);
-      },
-    );
+    void fetchFresh("/api/ai/policy").then(async (response) => {
+      if (response.ok) setPolicy((await response.json()) as Policy);
+    });
+    void fetchFresh("/api/ai/usage").then(async (response) => {
+      if (response.ok) setUsage((await response.json()) as Usage);
+    });
     void refreshProviders();
   }, [refreshProviders]);
   if (!policy) return null;
   const save = async () => {
-    const response = await fetch("/api/ai/policy", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(policy),
-    });
+    const response = await sendJson("/api/ai/policy", "PUT", policy);
     setMessage(
       response.ok
         ? "AI policy saved."
@@ -116,14 +109,10 @@ export function AiSettings() {
     setFetchingModels(true);
     setMessage(undefined);
     try {
-      const response = await fetch("/api/ai/providers/models", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          provider,
-          apiKey,
-          ...(baseUrl ? { baseUrl } : {}),
-        }),
+      const response = await sendJson("/api/ai/providers/models", "POST", {
+        provider,
+        apiKey,
+        ...(baseUrl ? { baseUrl } : {}),
       });
       if (!response.ok) {
         setMessage("Could not reach the provider with this key/endpoint.");
@@ -142,18 +131,14 @@ export function AiSettings() {
   };
   const addProvider = async () => {
     const allowedModels = candidateModels;
-    const response = await fetch("/api/ai/providers", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        provider,
-        displayName,
-        apiKey,
-        ...(baseUrl ? { baseUrl } : {}),
-        allowedCapabilities: capabilities,
-        allowedModels,
-        defaultModel: defaultModel || allowedModels[0],
-      }),
+    const response = await sendJson("/api/ai/providers", "POST", {
+      provider,
+      displayName,
+      apiKey,
+      ...(baseUrl ? { baseUrl } : {}),
+      allowedCapabilities: capabilities,
+      allowedModels,
+      defaultModel: defaultModel || allowedModels[0],
     });
     setApiKey("");
     setMessage(
@@ -174,14 +159,10 @@ export function AiSettings() {
       (item) => item.id === routeSelection[purpose],
     );
     if (!selected) return;
-    const response = await fetch("/api/ai/routes", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        purpose,
-        connectionId: selected.id,
-        model: selected.defaultModel,
-      }),
+    const response = await sendJson("/api/ai/routes", "PUT", {
+      purpose,
+      connectionId: selected.id,
+      model: selected.defaultModel,
     });
     setMessage(
       response.ok
@@ -194,11 +175,11 @@ export function AiSettings() {
   const rotateKey = async (connectionId: string) => {
     const nextKey = rotateKeys[connectionId];
     if (!nextKey) return;
-    const response = await fetch(`/api/ai/providers/${connectionId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ apiKey: nextKey }),
-    });
+    const response = await sendJson(
+      `/api/ai/providers/${connectionId}`,
+      "PATCH",
+      { apiKey: nextKey },
+    );
     setRotateKeys((current) => ({ ...current, [connectionId]: "" }));
     setMessage(
       response.ok
@@ -500,9 +481,10 @@ export function AiSettings() {
                           )
                         )
                           return;
-                        await fetch(`/api/ai/providers/${item.id}`, {
-                          method: "DELETE",
-                        });
+                        await sendJson(
+                          `/api/ai/providers/${item.id}`,
+                          "DELETE",
+                        );
                         await refreshProviders();
                       }}
                     >

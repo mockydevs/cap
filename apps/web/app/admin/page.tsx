@@ -14,6 +14,7 @@ export default function AdminPage() {
           </a>
           <a href="#members">Members</a>
           <a href="#integrations">Integrations</a>
+          <a href="#ai">AI</a>
           <a href="#security">Security</a>
         </nav>
         <Link href="/library">

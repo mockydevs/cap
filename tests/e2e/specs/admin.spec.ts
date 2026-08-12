@@ -23,6 +23,12 @@ test("shows a fresh workspace owner the full admin panel", async ({
     page.getByRole("heading", { name: "Retention policy" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Webhooks" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "AI providers" }),
+  ).toBeVisible();
+  // The summary comes from apps/web/components/ai-settings.tsx, so this fails
+  // if the AI panel is ever detached from the admin page again.
+  await expect(page.getByText("Workspace AI policy")).toBeVisible();
   await expect(page.getByRole("heading", { name: "API keys" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
 });

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { sendJson } from "../lib/http/json";
 
 export function AcceptInvitation() {
   const router = useRouter();
@@ -16,13 +17,10 @@ export function AcceptInvitation() {
       return;
     }
     void (async () => {
-      const acceptResponse = await fetch(
+      const acceptResponse = await sendJson(
         "/api/workspace/invitations/accept",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token }),
-        },
+        "POST",
+        { token },
       );
       if (acceptResponse.status === 401) {
         setStatus("unauthenticated");
@@ -35,10 +33,8 @@ export function AcceptInvitation() {
       const { workspaceId } = (await acceptResponse.json()) as {
         workspaceId: string;
       };
-      await fetch("/api/auth/session/switch-workspace", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
+      await sendJson("/api/auth/session/switch-workspace", "POST", {
+        workspaceId,
       });
       setStatus("done");
       router.replace("/library");

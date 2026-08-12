@@ -1,6 +1,7 @@
+import { WORKSPACE_ROLES } from "@cap/domain";
 import { z } from "zod";
 
-const workspaceRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER", "VIEWER"]);
+const workspaceRoleSchema = z.enum(WORKSPACE_ROLES);
 
 export const inviteMemberSchema = z
   .object({

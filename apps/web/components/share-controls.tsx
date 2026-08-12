@@ -1,15 +1,16 @@
 "use client";
 
+import type { RecordingVisibility } from "@cap/domain";
 import { useState } from "react";
+import { sendJson } from "../lib/http/json";
 
-type Visibility = "PRIVATE" | "LINK" | "PASSWORD" | "PUBLIC";
 type ShareResult = {
-  visibility: Visibility;
+  visibility: RecordingVisibility;
   shareToken?: string;
   expiresAt?: string;
 };
 export function ShareControls({ recordingId }: { recordingId: string }) {
-  const [visibility, setVisibility] = useState<Visibility>("PRIVATE");
+  const [visibility, setVisibility] = useState<RecordingVisibility>("PRIVATE");
   const [password, setPassword] = useState("");
   const [result, setResult] = useState<ShareResult>();
   const [error, setError] = useState<string>();
@@ -19,17 +20,17 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
     event.preventDefault();
     setSaving(true);
     setError(undefined);
-    const response = await fetch(`/api/recordings/${recordingId}/sharing`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
+    const response = await sendJson(
+      `/api/recordings/${recordingId}/sharing`,
+      "PUT",
+      {
         visibility,
         ...(visibility === "PASSWORD" ? { password } : {}),
         ...(visibility === "LINK" || visibility === "PASSWORD"
           ? { expiresInHours: 168 }
           : {}),
-      }),
-    });
+      },
+    );
     if (!response.ok) {
       setError(
         response.status === 403
@@ -59,7 +60,7 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
           <select
             value={visibility}
             onChange={(event) =>
-              setVisibility(event.target.value as Visibility)
+              setVisibility(event.target.value as RecordingVisibility)
             }
           >
             <option value="PRIVATE">Private workspace</option>

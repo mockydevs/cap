@@ -1,10 +1,18 @@
+import { WORKSPACE_ROLES } from "@cap/domain";
 import { describe, expect, it } from "vitest";
+import { workspaceRole } from "../../db/schema";
 import { hashInvitationToken } from "./service";
 import {
   acceptInvitationSchema,
   inviteMemberSchema,
   updateMemberRoleSchema,
 } from "./validation";
+
+describe("workspace roles", () => {
+  it("declares the same ladder in the database enum and the domain", () => {
+    expect(workspaceRole.enumValues).toEqual([...WORKSPACE_ROLES]);
+  });
+});
 
 describe("workspace invitation primitives", () => {
   it("hashes invitation tokens deterministically without leaking the token", () => {

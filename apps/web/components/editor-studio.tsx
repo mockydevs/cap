@@ -14,6 +14,7 @@ import {
   type EditorHistory,
 } from "@cap/editor-domain";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchFresh, sendJson } from "../lib/http/json";
 
 type Snapshot = {
   projectId: string;
@@ -62,11 +63,8 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const loadRevisions = useCallback(async (projectId: string) => {
-    const response = await fetch(
+    const response = await fetchFresh(
       `/api/editor-projects/${projectId}/revisions`,
-      {
-        cache: "no-store",
-      },
     );
     if (!response.ok) return;
     const body = (await response.json()) as { revisions: Revision[] };
@@ -76,9 +74,7 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
   const load = useCallback(async () => {
     setSaveState("loading");
     setError(undefined);
-    const response = await fetch(`/api/recordings/${recordingId}/editor`, {
-      cache: "no-store",
-    });
+    const response = await fetchFresh(`/api/recordings/${recordingId}/editor`);
     if (response.status === 401) {
       router.replace("/login");
       return;
@@ -109,12 +105,11 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
     );
     setSaveState("saved");
     void loadRevisions(next.projectId);
-    const preview = await fetch(`/api/recordings/${recordingId}/playback`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "{}",
-      cache: "no-store",
-    });
+    const preview = await sendJson(
+      `/api/recordings/${recordingId}/playback`,
+      "POST",
+      {},
+    );
     if (preview.ok) setPlayback((await preview.json()) as Playback);
   }, [loadRevisions, recordingId, router]);
 
@@ -131,15 +126,15 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
       )
         return current;
       setSaveState("saving");
-      const response = await fetch(`/api/recordings/${recordingId}/editor`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const response = await sendJson(
+        `/api/recordings/${recordingId}/editor`,
+        "PATCH",
+        {
           projectId: current.projectId,
           expectedRevision: current.revision,
           document,
-        }),
-      });
+        },
+      );
       if (response.status === 409) {
         setSaveState("conflict");
         setError(
@@ -314,13 +309,10 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
     if (!snapshot || !history) return;
     const saved = await saveDocument(history.document);
     if (!saved) return;
-    const response = await fetch(
+    const response = await sendJson(
       `/api/editor-projects/${saved.projectId}/renders`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      },
+      "POST",
+      {},
     );
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as {
@@ -340,9 +332,8 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
     if (!render || render.status === "COMPLETED" || render.status === "FAILED")
       return;
     const timer = window.setInterval(async () => {
-      const response = await fetch(
+      const response = await fetchFresh(
         `/api/editor-projects/${render.projectId}/renders/${render.id}`,
-        { cache: "no-store" },
       );
       if (response.ok) setRender((await response.json()) as Render);
     }, 2_500);

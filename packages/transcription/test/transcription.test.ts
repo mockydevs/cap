@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   approvedSegmentText,
   assertTranscriptTransition,
+  formatCaptionTimestamp,
   mergeTranscriptPreservingCorrections,
   prepareProviderRunMerge,
-  renderSrt,
-  renderWebVtt,
   validateProviderResult,
   type CanonicalSegment,
   type TranscriptIdFactory,
@@ -187,12 +186,9 @@ describe("transcription contracts and captions", () => {
     ).toThrow("Cost and ISO currency");
   });
 
-  it("renders approved corrections as valid WebVTT and SRT", () => {
-    const vtt = renderWebVtt(previous);
-    const srt = renderSrt(previous);
-    expect(vtt).toContain(
-      "WEBVTT\n\nstable-segment\n00:00:00.000 --> 00:00:02.000\nHello, world!",
-    );
-    expect(srt).toContain("1\n00:00:00,000 --> 00:00:02,000\nHello, world!");
+  it("formats cue timestamps for both subtitle dialects", () => {
+    expect(formatCaptionTimestamp(0, ".")).toBe("00:00:00.000");
+    expect(formatCaptionTimestamp(3_661_005, ",")).toBe("01:01:01,005");
+    expect(formatCaptionTimestamp(-5, ",")).toBe("00:00:00,000");
   });
 });

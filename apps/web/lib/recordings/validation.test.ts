@@ -7,6 +7,12 @@ describe("recording API validation", () => {
     expect(() => recordingListSchema.parse({ limit: "51" })).toThrow();
   });
 
+  it("accepts only supported library views", () => {
+    expect(recordingListSchema.parse({}).view).toBe("library");
+    expect(recordingListSchema.parse({ view: "starred" }).view).toBe("starred");
+    expect(() => recordingListSchema.parse({ view: "everything" })).toThrow();
+  });
+
   it("only accepts UUID recording identifiers", () => {
     expect(
       recordingParamsSchema.parse({
