@@ -8,3 +8,9 @@ export function hasTrustedOrigin(request: Request) {
     return false;
   }
 }
+
+export function publicAppUrl(path: string) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL;
+  if (!configured) throw new Error("NEXT_PUBLIC_APP_URL is required");
+  return new URL(path, new URL(configured).origin);
+}

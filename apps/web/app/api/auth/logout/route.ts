@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { hasTrustedOrigin } from "../../../../lib/auth/origin";
+import { hasTrustedOrigin, publicAppUrl } from "../../../../lib/auth/origin";
 import {
   revokeSession,
   sessionCookieName,
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   await revokeSession(tokenFromRequest(request));
-  const response = NextResponse.redirect(new URL("/login", request.url), 303);
+  const response = NextResponse.redirect(publicAppUrl("/login"), 303);
   response.cookies.set(sessionCookieName, "", {
     ...sessionCookieOptions,
     maxAge: 0,

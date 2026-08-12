@@ -4,9 +4,10 @@ import {
   googleCookieNames,
   googleCookieOptions,
 } from "../../../../lib/auth/google";
+import { publicAppUrl } from "../../../../lib/auth/origin";
 
 export const runtime = "nodejs";
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const authorization = beginGoogleAuthorization();
     const response = NextResponse.redirect(authorization.url, 302);
@@ -27,6 +28,6 @@ export async function GET(request: Request) {
     );
     return response;
   } catch {
-    return NextResponse.redirect(new URL("/login?error=google", request.url));
+    return NextResponse.redirect(publicAppUrl("/login?error=google"));
   }
 }

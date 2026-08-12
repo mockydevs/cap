@@ -8,7 +8,7 @@ import {
   loginSchema,
   verifyPassword,
 } from "../../../../lib/auth/credentials";
-import { hasTrustedOrigin } from "../../../../lib/auth/origin";
+import { hasTrustedOrigin, publicAppUrl } from "../../../../lib/auth/origin";
 import {
   createSession,
   sessionCookieName,
@@ -51,12 +51,12 @@ export async function POST(request: Request) {
       .limit(1);
     if (!membership) throw new Error("Account has no workspace");
     const token = await createSession(user.id, membership.workspaceId);
-    const response = NextResponse.redirect(new URL("/", request.url), 303);
+    const response = NextResponse.redirect(publicAppUrl("/"), 303);
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {
     return NextResponse.redirect(
-      new URL("/login?error=credentials", request.url),
+      publicAppUrl("/login?error=credentials"),
       303,
     );
   }

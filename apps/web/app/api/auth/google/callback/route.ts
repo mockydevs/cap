@@ -5,6 +5,7 @@ import {
   googleCookieNames,
   GoogleAccountConflictError,
 } from "../../../../../lib/auth/google";
+import { publicAppUrl } from "../../../../../lib/auth/origin";
 import {
   createSession,
   sessionCookieName,
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     const identity = await exchangeGoogleCode({ code, verifier, nonce });
     const account = await findOrCreateGoogleUser(identity);
     const token = await createSession(account.userId, account.workspaceId);
-    const response = NextResponse.redirect(new URL("/library", request.url));
+    const response = NextResponse.redirect(publicAppUrl("/library"));
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     for (const name of Object.values(googleCookieNames))
       response.cookies.set(name, "", { path: "/", maxAge: 0 });
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
         ? "google-account-exists"
         : "google";
     const response = NextResponse.redirect(
-      new URL(`/login?error=${errorCode}`, request.url),
+      publicAppUrl(`/login?error=${errorCode}`),
     );
     for (const name of Object.values(googleCookieNames))
       response.cookies.set(name, "", { path: "/", maxAge: 0 });

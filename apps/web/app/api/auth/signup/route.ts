@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "../../../../db/client";
 import { users, workspaceMembers, workspaces } from "../../../../db/schema";
 import { hashPassword, signupSchema } from "../../../../lib/auth/credentials";
-import { hasTrustedOrigin } from "../../../../lib/auth/origin";
+import { hasTrustedOrigin, publicAppUrl } from "../../../../lib/auth/origin";
 import {
   createSession,
   sessionCookieName,
@@ -47,12 +47,12 @@ export async function POST(request: Request) {
         .values({ userId, workspaceId, role: "OWNER" });
     });
     const token = await createSession(userId, workspaceId);
-    const response = NextResponse.redirect(new URL("/", request.url), 303);
+    const response = NextResponse.redirect(publicAppUrl("/"), 303);
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {
     return NextResponse.redirect(
-      new URL("/signup?error=account", request.url),
+      publicAppUrl("/signup?error=account"),
       303,
     );
   }
