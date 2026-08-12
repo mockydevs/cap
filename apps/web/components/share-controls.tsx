@@ -14,6 +14,7 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
   const [result, setResult] = useState<ShareResult>();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -49,6 +50,9 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
   return (
     <aside className="share-panel">
       <h2>Share recording</h2>
+      <p className="share-intro">
+        Control who can watch, then send one secure link.
+      </p>
       <form onSubmit={save} className="share-form">
         <label>
           Access
@@ -69,6 +73,7 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
             Password
             <input
               type="password"
+              autoComplete="new-password"
               required
               minLength={10}
               maxLength={256}
@@ -87,9 +92,13 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
           <input readOnly value={shareUrl} aria-label="Share link" />
           <button
             type="button"
-            onClick={() => void navigator.clipboard.writeText(shareUrl)}
+            onClick={async () => {
+              await navigator.clipboard.writeText(shareUrl);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1800);
+            }}
           >
-            Copy
+            {copied ? "Copied" : "Copy"}
           </button>
           {result?.expiresAt && (
             <small>Expires {new Date(result.expiresAt).toLocaleString()}</small>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   executeEditorCommand,
   clipIdSchema,
@@ -44,6 +45,7 @@ const duration = (clip: Clip) =>
   (clip.sourceEndMs - clip.sourceStartMs) / clip.playbackRate;
 
 export function EditorStudio({ recordingId }: { recordingId: string }) {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [history, setHistory] = useState<EditorHistory>();
   const historyRef = useRef<EditorHistory | undefined>(undefined);
@@ -78,7 +80,7 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
       cache: "no-store",
     });
     if (response.status === 401) {
-      window.location.assign("/login");
+      router.replace("/login");
       return;
     }
     if (!response.ok) {
@@ -114,7 +116,7 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
       cache: "no-store",
     });
     if (preview.ok) setPlayback((await preview.json()) as Playback);
-  }, [loadRevisions, recordingId]);
+  }, [loadRevisions, recordingId, router]);
 
   useEffect(() => {
     void load();
@@ -349,21 +351,43 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
 
   if (error && !history)
     return (
-      <section className="editor-shell">
-        <Link href={`/library/${recordingId}`}>← Recording</Link>
-        <p className="form-error">{error}</p>
+      <section className="editor-state-page">
+        <div className="editor-state-card">
+          <span className="state-mark" aria-hidden="true">!</span>
+          <p className="eyebrow">Editor unavailable</p>
+          <h1>We could not open this cut.</h1>
+          <p>{error}</p>
+          <div className="state-actions">
+            <button type="button" onClick={() => void load()}>Try again</button>
+            <Link href={`/library/${recordingId}`}>Back to recording</Link>
+          </div>
+        </div>
       </section>
     );
   if (!history || !snapshot)
-    return <section className="editor-shell">Loading editor…</section>;
+    return (
+      <section className="editor-state-page" aria-live="polite">
+        <div className="editor-state-card editor-state-loading">
+          <span className="state-loader" aria-hidden="true" />
+          <p className="eyebrow">Preparing editor</p>
+          <h1>Building your timeline.</h1>
+          <p>Loading source media, cuts, and saved revisions…</p>
+        </div>
+      </section>
+    );
 
   return (
     <section className="editor-shell">
       <header className="editor-heading">
         <div>
-          <Link href={`/library/${recordingId}`}>← Recording</Link>
+          <Link className="editor-back" href={`/library/${recordingId}`}>
+            ← Back to recording
+          </Link>
           <p className="eyebrow">Non-destructive editor</p>
           <h1>Cut the story.</h1>
+          <p className="editor-subtitle">
+            Tighten the recording without changing the original file.
+          </p>
         </div>
         <div className="editor-actions">
           <span className={`editor-save editor-save-${saveState}`}>
@@ -385,7 +409,11 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
           >
             Redo
           </button>
-          <button type="button" onClick={() => void requestExport()}>
+          <button
+            className="editor-export"
+            type="button"
+            onClick={() => void requestExport()}
+          >
             Export MP4
           </button>
         </div>
@@ -436,7 +464,7 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
                 <button type="button" onClick={split}>
                   Split at playhead
                 </button>
-                <button type="button" onClick={remove}>
+                <button className="editor-danger" type="button" onClick={remove}>
                   Delete clip
                 </button>
                 <button type="button" onClick={() => move(-1)}>
@@ -468,8 +496,14 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
       </div>
       <section className="editor-timeline" aria-label="Timeline">
         <div className="editor-timeline-heading">
-          <h2>Timeline</h2>
-          <span>{ms(history.document.timelineDurationMs)}</span>
+          <div>
+            <p className="eyebrow">Sequence</p>
+            <h2>Timeline</h2>
+          </div>
+          <div className="editor-timeline-meta">
+            <span>{clips.length} {clips.length === 1 ? "clip" : "clips"}</span>
+            <strong>{ms(history.document.timelineDurationMs)}</strong>
+          </div>
         </div>
         <div className="editor-track">
           <span>Video</span>

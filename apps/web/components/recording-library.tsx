@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { TranscriptSearch } from "./transcript-search";
 
@@ -15,6 +16,7 @@ type RecordingSummary = {
 type Page = { items: RecordingSummary[]; nextCursor: string | null };
 
 export function RecordingLibrary() {
+  const router = useRouter();
   const [items, setItems] = useState<RecordingSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>();
   const [error, setError] = useState<string>();
@@ -27,7 +29,7 @@ export function RecordingLibrary() {
       { cache: "no-store" },
     );
     if (response.status === 401) {
-      window.location.assign("/login");
+      router.replace("/login");
       return;
     }
     if (!response.ok) {
@@ -39,7 +41,7 @@ export function RecordingLibrary() {
     setItems((current) => (cursor ? [...current, ...page.items] : page.items));
     setNextCursor(page.nextCursor);
     setLoading(false);
-  }, []);
+  }, [router]);
   useEffect(() => {
     void load();
   }, [load]);

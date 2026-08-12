@@ -94,20 +94,30 @@ export function TranscriptPanel({
   }
 
   if (!page)
-    return <section className="transcript-panel">Loading transcript…</section>;
+    return (
+      <section className="transcript-panel" aria-live="polite">
+        <div className="panel-empty panel-loading">
+          <span className="state-loader" aria-hidden="true" />
+          <strong>Loading transcript.</strong>
+          <p>Aligning words with the recording timeline…</p>
+        </div>
+      </section>
+    );
   if (!page.transcript)
     return (
       <section className="transcript-panel">
-        <h2>Transcript</h2>
-        <p className="hint">
-          A transcript will appear here when transcription is complete.
-        </p>
+        <div className="panel-empty">
+          <span aria-hidden="true">TXT</span>
+          <strong>Transcript is processing.</strong>
+          <p>A searchable, editable transcript will appear here when it is ready.</p>
+        </div>
       </section>
     );
   return (
     <section className="transcript-panel" aria-label="Transcript">
       <header className="transcript-heading">
         <div>
+          <p className="eyebrow">Words &amp; captions</p>
           <h2>Transcript</h2>
           <div className="transcript-language">
             <label>

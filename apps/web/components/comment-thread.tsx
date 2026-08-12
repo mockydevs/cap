@@ -136,7 +136,13 @@ export function CommentThread({
   }
   return (
     <section className="comments">
-      <h2>Comments</h2>
+      <header className="panel-heading">
+        <div>
+          <p className="eyebrow">Conversation</p>
+          <h2>Comments</h2>
+        </div>
+        <span>{items.length}</span>
+      </header>
       <form onSubmit={create} className="comment-form">
         {share && (
           <input
@@ -182,6 +188,7 @@ export function CommentThread({
                 const reaction = comment.reactions[emoji];
                 return (
                   <button
+                    type="button"
                     className={reaction?.reacted ? "reacted" : ""}
                     key={emoji}
                     onClick={() =>
@@ -193,14 +200,21 @@ export function CommentThread({
                 );
               })}
               {comment.canEdit && (
-                <button onClick={() => void edit(comment)}>Edit</button>
+                <button type="button" onClick={() => void edit(comment)}>Edit</button>
               )}
               {comment.canEdit && (
-                <button onClick={() => void remove(comment.id)}>Delete</button>
+                <button type="button" onClick={() => void remove(comment.id)}>Delete</button>
               )}
             </footer>
           </article>
         ))}
+        {!items.length && (
+          <div className="panel-empty">
+            <span aria-hidden="true">00:00</span>
+            <strong>Start the conversation.</strong>
+            <p>Comments stay anchored to the moment you are watching.</p>
+          </div>
+        )}
       </div>
     </section>
   );

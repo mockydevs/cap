@@ -84,6 +84,7 @@ export function AiPanel({
       <div className="ai-actions">
         {capabilities.map((capability) => (
           <button
+            type="button"
             disabled={busy}
             key={capability}
             onClick={() => void request(capability)}
@@ -142,16 +143,23 @@ export function AiPanel({
             )}
             {item.artifactStatus === "SUGGESTED" && (
               <div>
-                <button onClick={() => void decide(item, "ACCEPTED")}>
+                <button type="button" onClick={() => void decide(item, "ACCEPTED")}>
                   Accept
                 </button>
-                <button onClick={() => void decide(item, "REJECTED")}>
+                <button type="button" onClick={() => void decide(item, "REJECTED")}>
                   Reject
                 </button>
               </div>
             )}
           </article>
         ))}
+        {!items.length && (
+          <div className="panel-empty ai-empty">
+            <span aria-hidden="true">AI</span>
+            <strong>No generated insights yet.</strong>
+            <p>Choose an action above to turn the transcript into useful output.</p>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -194,7 +202,7 @@ function Artifact({
         {(content.chapters as Array<{ startMs: number; title: string }>).map(
           (chapter) => (
             <li key={`${chapter.startMs}-${chapter.title}`}>
-              <button onClick={() => onSeek(chapter.startMs)}>
+              <button type="button" onClick={() => onSeek(chapter.startMs)}>
                 {chapter.title}
               </button>
             </li>
@@ -209,7 +217,7 @@ function Artifact({
         {Array.isArray(content.citations) &&
           (content.citations as Array<{ startMs: number }>).map(
             (citation, index) => (
-              <button key={index} onClick={() => onSeek(citation.startMs)}>
+              <button type="button" key={index} onClick={() => onSeek(citation.startMs)}>
                 Evidence {index + 1}
               </button>
             ),
