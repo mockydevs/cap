@@ -12,46 +12,6 @@ x-app-environment: &app-environment
   AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
 
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cap}
-      POSTGRES_USER: ${POSTGRES_USER:-cap}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U $${POSTGRES_USER:-cap} -d $${POSTGRES_DB:-cap}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks: [cap-internal]
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command:
-      [
-        "sh",
-        "-c",
-        'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"',
-      ]
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a strong REDIS_PASSWORD}
-    networks: [cap-internal]
-
   web:
     build:
       context: .
@@ -71,9 +31,6 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
       AI_ALLOW_DEPLOYMENT_CREDENTIAL: ${AI_ALLOW_DEPLOYMENT_CREDENTIAL:-false}
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
 
   media-worker:
@@ -85,9 +42,6 @@ services:
       <<: *app-environment
       MEDIA_WORKER_CONCURRENCY: ${MEDIA_WORKER_CONCURRENCY:-1}
       MEDIA_WORKER_HEALTH_PORT: 8081
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
 
   transcription-worker:
@@ -105,9 +59,6 @@ services:
       TRANSCRIPTION_WORKER_HEALTH_PORT: 8082
       TRANSCRIPTION_CONSENT_BASIS: ${TRANSCRIPTION_CONSENT_BASIS:?Set the approved transcription consent basis}
       TRANSCRIPTION_CONSENT_ACTOR_USER_ID: ${TRANSCRIPTION_CONSENT_ACTOR_USER_ID:-}
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
 
   render-worker:
@@ -120,9 +71,6 @@ services:
       RENDER_WORKER_CONCURRENCY: ${RENDER_WORKER_CONCURRENCY:-1}
       RENDER_WORKER_HEALTH_PORT: 8083
       RENDER_TIMEOUT_MS: ${RENDER_TIMEOUT_MS:-1800000}
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
 
   ai-worker:
@@ -142,9 +90,6 @@ services:
       AI_OUTPUT_COST_MICROUNITS_PER_MILLION: ${AI_OUTPUT_COST_MICROUNITS_PER_MILLION:-2000000}
       AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-2}
       AI_WORKER_HEALTH_PORT: 8084
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
 
   webhook-worker:
@@ -156,14 +101,7 @@ services:
       <<: *app-environment
       WEBHOOK_WORKER_CONCURRENCY: ${WEBHOOK_WORKER_CONCURRENCY:-4}
       WEBHOOK_WORKER_HEALTH_PORT: 8085
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     networks: [cap-internal]
-
-volumes:
-  postgres-data:
-  redis-data:
 
 networks:
   cap-internal:
