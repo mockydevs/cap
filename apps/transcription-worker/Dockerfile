@@ -10,4 +10,4 @@ COPY --from=build --chown=cap:cap /app /app
 USER cap
 EXPOSE 8082
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["pnpm","--filter","@cap/transcription-worker","start"]
+CMD ["apps/transcription-worker/node_modules/.bin/tsx","apps/transcription-worker/src/index.ts"]
