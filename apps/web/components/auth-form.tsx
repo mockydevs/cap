@@ -10,14 +10,15 @@ export function AuthForm({
   const signup = mode === "signup";
   return (
     <main className="auth-shell">
-      <section className="auth-card">
-        <Link className="brand" href="/">
-          cap
-        </Link>
-        <p className="eyebrow">
-          {signup ? "Create your workspace" : "Welcome back"}
-        </p>
-        <h1>{signup ? "Start recording." : "Sign in."}</h1>
+      <section className={`auth-card ${signup ? "auth-card-signup" : ""}`}>
+        <div className="auth-content">
+          <Link className="brand" href="/">
+            <span className="brand-mark" aria-hidden="true" />cap
+          </Link>
+          <p className="eyebrow">
+            {signup ? "Create your workspace" : "Welcome back"}
+          </p>
+          <h1>{signup ? "Start recording." : "Sign in."}</h1>
         {error && (
           <p className="form-error" role="alert">
             {error === "google"
@@ -53,7 +54,11 @@ export function AuthForm({
         <div className="auth-divider">
           <span>or use email</span>
         </div>
-        <form method="post" action={`/api/auth/${mode}`} className="auth-form">
+        <form
+          method="post"
+          action={`/api/auth/${mode}`}
+          className={`auth-form ${signup ? "auth-form-signup" : ""}`}
+        >
           {signup && (
             <>
               <label>
@@ -102,12 +107,24 @@ export function AuthForm({
           {signup && <small>Use at least 12 characters.</small>}
           <button type="submit">{signup ? "Create account" : "Sign in"}</button>
         </form>
-        <p className="auth-switch">
+          <p className="auth-switch">
           {signup ? "Already have an account?" : "New to Cap?"}{" "}
           <Link href={signup ? "/login" : "/signup"}>
             {signup ? "Sign in" : "Create an account"}
           </Link>
-        </p>
+          </p>
+        </div>
+        <aside className="auth-poster" aria-label="About Cap">
+          <div className="auth-poster-top" aria-hidden="true">
+            <span>Cap for teams</span>
+            <span>01</span>
+          </div>
+          <div className="auth-poster-copy">
+            <span>Browser-first screen recording</span>
+            <h2>Record the work while it happens.</h2>
+            <p>Capture. Explain. Keep everyone moving.</p>
+          </div>
+        </aside>
       </section>
     </main>
   );

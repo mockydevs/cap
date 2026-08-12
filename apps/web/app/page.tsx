@@ -3,9 +3,9 @@ import { UserNav } from "../components/user-nav";
 
 export default function HomePage() {
   return (
-    <main>
+    <main className="home-shell">
       <header className="header">
-        <span className="brand">cap</span>
+        <span className="brand"><span className="brand-mark" aria-hidden="true" />cap</span>
         <span className="badge">Browser capture</span>
         <UserNav />
       </header>
@@ -18,6 +18,11 @@ export default function HomePage() {
         </p>
       </section>
       <CaptureStudio />
+      <footer className="home-footer">
+        <span>Private by default</span>
+        <span>Browser-native capture</span>
+        <span>Built for async work</span>
+      </footer>
     </main>
   );
 }

@@ -44,11 +44,13 @@ export function SharedRecording({
   }
   return (
     <main className="shared-shell">
-      <Link className="brand" href="/">
-        cap
-      </Link>
+      <header className="shared-header">
+        <Link className="brand" href="/"><span className="brand-mark" aria-hidden="true" />cap</Link>
+        <Link className="nav-cta" href="/signup">Sign up free</Link>
+      </header>
       {playback ? (
         <>
+          <p className="eyebrow">Shared recording</p>
           <h1>{playback.title}</h1>
           <video
             className="playback-player"

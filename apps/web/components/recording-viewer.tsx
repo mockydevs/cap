@@ -92,78 +92,92 @@ export function RecordingViewer({
     );
   return (
     <section className="viewer-shell">
-      <Link href="/library">← Library</Link>
-      <div className="viewer-heading">
-        <div>
-          <p className="eyebrow">{recording.status}</p>
-          <h1>{recording.title}</h1>
-        </div>
-        <span>
-          {new Intl.DateTimeFormat(undefined, { dateStyle: "long" }).format(
-            new Date(recording.createdAt),
+      <header className="viewer-topbar">
+        <Link className="sidebar-brand" href="/library"><span className="brand-mark" aria-hidden="true" />Cap</Link>
+        <Link href="/library">← Library</Link>
+        <div className="viewer-actions">
+          {recording.status === "READY" && (
+            <Link className="editor-launch" href={`/library/${recording.id}/edit`}>
+              Edit recording
+            </Link>
           )}
-        </span>
-      </div>
-      {recording.status === "READY" && (
-        <Link className="editor-launch" href={`/library/${recording.id}/edit`}>
-          Edit recording
-        </Link>
-      )}
-      {playback ? (
-        <video
-          ref={playerRef}
-          className="playback-player"
-          controls
-          preload="metadata"
-          src={playback.url}
-          onTimeUpdate={(event) =>
-            setTimestampMs(event.currentTarget.currentTime * 1000)
-          }
-          onError={() => void load()}
-        >
-          <track
-            default
-            kind="subtitles"
-            label="Transcript"
-            src={`/api/recordings/${recordingId}/captions?format=vtt`}
-            srcLang="en"
-          />
-        </video>
-      ) : (
-        <div className="processing-state">
-          <span className="processing-pulse" />
-          <h2>
-            {recording.status === "FAILED"
-              ? "Processing failed"
-              : "Preparing playback…"}
-          </h2>
-          <p>
-            {recording.status === "FAILED"
-              ? "The source is safe. Contact a workspace administrator to retry processing."
-              : "This page updates automatically when your video is ready."}
-          </p>
         </div>
-      )}
-      <TranscriptPanel
-        recordingId={recording.id}
-        onSeek={(positionMs) => {
-          if (!playerRef.current) return;
-          playerRef.current.currentTime = positionMs / 1_000;
-          void playerRef.current.play().catch(() => undefined);
-        }}
-      />
-      <AiPanel
-        recordingId={recording.id}
-        onSeek={(positionMs) => {
-          if (!playerRef.current) return;
-          playerRef.current.currentTime = positionMs / 1000;
-          void playerRef.current.play().catch(() => undefined);
-        }}
-      />
-      <CommentThread recordingId={recording.id} timestampMs={timestampMs} />
-      {recording.canManageSharing && (
-        <ShareControls recordingId={recording.id} />
-      )}
+      </header>
+      <div className="viewer-layout">
+        <div className="viewer-main">
+          <div className="viewer-heading">
+            <div>
+              <p className="eyebrow">{recording.status}</p>
+              <h1>{recording.title}</h1>
+            </div>
+            <span>
+              {new Intl.DateTimeFormat(undefined, { dateStyle: "long" }).format(
+                new Date(recording.createdAt),
+              )}
+            </span>
+          </div>
+          {playback ? (
+            <video
+              ref={playerRef}
+              className="playback-player"
+              controls
+              preload="metadata"
+              src={playback.url}
+              onTimeUpdate={(event) =>
+                setTimestampMs(event.currentTarget.currentTime * 1000)
+              }
+              onError={() => void load()}
+            >
+              <track
+                default
+                kind="subtitles"
+                label="Transcript"
+                src={`/api/recordings/${recordingId}/captions?format=vtt`}
+                srcLang="en"
+              />
+            </video>
+          ) : (
+            <div className="processing-state">
+              <span className="processing-pulse" />
+              <h2>
+                {recording.status === "FAILED"
+                  ? "Processing failed"
+                  : "Preparing playback…"}
+              </h2>
+              <p>
+                {recording.status === "FAILED"
+                  ? "The source is safe. Contact a workspace administrator to retry processing."
+                  : "This page updates automatically when your video is ready."}
+              </p>
+            </div>
+          )}
+          {recording.canManageSharing && (
+            <ShareControls recordingId={recording.id} />
+          )}
+        </div>
+        <aside className="viewer-inspector">
+          <div className="viewer-tabs" aria-label="Recording details">
+            <span className="active">Transcript</span><span>Comments</span><span>AI</span>
+          </div>
+          <TranscriptPanel
+            recordingId={recording.id}
+            onSeek={(positionMs) => {
+              if (!playerRef.current) return;
+              playerRef.current.currentTime = positionMs / 1_000;
+              void playerRef.current.play().catch(() => undefined);
+            }}
+          />
+          <CommentThread recordingId={recording.id} timestampMs={timestampMs} />
+          <AiPanel
+            recordingId={recording.id}
+            onSeek={(positionMs) => {
+              if (!playerRef.current) return;
+              playerRef.current.currentTime = positionMs / 1000;
+              void playerRef.current.play().catch(() => undefined);
+            }}
+          />
+        </aside>
+      </div>
     </section>
   );
 }
