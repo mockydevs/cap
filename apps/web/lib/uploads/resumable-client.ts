@@ -98,6 +98,22 @@ async function remove(sessionId: string) {
   database.close();
 }
 
+async function replace(
+  previousSessionId: string,
+  upload: PendingUpload,
+): Promise<void> {
+  const database = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    store.put(upload);
+    store.delete(previousSessionId);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+}
+
 export async function listPendingUploads(): Promise<PendingUpload[]> {
   const database = await openDatabase();
   const uploads = await new Promise<PendingUpload[]>((resolve, reject) => {
@@ -164,10 +180,39 @@ export async function beginResumableUpload(
   return upload;
 }
 
-export async function resumeUpload(
+async function restartPendingUpload(
+  upload: PendingUpload,
+  config?: UploadClientConfig,
+): Promise<PendingUpload> {
+  const response = await fetch(
+    apiUrl(config, `/api/upload-sessions/${upload.sessionId}/restart`),
+    {
+      method: "POST",
+      headers: apiHeaders(config, {}),
+    },
+  );
+  if (!response.ok)
+    throw await responseError(response, "Could not restart upload session");
+  const payload = (await response.json()) as {
+    sessionId: string;
+    recordingId: string;
+    partSizeBytes: number;
+  };
+  const restarted: PendingUpload = {
+    ...upload,
+    ...payload,
+    completionIdempotencyKey: crypto.randomUUID(),
+    uploadedParts: [],
+  };
+  await replace(upload.sessionId, restarted);
+  return restarted;
+}
+
+async function resumeUploadAttempt(
   initialUpload: PendingUpload,
   onProgress?: (completedBytes: number, totalBytes: number) => void,
   config?: UploadClientConfig,
+  allowProviderRestart = true,
 ) {
   let upload = initialUpload;
   // Older prototype receipts had no checksums and cannot satisfy the hardened contract.
@@ -219,10 +264,16 @@ export async function resumeUpload(
       body,
     });
     const etag = result.headers.get("etag");
-    if (!result.ok || !etag) {
-      throw new Error(
-        "Part upload failed; S3 CORS must expose ETag and accept checksum headers",
-      );
+    if (result.status === 404 && allowProviderRestart) {
+      const restarted = await restartPendingUpload(upload, config);
+      onProgress?.(0, restarted.blob.size);
+      return resumeUploadAttempt(restarted, onProgress, config, false);
+    }
+    if (!result.ok) {
+      throw new Error(`Storage rejected upload part (HTTP ${result.status})`);
+    }
+    if (!etag) {
+      throw new Error("Upload succeeded but storage CORS did not expose ETag");
     }
     completed.set(partNumber, {
       partNumber,
@@ -266,6 +317,14 @@ export async function resumeUpload(
     status: "PROCESSING";
     sizeBytes: number;
   }>;
+}
+
+export async function resumeUpload(
+  initialUpload: PendingUpload,
+  onProgress?: (completedBytes: number, totalBytes: number) => void,
+  config?: UploadClientConfig,
+) {
+  return resumeUploadAttempt(initialUpload, onProgress, config);
 }
 
 export async function abortResumableUpload(

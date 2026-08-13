@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import { webcrypto } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   abortResumableUpload,
   beginResumableUpload,
   pendingUploadProgress,
+  resumeUpload,
   type PendingUpload,
 } from "./resumable-client";
 
@@ -129,5 +131,128 @@ describe("pendingUploadProgress", () => {
     };
 
     expect(pendingUploadProgress(upload).percent).toBe(100);
+  });
+});
+
+describe("stale multipart recovery", () => {
+  const originalArrayBuffer = Blob.prototype.arrayBuffer;
+
+  beforeEach(() => {
+    vi.stubGlobal("crypto", webcrypto);
+    if (!Blob.prototype.arrayBuffer)
+      Object.defineProperty(Blob.prototype, "arrayBuffer", {
+        configurable: true,
+        value: async () => new Uint8Array([120]).buffer,
+      });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (!originalArrayBuffer)
+      delete (Blob.prototype as { arrayBuffer?: unknown }).arrayBuffer;
+  });
+
+  it("rotates a missing provider session and finishes with the preserved blob", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          url: "https://storage.example/old-part",
+          method: "PUT",
+          requiredHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            sessionId: "s-new",
+            recordingId: "r1",
+            partSizeBytes: 5_000_000,
+          },
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          url: "https://storage.example/new-part",
+          method: "PUT",
+          requiredHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, { status: 200, headers: { ETag: '"fresh"' } }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          recordingId: "r1",
+          status: "PROCESSING",
+          sizeBytes: 1,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await resumeUpload({
+      sessionId: "s-old",
+      recordingId: "r1",
+      partSizeBytes: 5_000_000,
+      blob: new Blob(["x"], { type: "video/webm" }),
+      completionIdempotencyKey: "idem-old",
+      uploadedParts: [],
+    });
+
+    expect(result).toMatchObject({ recordingId: "r1", status: "PROCESSING" });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/upload-sessions/s-old/parts/1",
+      "https://storage.example/old-part",
+      "/api/upload-sessions/s-old/restart",
+      "/api/upload-sessions/s-new/parts/1",
+      "https://storage.example/new-part",
+      "/api/upload-sessions/s-new/complete",
+    ]);
+  });
+
+  it("does not loop when the replacement session is also missing", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          url: "https://storage.example/old-part",
+          method: "PUT",
+          requiredHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            sessionId: "s-new",
+            recordingId: "r1",
+            partSizeBytes: 5_000_000,
+          },
+          { status: 201 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          url: "https://storage.example/new-part",
+          method: "PUT",
+          requiredHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      resumeUpload({
+        sessionId: "s-old",
+        recordingId: "r1",
+        partSizeBytes: 5_000_000,
+        blob: new Blob(["x"], { type: "video/webm" }),
+        completionIdempotencyKey: "idem-old",
+        uploadedParts: [],
+      }),
+    ).rejects.toThrow("Storage rejected upload part (HTTP 404)");
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   createUploadPlan,
   recordingId,
@@ -634,4 +634,137 @@ export async function abortSourceUpload(
     );
   }
   await storage.abortMultipartUpload(uploadReference(session));
+}
+
+/**
+ * Replaces a provider-side multipart upload that has disappeared while keeping
+ * the same recording. The browser still owns the source Blob, so this only
+ * rotates storage/session state and lets it upload the bytes again.
+ */
+export async function restartSourceUpload(
+  actor: UploadActor,
+  sessionIdValue: string,
+  storage: MultipartObjectStorage = uploadStorage(),
+) {
+  const [candidate] = await db()
+    .select()
+    .from(uploadSessions)
+    .where(
+      and(
+        eq(uploadSessions.id, sessionIdValue),
+        eq(uploadSessions.workspaceId, actor.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!candidate)
+    throw new UploadServiceError(
+      "UPLOAD_SESSION_NOT_FOUND",
+      404,
+      "Upload session not found",
+    );
+  if (!new Set(["PENDING", "UPLOADING", "EXPIRED"]).has(candidate.status))
+    throw new UploadServiceError(
+      "UPLOAD_STATE_CONFLICT",
+      409,
+      "Upload cannot be restarted in its current state",
+    );
+
+  const nextSessionId = uploadSessionId(randomUUID());
+  const nextObjectKey = buildSourceMediaObjectKey({
+    workspaceId: workspaceId(candidate.workspaceId),
+    recordingId: recordingId(candidate.recordingId),
+    uploadSessionId: nextSessionId,
+    mediaType: sourceMediaType(candidate.contentType),
+  });
+  const created = await storage.createSourceMultipartUpload({
+    objectKey: nextObjectKey,
+    workspaceId: workspaceId(candidate.workspaceId),
+    recordingId: recordingId(candidate.recordingId),
+    uploadSessionId: nextSessionId,
+    mediaType: sourceMediaType(candidate.contentType),
+  });
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+
+  try {
+    await db().transaction(async (transaction) => {
+      const [current] = await transaction
+        .select()
+        .from(uploadSessions)
+        .where(
+          and(
+            eq(uploadSessions.id, sessionIdValue),
+            eq(uploadSessions.workspaceId, actor.workspaceId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!current || current.status !== candidate.status)
+        throw new UploadServiceError(
+          "UPLOAD_STATE_CONFLICT",
+          409,
+          "Upload changed while it was being restarted",
+        );
+
+      await transaction
+        .update(uploadSessions)
+        .set({ status: "ABORTED", updatedAt: now })
+        .where(eq(uploadSessions.id, current.id));
+      const [updatedRecording] = await transaction
+        .update(recordings)
+        .set({
+          sourceObjectKey: nextObjectKey,
+          status: "UPLOADING",
+          sizeBytes: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(recordings.id, current.recordingId),
+            eq(recordings.workspaceId, actor.workspaceId),
+            inArray(recordings.status, ["UPLOADING", "FAILED"]),
+            isNull(recordings.deletedAt),
+          ),
+        )
+        .returning({ id: recordings.id });
+      if (!updatedRecording)
+        throw new UploadServiceError(
+          "UPLOAD_STATE_CONFLICT",
+          409,
+          "Recording cannot be restarted in its current state",
+        );
+      await transaction.insert(uploadSessions).values({
+        id: nextSessionId,
+        workspaceId: current.workspaceId,
+        recordingId: current.recordingId,
+        s3UploadId: created.uploadId,
+        objectKey: nextObjectKey,
+        contentType: current.contentType,
+        partSizeBytes: current.partSizeBytes,
+        expectedSizeBytes: current.expectedSizeBytes,
+        maxPartCount: current.maxPartCount,
+        expiresAt,
+      });
+    });
+  } catch (error) {
+    await storage
+      .abortMultipartUpload({
+        objectKey: nextObjectKey,
+        uploadId: created.uploadId,
+      })
+      .catch(() => undefined);
+    throw error;
+  }
+
+  await storage
+    .abortMultipartUpload(uploadReference(candidate))
+    .catch(() => undefined);
+  return {
+    recordingId: candidate.recordingId,
+    sessionId: nextSessionId,
+    partSizeBytes: candidate.partSizeBytes,
+    maxUploadBytes: candidate.expectedSizeBytes,
+    maxPartCount: candidate.maxPartCount,
+    expiresAt: expiresAt.toISOString(),
+  };
 }
