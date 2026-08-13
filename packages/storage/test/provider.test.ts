@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isMissingObjectError,
+  multipartSha256ChecksumsEnabled,
   storageBucketUrl,
   storageClientConfig,
   storageKmsKeyArn,
@@ -27,6 +28,20 @@ describe("S3-compatible provider configuration", () => {
     expect(storageClientConfig({ AWS_REGION: "eu-west-1" })).toEqual({
       region: "eu-west-1",
     });
+  });
+
+  it("disables per-part SHA-256 only for Cloudflare R2 endpoints", () => {
+    expect(
+      multipartSha256ChecksumsEnabled({
+        AWS_S3_ENDPOINT: "https://account.eu.r2.cloudflarestorage.com",
+      }),
+    ).toBe(false);
+    expect(
+      multipartSha256ChecksumsEnabled({
+        AWS_S3_ENDPOINT: "https://minio.example.com",
+      }),
+    ).toBe(true);
+    expect(multipartSha256ChecksumsEnabled({})).toBe(true);
   });
 
   it("builds provider-specific preflight URLs", () => {

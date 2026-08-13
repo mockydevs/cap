@@ -1,5 +1,4 @@
 import type {
-  CompletedUploadPart,
   RecordingId,
   S3EntityTag,
   Sha256Base64,
@@ -78,6 +77,14 @@ export interface MultipartUploadReference {
   readonly uploadId: MultipartUploadId;
 }
 
+/** Provider-authoritative part metadata. Some S3-compatible stores omit SHA-256. */
+export interface StoredUploadPart {
+  readonly partNumber: number;
+  readonly contentLength: number;
+  readonly checksumSha256?: Sha256Base64;
+  readonly etag: S3EntityTag;
+}
+
 export interface CompleteSourceMultipartUpload extends MultipartUploadReference {
   /** This must have been constructed from the storage provider's ListParts result. */
   readonly verifiedUpload: VerifiedCompletedUpload;
@@ -116,7 +123,7 @@ export interface MultipartObjectStorage {
   presignUploadPart(input: PresignUploadPart): Promise<PresignedUploadPart>;
   listUploadedParts(
     input: MultipartUploadReference,
-  ): Promise<readonly CompletedUploadPart[]>;
+  ): Promise<readonly StoredUploadPart[]>;
   completeSourceMultipartUpload(
     input: CompleteSourceMultipartUpload,
   ): Promise<CompletedSourceMultipartUpload>;

@@ -131,4 +131,29 @@ describe("multipart completion reconciliation", () => {
       }),
     ).toThrow("do not match");
   });
+
+  it("accepts R2 part metadata when the provider omits SHA-256", () => {
+    const result = reconcileCompletedParts({
+      partSizeBytes: UPLOAD_PART_SIZE_BYTES,
+      expectedSizeBytes: 100,
+      intents: [
+        {
+          partNumber: 1,
+          contentLength: 100,
+          checksumSha256: checksum,
+          isFinalPart: true,
+        },
+      ],
+      browserParts: [{ partNumber: 1, etag: '"r2"', checksumSha256: checksum }],
+      storedParts: [
+        {
+          partNumber: 1,
+          contentLength: 100,
+          etag: s3EntityTag('"r2"'),
+        },
+      ],
+    });
+
+    expect(result.parts[0]?.checksumSha256).toBe(checksum);
+  });
 });

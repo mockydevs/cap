@@ -11,6 +11,25 @@ export function storageKmsKeyArn(
   return environment.AWS_KMS_KEY_ARN?.trim() || undefined;
 }
 
+/**
+ * R2 supports multipart uploads but rejects the per-part
+ * `x-amz-checksum-sha256` header with NotImplemented. AWS S3 and compatible
+ * stores without that known limitation retain the stronger bound checksum.
+ */
+export function multipartSha256ChecksumsEnabled(
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const endpoint = environment.AWS_S3_ENDPOINT?.trim();
+  if (!endpoint) return true;
+  try {
+    return !new URL(endpoint).hostname
+      .toLowerCase()
+      .endsWith(".r2.cloudflarestorage.com");
+  } catch {
+    return true;
+  }
+}
+
 /** Provider-neutral write fields: request SSE-KMS only when AWS KMS is set. */
 export function storageWriteEncryption(
   environment: NodeJS.ProcessEnv = process.env,

@@ -60,6 +60,12 @@ for a video product is the single largest lever on hosting cost.
 switches to path-style addressing and relaxes the CRC32 checksum behaviour that
 R2, MinIO and Backblaze B2 reject. Nothing above the adapter changes.
 
+R2 also rejects `x-amz-checksum-sha256` on `UploadPart` with HTTP 501. Cap
+detects an R2 endpoint and omits that provider-unsupported header while still
+reconciling every part by its provider-returned ETag, byte length, persisted
+upload intent, and browser receipt. AWS S3 keeps the bound per-part SHA-256
+contract.
+
 **Recommended default: Cap-managed storage on R2.** It removes the egress bill
 and keeps one bucket to configure correctly.
 

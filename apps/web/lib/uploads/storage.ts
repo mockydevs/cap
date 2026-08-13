@@ -1,5 +1,6 @@
 import {
   createStorageClient,
+  multipartSha256ChecksumsEnabled,
   S3MultipartStorage,
   storageKmsKeyArn,
 } from "@cap/storage";
@@ -24,6 +25,7 @@ export function uploadStorage(): S3MultipartStorage {
   instance = new S3MultipartStorage({
     client: createStorageClient(),
     bucketName,
+    multipartSha256Checksums: multipartSha256ChecksumsEnabled(),
     ...(kmsKeyArn ? { kmsKeyArn } : {}),
   });
   return instance;

@@ -18,7 +18,6 @@ import {
   S3_MAX_MULTIPART_PARTS,
   s3EntityTag,
   sha256Base64,
-  type CompletedUploadPart,
   type RecordingId,
   type WorkspaceId,
 } from "@cap/domain";
@@ -43,6 +42,7 @@ import {
   type PresignUploadPart,
   type PurgeableObjectStorage,
   type SmallObjectStorage,
+  type StoredUploadPart,
   type StoredSourceObject,
 } from "./multipart-storage";
 
@@ -55,6 +55,8 @@ export interface S3MultipartStorageOptions {
    * assert that the stored object really carries it.
    */
   readonly kmsKeyArn?: string;
+  /** Disable only for providers such as R2 that reject per-part SHA-256. */
+  readonly multipartSha256Checksums?: boolean;
   readonly now?: () => Date;
 }
 
@@ -91,6 +93,7 @@ export class S3MultipartStorage
   readonly #client: S3Client;
   readonly #bucketName: string;
   readonly #kmsKeyArn: string | undefined;
+  readonly #multipartSha256Checksums: boolean;
   readonly #now: () => Date;
 
   constructor(options: S3MultipartStorageOptions) {
@@ -98,6 +101,7 @@ export class S3MultipartStorage
     this.#client = options.client;
     this.#bucketName = options.bucketName;
     this.#kmsKeyArn = options.kmsKeyArn;
+    this.#multipartSha256Checksums = options.multipartSha256Checksums ?? true;
     this.#now = options.now ?? (() => new Date());
   }
 
@@ -121,7 +125,9 @@ export class S3MultipartStorage
         Bucket: this.#bucketName,
         Key: objectKey,
         ContentType: input.mediaType,
-        ChecksumAlgorithm: "SHA256",
+        ...(this.#multipartSha256Checksums
+          ? { ChecksumAlgorithm: "SHA256" as const }
+          : {}),
         ...this.#encryption,
         Metadata: {
           "workspace-id": input.workspaceId,
@@ -160,6 +166,9 @@ export class S3MultipartStorage
     }
 
     const checksumHeader = "x-amz-checksum-sha256";
+    const checksumFields = this.#multipartSha256Checksums
+      ? { ChecksumSHA256: input.checksumSha256 }
+      : {};
     const url = await getSignedUrl(
       this.#client,
       new UploadPartCommand({
@@ -168,12 +177,16 @@ export class S3MultipartStorage
         UploadId: input.uploadId,
         PartNumber: input.partNumber,
         ContentLength: input.contentLength,
-        ChecksumSHA256: input.checksumSha256,
+        ...checksumFields,
       }),
       {
         expiresIn: input.expiresInSeconds,
-        // Bind the digest as a required request header instead of a mutable query value.
-        unhoistableHeaders: new Set([checksumHeader]),
+        ...(this.#multipartSha256Checksums
+          ? {
+              // Bind the digest as a required request header instead of a mutable query value.
+              unhoistableHeaders: new Set([checksumHeader]),
+            }
+          : {}),
       },
     );
 
@@ -183,17 +196,19 @@ export class S3MultipartStorage
       expiresAt: new Date(
         this.#now().getTime() + input.expiresInSeconds * 1000,
       ),
-      requiredHeaders: Object.freeze({
-        [checksumHeader]: input.checksumSha256,
-      }),
+      requiredHeaders: Object.freeze(
+        this.#multipartSha256Checksums
+          ? { [checksumHeader]: input.checksumSha256 }
+          : {},
+      ),
     };
   }
 
   async listUploadedParts(
     input: MultipartUploadReference,
-  ): Promise<readonly CompletedUploadPart[]> {
+  ): Promise<readonly StoredUploadPart[]> {
     assertManagedMediaObjectKey(input.objectKey);
-    const parts: CompletedUploadPart[] = [];
+    const parts: StoredUploadPart[] = [];
     let partNumberMarker: string | undefined;
 
     do {
@@ -210,7 +225,7 @@ export class S3MultipartStorage
           part.PartNumber === undefined ||
           part.Size === undefined ||
           !part.ETag ||
-          !part.ChecksumSHA256
+          (this.#multipartSha256Checksums && !part.ChecksumSHA256)
         ) {
           throw new StorageContractError(
             "INVALID_S3_RESPONSE",
@@ -221,7 +236,9 @@ export class S3MultipartStorage
           partNumber: part.PartNumber,
           contentLength: part.Size,
           etag: s3EntityTag(part.ETag),
-          checksumSha256: sha256Base64(part.ChecksumSHA256),
+          ...(part.ChecksumSHA256
+            ? { checksumSha256: sha256Base64(part.ChecksumSHA256) }
+            : {}),
         });
       }
       partNumberMarker = response.IsTruncated
@@ -253,7 +270,9 @@ export class S3MultipartStorage
           Parts: input.verifiedUpload.parts.map((part) => ({
             PartNumber: part.partNumber,
             ETag: part.etag,
-            ChecksumSHA256: part.checksumSha256,
+            ...(this.#multipartSha256Checksums
+              ? { ChecksumSHA256: part.checksumSha256 }
+              : {}),
           })),
         },
       }),

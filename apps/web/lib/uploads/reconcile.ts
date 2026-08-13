@@ -3,9 +3,9 @@ import {
   s3EntityTag,
   sha256Base64,
   verifyCompletedUpload,
-  type CompletedUploadPart,
   type VerifiedCompletedUpload,
 } from "@cap/domain";
+import type { StoredUploadPart } from "@cap/storage";
 
 export interface PersistedPartIntent {
   readonly partNumber: number;
@@ -33,7 +33,7 @@ export function reconcileCompletedParts(input: {
   readonly expectedSizeBytes: number;
   readonly intents: readonly PersistedPartIntent[];
   readonly browserParts: readonly BrowserCompletedPart[];
-  readonly storedParts: readonly CompletedUploadPart[];
+  readonly storedParts: readonly StoredUploadPart[];
 }): VerifiedCompletedUpload {
   const plan = createUploadPlan({
     partSizeBytes: input.partSizeBytes,
@@ -78,7 +78,8 @@ export function reconcileCompletedParts(input: {
       browser.partNumber !== intent.partNumber ||
       stored.partNumber !== intent.partNumber ||
       browser.checksumSha256 !== intent.checksumSha256 ||
-      stored.checksumSha256 !== intent.checksumSha256 ||
+      (stored.checksumSha256 !== undefined &&
+        stored.checksumSha256 !== intent.checksumSha256) ||
       browser.etag !== stored.etag
     ) {
       throw new UploadReconciliationError(
@@ -89,7 +90,13 @@ export function reconcileCompletedParts(input: {
     s3EntityTag(browser.etag);
   }
 
-  const verified = verifyCompletedUpload(plan, storedParts);
+  const verified = verifyCompletedUpload(
+    plan,
+    storedParts.map((stored, index) => ({
+      ...stored,
+      checksumSha256: sha256Base64(browserParts[index]!.checksumSha256),
+    })),
+  );
   if (verified.totalBytes !== input.expectedSizeBytes) {
     throw new UploadReconciliationError(
       "Uploaded bytes do not match the declared source size",
