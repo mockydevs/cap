@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 const responseSchema = z.object({
   data: z.array(
     z.object({
@@ -6,21 +7,54 @@ const responseSchema = z.object({
       embedding: z.array(z.number().finite()).min(8),
     }),
   ),
+  usage: z.object({ prompt_tokens: z.number().int().nonnegative() }).optional(),
 });
-export async function embedTexts(texts: string[]) {
-  if (!texts.length) return [];
-  const apiKey = process.env.AI_API_KEY;
-  if (!apiKey) throw new Error("AI_API_KEY must be configured");
-  const model = process.env.AI_EMBEDDING_MODEL ?? "text-embedding-3-small";
+
+export interface EmbeddingCredential {
+  readonly baseUrl: string | null;
+  readonly apiKey: string;
+  readonly model: string;
+}
+
+export interface EmbeddingBatch {
+  readonly vectors: ReadonlyArray<{
+    readonly embedding: number[];
+    readonly model: string;
+  }>;
+  /** Reported by the provider where available, else estimated for metering. */
+  readonly inputTokens: number;
+}
+
+/** Rough token estimate for providers that omit usage, at ~4 chars per token. */
+function estimateTokens(texts: readonly string[]): number {
+  return texts.reduce((total, text) => total + Math.ceil(text.length / 4), 0);
+}
+
+/**
+ * Embeds a batch against the caller-supplied credential.
+ *
+ * The credential is a parameter rather than an environment read because search
+ * indexing is billable work like any other: whoever the entitlement resolver
+ * says is paying for this workspace's embeddings is whose key must be used.
+ */
+export async function embedTexts(
+  texts: readonly string[],
+  credential: EmbeddingCredential,
+): Promise<EmbeddingBatch> {
+  if (!texts.length) return { vectors: [], inputTokens: 0 };
   const response = await fetch(
-    `${(process.env.AI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/$/, "")}/embeddings`,
+    `${(credential.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/embeddings`,
     {
       method: "POST",
       headers: {
-        authorization: `Bearer ${apiKey}`,
+        authorization: `Bearer ${credential.apiKey}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ model, input: texts, encoding_format: "float" }),
+      body: JSON.stringify({
+        model: credential.model,
+        input: texts,
+        encoding_format: "float",
+      }),
       signal: AbortSignal.timeout(30_000),
     },
   );
@@ -30,8 +64,15 @@ export async function embedTexts(texts: string[]) {
   const sorted = [...parsed.data].sort((a, b) => a.index - b.index);
   if (sorted.length !== texts.length)
     throw new Error("Embedding provider returned an incomplete batch");
-  return sorted.map((item) => ({ embedding: item.embedding, model }));
+  return {
+    vectors: sorted.map((item) => ({
+      embedding: item.embedding,
+      model: credential.model,
+    })),
+    inputTokens: parsed.usage?.prompt_tokens ?? estimateTokens(texts),
+  };
 }
+
 export function cosine(left: number[], right: number[]) {
   if (left.length !== right.length || !left.length) return -1;
   let dot = 0,

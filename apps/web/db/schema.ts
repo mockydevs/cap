@@ -1536,3 +1536,156 @@ export const editorTemplates = pgTable(
     index("editor_templates_workspace_idx").on(table.workspaceId, table.kind),
   ],
 );
+
+export const aiUsageLane = pgEnum("ai_usage_lane", [
+  "BYOK",
+  "MANAGED",
+  "DEPLOYMENT",
+]);
+export const aiUsageUnitKind = pgEnum("ai_usage_unit_kind", [
+  "TOKENS",
+  "AUDIO_MS",
+]);
+export const aiUsageSource = pgEnum("ai_usage_source", [
+  "AI_JOB",
+  "TRANSCRIPTION_RUN",
+  "EMBEDDING_BATCH",
+]);
+
+/**
+ * The one authoritative record of metered AI consumption.
+ *
+ * `ai_jobs` and `transcription_runs` remain the operational record of what ran
+ * and how it went; this table answers what it cost and who paid. Quota checks
+ * and the usage screen read here and nowhere else, so analysis, transcription,
+ * and embedding spend can be summed together — the split that previously let
+ * transcription and embeddings run entirely unmetered. Each row is written in
+ * the same transaction that completes its source, and `(source_kind,
+ * source_id)` is unique so a retried job cannot double-count.
+ */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    purpose: aiProviderPurpose("purpose").notNull(),
+    lane: aiUsageLane("lane").notNull(),
+    sourceKind: aiUsageSource("source_kind").notNull(),
+    sourceId: uuid("source_id").notNull(),
+    connectionId: uuid("connection_id").references(
+      () => aiProviderConnections.id,
+      { onDelete: "set null" },
+    ),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    units: bigint("units", { mode: "number" }).notNull(),
+    unitKind: aiUsageUnitKind("unit_kind").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    /** Estimated provider cost, counted against the workspace's own ceiling. */
+    costMicrounits: bigint("cost_microunits", { mode: "number" }).notNull(),
+    /** Decremented from plan credit; zero unless the managed lane paid. */
+    chargedMicrounits: bigint("charged_microunits", { mode: "number" })
+      .notNull()
+      .default(0),
+    currency: text("currency").notNull().default("USD"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ai_usage_events_source_unique_idx").on(
+      table.sourceKind,
+      table.sourceId,
+    ),
+    index("ai_usage_events_workspace_occurred_idx").on(
+      table.workspaceId,
+      table.occurredAt,
+    ),
+    check(
+      "ai_usage_events_amounts_check",
+      sql`${table.units} >= 0 AND ${table.costMicrounits} >= 0 AND ${table.chargedMicrounits} >= 0`,
+    ),
+    check(
+      "ai_usage_events_currency_check",
+      sql`${table.currency} ~ '^[A-Z]{3}$'`,
+    ),
+    check(
+      "ai_usage_events_charge_lane_check",
+      sql`${table.lane} = 'MANAGED' OR ${table.chargedMicrounits} = 0`,
+    ),
+  ],
+);
+
+export const workspaceSubscriptionStatus = pgEnum(
+  "workspace_subscription_status",
+  ["ACTIVE", "TRIALING", "PAST_DUE", "CANCELED", "INCOMPLETE", "UNPAID"],
+);
+
+/**
+ * A mirror of the billing provider's subscription, never the source of truth.
+ * Cap reads it to decide whether the managed AI lane is available and how much
+ * credit the current period carries; the provider's webhook is what writes it.
+ */
+export const workspaceSubscriptions = pgTable(
+  "workspace_subscriptions",
+  {
+    workspaceId: uuid("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull().default("STRIPE"),
+    customerId: text("customer_id").notNull(),
+    subscriptionId: text("subscription_id"),
+    planCode: text("plan_code").notNull(),
+    status: workspaceSubscriptionStatus("status").notNull(),
+    currentPeriodStart: timestamp("current_period_start", {
+      withTimezone: true,
+    }).notNull(),
+    currentPeriodEnd: timestamp("current_period_end", {
+      withTimezone: true,
+    }).notNull(),
+    includedCreditMicrounits: bigint("included_credit_microunits", {
+      mode: "number",
+    }).notNull(),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("workspace_subscriptions_customer_unique_idx").on(
+      table.customerId,
+    ),
+    check(
+      "workspace_subscriptions_credit_check",
+      sql`${table.includedCreditMicrounits} >= 0`,
+    ),
+    check(
+      "workspace_subscriptions_period_check",
+      sql`${table.currentPeriodEnd} > ${table.currentPeriodStart}`,
+    ),
+  ],
+);
+
+/**
+ * Delivered billing webhook identifiers. Providers redeliver on any non-2xx,
+ * so a subscription change must be applied at most once no matter how often
+ * the same event arrives.
+ */
+export const billingEvents = pgTable(
+  "billing_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    provider: text("provider").notNull().default("STRIPE"),
+    eventType: text("event_type").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("billing_events_received_idx").on(table.receivedAt)],
+);

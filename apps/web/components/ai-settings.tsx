@@ -1,6 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { fetchFresh, sendJson } from "../lib/http/json";
+import {
+  aiErrorMessage,
+  laneLabel,
+  type WorkspaceEntitlements,
+} from "../lib/ai/messages";
+import { BillingSettings } from "./billing-settings";
 type Policy = {
   enabled: boolean;
   allowExternalProcessing: boolean;
@@ -8,7 +14,7 @@ type Policy = {
   monthlyTokenLimit: number;
   monthlyCostLimitMicrounits: number;
 };
-type Usage = { tokens: number; costMicrounits: number };
+type Usage = { tokens: number; audioMs: number; costMicrounits: number };
 type Purpose = "ANALYSIS" | "EMBEDDINGS" | "TRANSCRIPTION";
 const PURPOSES: Purpose[] = ["ANALYSIS", "EMBEDDINGS", "TRANSCRIPTION"];
 type ProviderConnection = {
@@ -24,6 +30,7 @@ type ProviderConnection = {
 export function AiSettings() {
   const [policy, setPolicy] = useState<Policy>(),
     [usage, setUsage] = useState<Usage>(),
+    [entitlements, setEntitlements] = useState<WorkspaceEntitlements>(),
     [message, setMessage] = useState<string>(),
     [providers, setProviders] = useState<ProviderConnection[]>([]),
     [routesByPurpose, setRoutesByPurpose] = useState<Record<Purpose, string>>({
@@ -74,6 +81,10 @@ export function AiSettings() {
     });
     void fetchFresh("/api/ai/usage").then(async (response) => {
       if (response.ok) setUsage((await response.json()) as Usage);
+    });
+    void fetchFresh("/api/ai/entitlement").then(async (response) => {
+      if (response.ok)
+        setEntitlements((await response.json()) as WorkspaceEntitlements);
     });
     void refreshProviders();
   }, [refreshProviders]);
@@ -268,18 +279,50 @@ export function AiSettings() {
       {usage && (
         <p>
           Used this month: {usage.tokens.toLocaleString()} /{" "}
-          {policy.monthlyTokenLimit.toLocaleString()} tokens, $
-          {(usage.costMicrounits / 1_000_000).toFixed(2)} / $
+          {policy.monthlyTokenLimit.toLocaleString()} tokens,{" "}
+          {Math.round(usage.audioMs / 60_000).toLocaleString()} minutes
+          transcribed, ${(usage.costMicrounits / 1_000_000).toFixed(2)} / $
           {(policy.monthlyCostLimitMicrounits / 1_000_000).toFixed(2)}
         </p>
       )}
       <button onClick={() => void save()}>Save AI policy</button>
+      {entitlements && (
+        <>
+          <hr />
+          <h3>Who pays for AI</h3>
+          <p>
+            Each feature runs on the first source that can cover it: a provider
+            key you have routed, then a Cap plan. Anything showing
+            &ldquo;Unavailable&rdquo; stays switched off until one of those
+            exists.
+          </p>
+          <dl className="admin-metrics">
+            {(
+              [
+                ["Transcripts", entitlements.transcription],
+                ["Analysis", entitlements.analysis],
+                ["Semantic search", entitlements.embeddings],
+              ] as const
+            ).map(([label, entitlement]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  {laneLabel(entitlement)}
+                  {entitlement.lane === "NONE" && (
+                    <> — {aiErrorMessage(entitlement.reason)}</>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
       <hr />
       <h3>Provider connections</h3>
       <p>
-        Keys are validated, encrypted with AWS KMS, and never shown again.
-        Workspace members can use an approved connection but cannot read its
-        credential.
+        Keys are validated against the provider, sealed with this
+        deployment&rsquo;s credential key, and never shown again. Workspace
+        members can use an approved connection but cannot read its credential.
       </p>
       <label>
         Provider
@@ -499,6 +542,9 @@ export function AiSettings() {
           </ul>
         </>
       )}
+      <hr />
+      <h3>Cap AI plan</h3>
+      <BillingSettings />
       {message && <p>{message}</p>}
     </details>
   );

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { estimateAudioCostMicrounits, type AudioRate } from "@cap/ai";
 import type {
   TranscriptionProvider,
   TranscriptionProviderRequest,
@@ -34,7 +35,13 @@ async function bytes(stream: AsyncIterable<Uint8Array>) {
 export class OpenAICompatibleProvider implements TranscriptionProvider {
   readonly name = "openai-compatible";
   constructor(
-    private readonly config: { baseUrl: string; apiKey: string; model: string },
+    private readonly config: {
+      baseUrl: string;
+      apiKey: string;
+      model: string;
+      /** Used only for a model Cap publishes no per-minute price for. */
+      fallbackRate?: AudioRate | undefined;
+    },
   ) {}
   async transcribe(
     request: TranscriptionProviderRequest,
@@ -57,6 +64,7 @@ export class OpenAICompatibleProvider implements TranscriptionProvider {
     if (!response.ok)
       throw new Error(`Transcription provider returned ${response.status}`);
     const parsed = responseSchema.parse(await response.json());
+    const durationMs = Math.round(parsed.duration * 1000);
     return {
       provider: this.name,
       model: this.config.model,
@@ -64,7 +72,16 @@ export class OpenAICompatibleProvider implements TranscriptionProvider {
         ? { providerRequestId: response.headers.get("x-request-id")! }
         : {}),
       language: parsed.language,
-      durationMs: Math.round(parsed.duration * 1000),
+      durationMs,
+      // Transcription is billed per minute of audio, so the run records what
+      // it cost from the same rate table every other AI purpose is priced on.
+      billedDurationMs: durationMs,
+      costMicrounits: estimateAudioCostMicrounits({
+        model: this.config.model,
+        durationMs,
+        fallback: this.config.fallbackRate,
+      }),
+      currency: "USD",
       segments: parsed.segments.map((segment, ordinal) => ({
         providerKey: String(segment.id ?? ordinal),
         startMs: Math.round(segment.start * 1000),
@@ -113,6 +130,22 @@ export class DeterministicProvider implements TranscriptionProvider {
       ],
     };
   }
+}
+/**
+ * Builds a provider from a workspace's own connection. Transcription runs on
+ * every recording, so this is the path that decides whether the customer or
+ * the operator pays for the platform's largest AI cost.
+ */
+export function providerFromConnection(input: {
+  baseUrl?: string | null;
+  apiKey: string;
+  model: string;
+}): TranscriptionProvider {
+  return new OpenAICompatibleProvider({
+    baseUrl: input.baseUrl ?? "https://api.openai.com/v1",
+    apiKey: input.apiKey,
+    model: input.model,
+  });
 }
 export function providerFromEnvironment(): TranscriptionProvider {
   if (

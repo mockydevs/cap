@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { sendJson } from "../lib/http/json";
+import { aiErrorMessage, isEntitlementDenial } from "../lib/ai/messages";
 
 type SearchHit = {
   id: string;
@@ -17,6 +18,7 @@ export function TranscriptSearch() {
   const [items, setItems] = useState<SearchHit[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>();
   const [error, setError] = useState<string>();
+  const [blocked, setBlocked] = useState(false);
   const [semantic, setSemantic] = useState(false);
   async function search(event?: React.FormEvent, cursor?: string) {
     event?.preventDefault();
@@ -30,10 +32,23 @@ export function TranscriptSearch() {
           `/api/transcripts/search?q=${encodeURIComponent(query.trim())}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         );
     if (!response.ok) {
-      setError("Could not search workspace transcripts.");
+      // Meaning-based search bills the workspace like any other AI feature, so
+      // an entitlement denial has to say what to do about it rather than read
+      // as a generic search failure.
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: { code?: string };
+      };
+      const code = body.error?.code;
+      setError(
+        semantic && code
+          ? aiErrorMessage(code)
+          : "Could not search workspace transcripts.",
+      );
+      setBlocked(semantic && isEntitlementDenial(code));
       return;
     }
     setError(undefined);
+    setBlocked(false);
     const raw = (await response.json()) as {
       items: SearchHit[];
       nextCursor: string | null;
@@ -76,7 +91,17 @@ export function TranscriptSearch() {
           Meaning-based AI search
         </label>
       </form>
-      {error ? <p className="form-error">{error}</p> : null}
+      {error ? (
+        <p className="form-error">
+          {error}
+          {blocked ? (
+            <>
+              {" "}
+              <Link href="/admin#ai">Open AI settings</Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       {items.length ? (
         <>
           <ul>

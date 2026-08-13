@@ -1,8 +1,11 @@
 import {
   aiArtifactContentSchema,
+  estimateTokenCostMicrounits,
   guardedTranscript,
+  unknownTokenRateFromEnvironment,
   type AiCapability,
   type AiArtifactContent,
+  type TokenRate,
 } from "@cap/ai";
 import { z } from "zod";
 const responseSchema = z.object({
@@ -71,8 +74,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
       baseUrl: string;
       apiKey: string;
       model: string;
-      inputRate: number;
-      outputRate: number;
+      /** Used only for a model Cap publishes no list price for. */
+      fallbackRate?: TokenRate | undefined;
     },
   ) {
     this.name = c.providerName;
@@ -126,10 +129,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
       content,
       inputTokens,
       outputTokens,
-      costMicrounits: Math.ceil(
-        (inputTokens * this.c.inputRate) / 1_000_000 +
-          (outputTokens * this.c.outputRate) / 1_000_000,
-      ),
+      costMicrounits: estimateTokenCostMicrounits({
+        model: this.c.model,
+        inputTokens,
+        outputTokens,
+        fallback: this.c.fallbackRate,
+      }),
       currency: "USD",
     };
   }
@@ -141,8 +146,7 @@ export class AnthropicProvider implements AiProvider {
       baseUrl: string;
       apiKey: string;
       model: string;
-      inputRate: number;
-      outputRate: number;
+      fallbackRate?: TokenRate | undefined;
     },
   ) {}
   async generate(input: {
@@ -190,10 +194,14 @@ export class AnthropicProvider implements AiProvider {
       content,
       inputTokens: parsed.usage.input_tokens,
       outputTokens: parsed.usage.output_tokens,
-      costMicrounits: Math.ceil(
-        (parsed.usage.input_tokens * this.c.inputRate) / 1_000_000 +
-          (parsed.usage.output_tokens * this.c.outputRate) / 1_000_000,
-      ),
+      costMicrounits: estimateTokenCostMicrounits({
+        // The response names the model that actually served the request, which
+        // can differ from the alias that was asked for.
+        model: parsed.model,
+        inputTokens: parsed.usage.input_tokens,
+        outputTokens: parsed.usage.output_tokens,
+        fallback: this.c.fallbackRate,
+      }),
       currency: "USD",
     };
   }
@@ -205,27 +213,20 @@ export function providerFromConnection(input: {
   apiKey: string;
   model: string;
 }): AiProvider {
-  const inputRate = Number(
-    process.env.AI_INPUT_COST_MICROUNITS_PER_MILLION ?? "250000",
-  );
-  const outputRate = Number(
-    process.env.AI_OUTPUT_COST_MICROUNITS_PER_MILLION ?? "2000000",
-  );
+  const fallbackRate = unknownTokenRateFromEnvironment(process.env);
   if (input.provider === "ANTHROPIC")
     return new AnthropicProvider({
       baseUrl: input.baseUrl ?? "https://api.anthropic.com",
       apiKey: input.apiKey,
       model: input.model,
-      inputRate,
-      outputRate,
+      fallbackRate,
     });
   return new OpenAiCompatibleProvider({
     providerName: input.provider,
     baseUrl: input.baseUrl ?? "https://api.openai.com/v1",
     apiKey: input.apiKey,
     model: input.model,
-    inputRate,
-    outputRate,
+    fallbackRate,
   });
 }
 export function providerFromEnvironment(): AiProvider {
@@ -239,11 +240,6 @@ export function providerFromEnvironment(): AiProvider {
     baseUrl: process.env.AI_BASE_URL ?? "https://api.openai.com/v1",
     apiKey,
     model: process.env.AI_MODEL ?? "gpt-5-mini",
-    inputRate: Number(
-      process.env.AI_INPUT_COST_MICROUNITS_PER_MILLION ?? "250000",
-    ),
-    outputRate: Number(
-      process.env.AI_OUTPUT_COST_MICROUNITS_PER_MILLION ?? "2000000",
-    ),
+    fallbackRate: unknownTokenRateFromEnvironment(process.env),
   });
 }

@@ -87,7 +87,7 @@ Workspace administrators explicitly enable AI, choose either an external OpenAI-
 
 Workspace BYOK setup for OpenAI, Anthropic Claude, and compatible private endpoints is documented in [docs/AI_PROVIDERS.md](docs/AI_PROVIDERS.md).
 
-Desktop installers and the Chrome, Edge, and Firefox companion extension are published through tagged GitHub Releases. See [docs/DESKTOP.md](docs/DESKTOP.md) and [docs/BROWSER_EXTENSION.md](docs/BROWSER_EXTENSION.md).
+Desktop installers are published through tagged GitHub Releases. See [docs/DESKTOP.md](docs/DESKTOP.md).
 
 ## Administration and integrations
 

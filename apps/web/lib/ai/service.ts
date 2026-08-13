@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import {
+  estimateTokenCostMicrounits,
   PROMPT_TEMPLATE_VERSION,
   transcriptInputHash,
   type AiCapability,
@@ -10,8 +11,6 @@ import { db } from "../../db/client";
 import {
   aiArtifacts,
   aiJobs,
-  aiProviderConnections,
-  aiProviderRoutes,
   aiSearchDocuments,
   aiWorkspacePolicies,
   recordings,
@@ -20,50 +19,32 @@ import {
 } from "../../db/schema";
 import type { Actor } from "../auth/session";
 import { cosine, embedTexts } from "./embedding";
-export class AiServiceError extends Error {
-  constructor(
-    readonly code:
-      | "AI_DISABLED"
-      | "EXTERNAL_AI_DISABLED"
-      | "TRANSCRIPT_NOT_READY"
-      | "AI_QUOTA_EXCEEDED"
-      | "AI_NOT_FOUND"
-      | "AI_QUEUE_NOT_CONFIGURED"
-      | "AI_PROVIDER_NOT_CONFIGURED"
-      | "AI_PROVIDER_VALIDATION_FAILED"
-      | "AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE",
-    readonly status: number,
-  ) {
-    super(code);
-  }
-}
+import {
+  loadEntitlement,
+  monthlyUsage,
+  recordAiUsage,
+  requireEntitlement,
+  resolveCredential,
+  unknownModelRate,
+} from "./entitlement";
+import { AiServiceError } from "./errors";
+export { AiServiceError };
 const approvedText = sql<string>`string_agg('['||${transcriptSegments.startMs}||'-'||${transcriptSegments.endMs}||'] '||coalesce(${transcriptSegments.correctedText},${transcriptSegments.providerText}), E'\n' ORDER BY ${transcriptSegments.ordinal})`;
-function currentMonthStart(): Date {
-  const month = new Date();
-  month.setUTCDate(1);
-  month.setUTCHours(0, 0, 0, 0);
-  return month;
-}
-async function monthlyUsage(workspaceId: string) {
-  const [usage] = await db()
-    .select({
-      tokens: sql<number>`coalesce(sum(coalesce(${aiJobs.inputTokens},0)+coalesce(${aiJobs.outputTokens},0)),0)::int`,
-      cost: sql<number>`coalesce(sum(${aiJobs.costMicrounits}),0)::bigint`,
-    })
-    .from(aiJobs)
-    .where(
-      and(
-        eq(aiJobs.workspaceId, workspaceId),
-        gte(aiJobs.createdAt, currentMonthStart()),
-      ),
-    );
-  return { tokens: usage?.tokens ?? 0, costMicrounits: usage?.cost ?? 0 };
-}
-/** Exposes the same monthly consumption `createAiJob` enforces against, so
- * the admin settings screen can show spend instead of leaving the
+/** Exposes the same monthly consumption the entitlement resolver enforces
+ * against, so the admin settings screen can show spend instead of leaving the
  * configured ceiling as write-only. */
 export async function getMonthlyUsage(actor: Actor) {
   return monthlyUsage(actor.workspaceId);
+}
+/** Which lane, if any, will pay for each purpose — drives the settings screen
+ * and the inline prompts on every AI surface. */
+export async function getEntitlements(actor: Actor) {
+  const [analysis, embeddings, transcription] = await Promise.all([
+    loadEntitlement(actor.workspaceId, "ANALYSIS"),
+    loadEntitlement(actor.workspaceId, "EMBEDDINGS"),
+    loadEntitlement(actor.workspaceId, "TRANSCRIPTION"),
+  ]);
+  return { analysis, embeddings, transcription };
 }
 export async function createAiJob(
   recordingId: string,
@@ -74,23 +55,7 @@ export async function createAiJob(
     targetLanguage?: string;
   },
 ) {
-  const [policy] = await db()
-    .select()
-    .from(aiWorkspacePolicies)
-    .where(eq(aiWorkspacePolicies.workspaceId, actor.workspaceId))
-    .limit(1);
-  if (!policy?.enabled) throw new AiServiceError("AI_DISABLED", 403);
-  if (
-    policy.allowedProvider === "openai-compatible" &&
-    !policy.allowExternalProcessing
-  )
-    throw new AiServiceError("EXTERNAL_AI_DISABLED", 403);
-  const usage = await monthlyUsage(actor.workspaceId);
-  if (
-    usage.tokens >= policy.monthlyTokenLimit ||
-    usage.costMicrounits >= policy.monthlyCostLimitMicrounits
-  )
-    throw new AiServiceError("AI_QUOTA_EXCEEDED", 429);
+  const entitlement = await requireEntitlement(actor.workspaceId, "ANALYSIS");
   const [source] = await db()
     .select({
       transcriptId: transcripts.id,
@@ -115,26 +80,6 @@ export async function createAiJob(
     .groupBy(transcripts.id)
     .limit(1);
   if (!source) throw new AiServiceError("TRANSCRIPT_NOT_READY", 409);
-  const [route] = await db()
-    .select({
-      connectionId: aiProviderRoutes.connectionId,
-      model: aiProviderRoutes.model,
-    })
-    .from(aiProviderRoutes)
-    .innerJoin(
-      aiProviderConnections,
-      eq(aiProviderConnections.id, aiProviderRoutes.connectionId),
-    )
-    .where(
-      and(
-        eq(aiProviderRoutes.workspaceId, actor.workspaceId),
-        eq(aiProviderRoutes.purpose, "ANALYSIS"),
-        eq(aiProviderConnections.status, "ACTIVE"),
-      ),
-    )
-    .limit(1);
-  if (!route && process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL !== "true")
-    throw new AiServiceError("AI_PROVIDER_NOT_CONFIGURED", 409);
   const id = randomUUID();
   await db()
     .insert(aiJobs)
@@ -147,8 +92,15 @@ export async function createAiJob(
       inputHash: transcriptInputHash(source.text, source.revision),
       capability: input.capability,
       promptTemplateVersion: PROMPT_TEMPLATE_VERSION,
-      ...(route
-        ? { providerConnectionId: route.connectionId, model: route.model }
+      // Only the bring-your-own-key lane pins a connection; the managed and
+      // deployment lanes are performed with the deployment credential, and the
+      // worker re-resolves the lane so a key revoked between enqueue and run
+      // still fails closed.
+      ...(entitlement.lane === "BYOK"
+        ? {
+            providerConnectionId: entitlement.connectionId,
+            model: entitlement.model,
+          }
         : {}),
       requestedBy: actor.userId,
       ...(input.question ? { question: input.question } : {}),
@@ -302,13 +254,13 @@ export async function semanticSearch(
   query: string,
   limit: number,
 ) {
-  const policy = await getPolicy(actor);
-  if (!policy.enabled) throw new AiServiceError("AI_DISABLED", 403);
-  if (
-    !policy.allowExternalProcessing &&
-    policy.allowedProvider === "openai-compatible"
-  )
-    throw new AiServiceError("EXTERNAL_AI_DISABLED", 403);
+  const entitlement = await requireEntitlement(actor.workspaceId, "EMBEDDINGS");
+  const credential = await resolveCredential(
+    actor.workspaceId,
+    entitlement,
+    process.env.AI_EMBEDDING_MODEL ?? "text-embedding-3-small",
+  );
+  let embeddedTokens = 0;
   const segments = await db()
     .select({
       segmentId: transcriptSegments.id,
@@ -336,17 +288,33 @@ export async function semanticSearch(
     .from(aiSearchDocuments)
     .where(eq(aiSearchDocuments.workspaceId, actor.workspaceId));
   const bySegment = new Map(existing.map((item) => [item.segmentId, item]));
-  const missing = segments.filter(
-    (segment) =>
-      bySegment.get(segment.segmentId)?.contentHash !==
-      createHash("sha256").update(segment.content).digest("hex"),
+  // Indexing is bounded per request: an unindexed workspace would otherwise
+  // embed every segment inside one search, spending an unpredictable amount of
+  // the caller's money and holding the request open while it does. Successive
+  // searches pick up where this one stopped.
+  const backfillLimit = Number(
+    process.env.AI_EMBEDDING_BACKFILL_LIMIT ?? "128",
   );
+  const missing = segments
+    .filter(
+      (segment) =>
+        bySegment.get(segment.segmentId)?.contentHash !==
+        createHash("sha256").update(segment.content).digest("hex"),
+    )
+    .slice(
+      0,
+      Number.isFinite(backfillLimit) ? Math.max(0, backfillLimit) : 128,
+    );
   for (let offset = 0; offset < missing.length; offset += 64) {
     const batch = missing.slice(offset, offset + 64);
-    const vectors = await embedTexts(batch.map((item) => item.content));
+    const embedded = await embedTexts(
+      batch.map((item) => item.content),
+      credential,
+    );
+    embeddedTokens += embedded.inputTokens;
     for (let index = 0; index < batch.length; index += 1) {
       const segment = batch[index]!;
-      const vector = vectors[index]!;
+      const vector = embedded.vectors[index]!;
       const contentHash = createHash("sha256")
         .update(segment.content)
         .digest("hex");
@@ -379,7 +347,28 @@ export async function semanticSearch(
       bySegment.set(segment.segmentId, saved!);
     }
   }
-  const [queryVector] = await embedTexts([query]);
+  const queryBatch = await embedTexts([query], credential);
+  embeddedTokens += queryBatch.inputTokens;
+  const queryVector = queryBatch.vectors[0];
+  await recordAiUsage({
+    workspaceId: actor.workspaceId,
+    purpose: "EMBEDDINGS",
+    lane: entitlement.lane,
+    sourceKind: "EMBEDDING_BATCH",
+    sourceId: randomUUID(),
+    connectionId: credential.connectionId,
+    provider: credential.provider,
+    model: credential.model,
+    units: embeddedTokens,
+    unitKind: "TOKENS",
+    inputTokens: embeddedTokens,
+    costMicrounits: estimateTokenCostMicrounits({
+      model: credential.model,
+      inputTokens: embeddedTokens,
+      outputTokens: 0,
+      fallback: unknownModelRate(),
+    }),
+  });
   if (!queryVector) return [];
   return segments
     .map((segment) => {

@@ -28,7 +28,7 @@ type WordRow = {
   confidence: string | null;
   is_orphaned: boolean;
 };
-export class PostgresTranscriptPersistence implements TranscriptPersistence {
+export class PostgresTranscriptPersistence implements TranscriptPersistence<PoolClient> {
   constructor(private readonly pool: Pool) {}
   async loadCanonical(
     transcriptId: string,
@@ -87,7 +87,15 @@ export class PostgresTranscriptPersistence implements TranscriptPersistence {
       })),
     };
   }
-  async commitMergedProviderRun(command: MergedProviderRun): Promise<void> {
+  /**
+   * `onCommit` runs inside the same transaction as the run it belongs to,
+   * immediately before COMMIT. The caller uses it to append the usage ledger
+   * entry, so metered spend and a recorded transcription can never disagree.
+   */
+  async commitMergedProviderRun(
+    command: MergedProviderRun,
+    onCommit?: (client: PoolClient) => Promise<void>,
+  ): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -186,6 +194,7 @@ export class PostgresTranscriptPersistence implements TranscriptPersistence {
          FROM transcripts t WHERE t.id = $1`,
         [command.transcriptId],
       );
+      if (onCommit) await onCommit(client);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

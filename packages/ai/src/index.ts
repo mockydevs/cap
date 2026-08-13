@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+export * from "./entitlement";
+export * from "./persistence";
+export * from "./rates";
+
 export const aiCapabilitySchema = z.enum([
   "TITLE_DESCRIPTION",
   "SUMMARY",

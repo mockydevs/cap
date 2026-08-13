@@ -141,6 +141,13 @@
       "when": 1786575023293,
       "tag": "0019_library_views",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786665600000,
+      "tag": "0020_ai_metering_and_plans",
+      "breakpoints": true
     }
   ]
 }

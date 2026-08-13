@@ -38,9 +38,19 @@ export interface MergedProviderRun {
  * Corrected fields, correction versions, correctedBy and correctedAt may never
  * be overwritten by provider data.
  */
-export interface TranscriptPersistence {
+export interface TranscriptPersistence<Transaction = unknown> {
   loadCanonical(transcriptId: string): Promise<CanonicalTranscriptSnapshot>;
-  commitMergedProviderRun(command: MergedProviderRun): Promise<void>;
+  /**
+   * `onCommit` receives the adapter's own transaction handle and must run
+   * inside the same atomic unit as the run. Callers use it to record metered
+   * usage, which must neither survive a rolled-back transcription nor be lost
+   * after a committed one. The handle's type is the adapter's to decide, so
+   * this contract stays free of any particular database driver.
+   */
+  commitMergedProviderRun(
+    command: MergedProviderRun,
+    onCommit?: (transaction: Transaction) => Promise<void>,
+  ): Promise<void>;
   applySegmentCorrection(command: {
     transcriptId: string;
     segmentId: string;

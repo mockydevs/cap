@@ -178,7 +178,10 @@ resource "aws_iam_policy" "web" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["s3:PutObject", "s3:ListMultipartUploadParts", "s3:AbortMultipartUpload", "s3:GetObject"], Resource = local.object_resource },
     { Effect = "Allow", Action = local.kms_write, Resource = aws_kms_key.media.arn },
-    { Effect = "Allow", Action = ["kms:Encrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
+    # Encrypt to store a workspace's provider key; decrypt because semantic
+    # search embeds in the web process and must do so on the workspace's own
+    # credential rather than the deployment's.
+    { Effect = "Allow", Action = ["kms:Encrypt", "kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
   ] })
 }
 
@@ -209,7 +212,10 @@ resource "aws_iam_policy" "transcription_worker" {
   name = "cap-${var.environment}-transcription-worker"
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.media.arn}/workspaces/*/recordings/*/playback/*" },
-    { Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.media.arn }
+    { Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.media.arn },
+    # Transcription runs on the workspace's own provider key, so this worker
+    # unseals credentials the same way the AI worker does.
+    { Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
   ] })
 }
 

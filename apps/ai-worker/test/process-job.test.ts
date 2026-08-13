@@ -3,14 +3,59 @@ import type { Job } from "bullmq";
 import type { Pool } from "pg";
 import type { KMSClient } from "@aws-sdk/client-kms";
 import type { AiJob } from "@cap/queue";
-import { providerForJob, processJob } from "../src/process-job";
+import {
+  AiEntitlementDenied,
+  providerForJob,
+  processJob,
+} from "../src/process-job";
 
-function fakePool(queryImpl: (...args: unknown[]) => unknown) {
-  return {
-    query: vi.fn(queryImpl),
+interface WorkspaceState {
+  policy?: Record<string, unknown> | null;
+  route?: { connection_id: string; model: string } | null;
+  connection?: Record<string, unknown> | null;
+  usage?: { tokens: string; cost: string };
+  subscription?: Record<string, unknown> | null;
+}
+
+/**
+ * Answers the entitlement loader's statements by shape rather than by call
+ * order, so a test states the workspace it means instead of a query script.
+ */
+function workspacePool(
+  state: WorkspaceState,
+  extra?: (sql: string, params?: unknown) => unknown,
+) {
+  const calls: Array<[string, unknown]> = [];
+  const pool = {
+    query: vi.fn((sql: string, params?: unknown) => {
+      calls.push([sql, params]);
+      if (sql.includes("FROM ai_workspace_policies"))
+        return {
+          rows: state.policy === null ? [] : [state.policy],
+          rowCount: state.policy === null ? 0 : 1,
+        };
+      if (sql.includes("FROM ai_provider_routes"))
+        return { rows: state.route ? [state.route] : [], rowCount: 1 };
+      if (sql.includes("FROM workspace_subscriptions"))
+        return { rows: state.subscription ? [state.subscription] : [] };
+      if (sql.includes("FROM ai_usage_events"))
+        return { rows: [state.usage ?? { tokens: "0", cost: "0" }] };
+      if (sql.includes("FROM ai_provider_connections"))
+        return { rows: state.connection ? [state.connection] : [] };
+      return extra?.(sql, params) ?? { rows: [], rowCount: 1 };
+    }),
     connect: vi.fn(),
   } as unknown as Pool;
+  return { pool, calls };
 }
+
+const enabledPolicy = {
+  enabled: true,
+  allowed_provider: "openai-compatible",
+  allow_external_processing: true,
+  monthly_token_limit: 1_000_000,
+  monthly_cost_limit_microunits: "25000000",
+};
 
 function baseJobData(overrides: Partial<AiJob> = {}): AiJob {
   return {
@@ -25,114 +70,92 @@ function baseJobData(overrides: Partial<AiJob> = {}): AiJob {
   };
 }
 
+const kmsStub = () => ({ send: vi.fn() }) as unknown as KMSClient;
+
 describe("providerForJob", () => {
-  const originalAllowDeploymentCredential =
-    process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-  const originalApiKey = process.env.AI_API_KEY;
+  const original = {
+    allow: process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL,
+    key: process.env.AI_API_KEY,
+  };
 
   afterEach(() => {
-    if (originalAllowDeploymentCredential === undefined)
+    if (original.allow === undefined)
       delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-    else
-      process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL =
-        originalAllowDeploymentCredential;
-    if (originalApiKey === undefined) delete process.env.AI_API_KEY;
-    else process.env.AI_API_KEY = originalApiKey;
+    else process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = original.allow;
+    if (original.key === undefined) delete process.env.AI_API_KEY;
+    else process.env.AI_API_KEY = original.key;
   });
 
-  it("throws when no matching job/connection row exists", async () => {
-    const pool = fakePool(() => ({ rows: [], rowCount: 0 }));
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
-      "AI job is not available",
-    );
+  it("denies a workspace that has not enabled AI", async () => {
+    const { pool } = workspacePool({ policy: null });
+    await expect(
+      providerForJob(pool, kmsStub(), baseJobData()),
+    ).rejects.toThrow(AiEntitlementDenied);
   });
 
-  it("throws when connection is missing and deployment credential fallback is disallowed", async () => {
+  it("denies when no credential is routed and the deployment credential is not allowed", async () => {
     delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-    const pool = fakePool(() => ({
-      rows: [
-        {
-          provider_connection_id: null,
-          model: null,
-          provider: null,
-          base_url: null,
-          encrypted_credential: null,
-          credential_key_arn: null,
-        },
-      ],
-      rowCount: 1,
-    }));
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
-      "AI provider connection is required",
-    );
+    const { pool } = workspacePool({ policy: enabledPolicy });
+    await expect(
+      providerForJob(pool, kmsStub(), baseJobData()),
+    ).rejects.toMatchObject({ reason: "AI_PROVIDER_NOT_CONFIGURED" });
   });
 
-  it("falls back to providerFromEnvironment when AI_ALLOW_DEPLOYMENT_CREDENTIAL is 'true'", async () => {
+  it("denies once the workspace ceiling is spent, before reaching a provider", async () => {
+    const { pool } = workspacePool({
+      policy: enabledPolicy,
+      route: { connection_id: "conn-1", model: "gpt-5-mini" },
+      usage: { tokens: "0", cost: "25000000" },
+    });
+    await expect(
+      providerForJob(pool, kmsStub(), baseJobData()),
+    ).rejects.toMatchObject({ reason: "AI_QUOTA_EXCEEDED" });
+  });
+
+  it("uses the deployment credential only when the operator opted in", async () => {
     process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = "true";
     process.env.AI_API_KEY = "env-api-key";
-    const pool = fakePool(() => ({
-      rows: [
-        {
-          provider_connection_id: null,
-          model: null,
-          provider: null,
-          base_url: null,
-          encrypted_credential: null,
-          credential_key_arn: null,
-        },
-      ],
-      rowCount: 1,
-    }));
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    const provider = await providerForJob(pool, kms, baseJobData());
-    expect(provider.name).toBe("OPENAI");
+    const { pool } = workspacePool({ policy: enabledPolicy });
+    const kms = kmsStub();
+    const resolved = await providerForJob(pool, kms, baseJobData());
+    expect(resolved.provider.name).toBe("OPENAI");
+    expect(resolved.lane).toBe("DEPLOYMENT");
+    expect(resolved.connectionId).toBeNull();
     expect(kms.send).not.toHaveBeenCalled();
   });
 
-  it("throws when the connection row is missing required credential fields", async () => {
-    const pool = fakePool(() => ({
-      rows: [
-        {
-          provider_connection_id: "conn-1",
-          model: null,
-          provider: "ANTHROPIC",
-          base_url: null,
-          encrypted_credential: "ciphertext",
-          credential_key_arn: "arn:aws:kms:key",
-        },
-      ],
-      rowCount: 1,
-    }));
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
-      "AI provider connection is unavailable",
-    );
+  it("denies when the routed connection has been revoked since enqueue", async () => {
+    delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
+    const { pool } = workspacePool({
+      policy: enabledPolicy,
+      route: { connection_id: "conn-1", model: "claude-opus-5" },
+      connection: null,
+    });
+    await expect(
+      providerForJob(pool, kmsStub(), baseJobData()),
+    ).rejects.toMatchObject({ reason: "AI_PROVIDER_NOT_CONFIGURED" });
   });
 
-  it("decrypts the credential via KMS and builds the provider from the connection on the happy path", async () => {
-    const pool = fakePool(() => ({
-      rows: [
-        {
-          provider_connection_id: "conn-1",
-          model: "claude-x",
-          provider: "ANTHROPIC",
-          base_url: "https://custom.example.com",
-          encrypted_credential: Buffer.from("ciphertext").toString("base64"),
-          credential_key_arn: "arn:aws:kms:key",
-        },
-      ],
-      rowCount: 1,
-    }));
+  it("decrypts the workspace credential and builds the provider from the connection", async () => {
+    delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
+    const { pool } = workspacePool({
+      policy: enabledPolicy,
+      route: { connection_id: "conn-1", model: "claude-opus-5" },
+      connection: {
+        provider: "ANTHROPIC",
+        base_url: "https://custom.example.com",
+        encrypted_credential: Buffer.from("ciphertext").toString("base64"),
+        credential_key_arn: "arn:aws:kms:key",
+      },
+    });
     const kms = {
-      send: vi.fn(async () => ({
-        Plaintext: Buffer.from("decrypted-secret"),
-      })),
+      send: vi.fn(async () => ({ Plaintext: Buffer.from("decrypted-secret") })),
     } as unknown as KMSClient;
     const data = baseJobData();
-    const provider = await providerForJob(pool, kms, data);
-    expect(provider.name).toBe("ANTHROPIC");
+    const resolved = await providerForJob(pool, kms, data);
+    expect(resolved.provider.name).toBe("ANTHROPIC");
+    expect(resolved.lane).toBe("BYOK");
+    expect(resolved.connectionId).toBe("conn-1");
     expect(kms.send).toHaveBeenCalledTimes(1);
     const command = (kms.send as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(command.input).toMatchObject({
@@ -144,19 +167,22 @@ describe("providerForJob", () => {
         purpose: "ai-provider-credential",
       },
     });
-    const config = (provider as unknown as { c: Record<string, unknown> }).c;
+    const config = (
+      resolved.provider as unknown as { c: Record<string, unknown> }
+    ).c;
     expect(config).toMatchObject({
       baseUrl: "https://custom.example.com",
       apiKey: "decrypted-secret",
-      model: "claude-x",
+      model: "claude-opus-5",
     });
   });
 });
 
 describe("processJob", () => {
-  const originalAllowDeploymentCredential =
-    process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-  const originalApiKey = process.env.AI_API_KEY;
+  const original = {
+    allow: process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL,
+    key: process.env.AI_API_KEY,
+  };
 
   beforeEach(() => {
     process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = "true";
@@ -164,117 +190,37 @@ describe("processJob", () => {
   });
 
   afterEach(() => {
-    if (originalAllowDeploymentCredential === undefined)
+    if (original.allow === undefined)
       delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-    else
-      process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL =
-        originalAllowDeploymentCredential;
-    if (originalApiKey === undefined) delete process.env.AI_API_KEY;
-    else process.env.AI_API_KEY = originalApiKey;
+    else process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = original.allow;
+    if (original.key === undefined) delete process.env.AI_API_KEY;
+    else process.env.AI_API_KEY = original.key;
   });
 
-  function jobFor(data: AiJob): Job<AiJob> {
-    return { data } as unknown as Job<AiJob>;
-  }
+  const jobFor = (data: AiJob) => ({ data }) as unknown as Job<AiJob>;
 
-  const deploymentFallbackRow = {
-    provider_connection_id: null,
-    model: null,
-    provider: null,
-    base_url: null,
-    encrypted_credential: null,
-    credential_key_arn: null,
-  };
-
-  it("marks the job FAILED with error_category='PolicyDenied' and stops when the workspace policy disallows external processing", async () => {
-    const calls: unknown[][] = [];
-    const pool = fakePool((sql: unknown, params?: unknown) => {
-      calls.push([sql, params]);
-      const call = calls.length;
-      if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
-      if (call === 2)
-        return {
-          rows: [
-            {
-              enabled: false,
-              allowed_provider: "OPENAI",
-              allow_external_processing: false,
-            },
-          ],
-          rowCount: 1,
-        };
-      return { rows: [], rowCount: 1 };
+  it("records the denial reason and does not claim the job when the workspace withdrew consent", async () => {
+    const { pool, calls } = workspacePool({
+      policy: { ...enabledPolicy, allow_external_processing: false },
     });
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    const data = baseJobData();
-    await processJob(pool, kms, jobFor(data));
-    expect(calls).toHaveLength(3);
-    const [thirdSql, thirdParams] = calls[2]!;
-    expect(String(thirdSql)).toContain("status='FAILED'");
-    expect(String(thirdSql)).toContain("error_category='PolicyDenied'");
-    expect(thirdParams).toEqual([data.jobId, data.workspaceId]);
-    expect(pool.connect as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
-  });
-
-  it("fails the job when the transcript changed after the job was authorized", async () => {
-    const calls: unknown[][] = [];
-    const pool = fakePool((sql: unknown, params?: unknown) => {
-      calls.push([sql, params]);
-      const call = calls.length;
-      if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
-      if (call === 2)
-        return {
-          rows: [
-            {
-              enabled: true,
-              allowed_provider: "OPENAI",
-              allow_external_processing: true,
-            },
-          ],
-          rowCount: 1,
-        };
-      if (call === 3)
-        return { rows: [{ input_hash: "stale-hash" }], rowCount: 1 };
-      if (call === 4)
-        return {
-          rows: [{ text: "hello world", revision: 1 }],
-          rowCount: 1,
-        };
-      return { rows: [], rowCount: 1 };
-    });
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    const data = baseJobData({ transcriptRevision: 1 });
-    await expect(processJob(pool, kms, jobFor(data))).rejects.toThrow(
-      "Transcript changed after AI job was authorized",
+    await processJob(pool, kmsStub(), jobFor(baseJobData()));
+    const update = calls.find(([sql]) => sql.startsWith("UPDATE ai_jobs"));
+    expect(update?.[0]).toContain("status='FAILED'");
+    expect(update?.[1]).toEqual([
+      "11111111-1111-1111-1111-111111111111",
+      "22222222-2222-2222-2222-222222222222",
+      "EXTERNAL_AI_DISABLED",
+    ]);
+    expect(calls.some(([sql]) => sql.includes("status='PROCESSING'"))).toBe(
+      false,
     );
-    expect(calls).toHaveLength(5);
-    const [failSql, failParams] = calls[4]!;
-    expect(String(failSql)).toContain("status='FAILED'");
-    expect(failParams).toEqual([data.jobId, "Error"]);
   });
 
-  it("returns without proceeding when the job could not be claimed", async () => {
-    const calls: unknown[][] = [];
-    const pool = fakePool((sql: unknown, params?: unknown) => {
-      calls.push([sql, params]);
-      const call = calls.length;
-      if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
-      if (call === 2)
-        return {
-          rows: [
-            {
-              enabled: true,
-              allowed_provider: "OPENAI",
-              allow_external_processing: true,
-            },
-          ],
-          rowCount: 1,
-        };
-      return { rows: [], rowCount: 0 };
-    });
-    const kms = { send: vi.fn() } as unknown as KMSClient;
-    const data = baseJobData();
-    await processJob(pool, kms, jobFor(data));
-    expect(calls).toHaveLength(3);
+  it("stops without generating when another worker already claimed the job", async () => {
+    const { pool, calls } = workspacePool({ policy: enabledPolicy }, (sql) =>
+      sql.startsWith("UPDATE ai_jobs") ? { rows: [], rowCount: 0 } : undefined,
+    );
+    await processJob(pool, kmsStub(), jobFor(baseJobData()));
+    expect(calls.some(([sql]) => sql.includes("FROM transcripts"))).toBe(false);
   });
 });

@@ -1,6 +1,12 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchFresh, sendJson } from "../lib/http/json";
+import {
+  aiErrorMessage,
+  isEntitlementDenial,
+  type WorkspaceEntitlements,
+} from "../lib/ai/messages";
 type Item = {
   id: string;
   capability: string;
@@ -30,6 +36,7 @@ export function AiPanel({
     [question, setQuestion] = useState(""),
     [targetLanguage, setTargetLanguage] = useState(""),
     [error, setError] = useState<string>(),
+    [blocked, setBlocked] = useState<string>(),
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     const response = await fetchFresh(`/api/recordings/${recordingId}/ai`);
@@ -41,6 +48,17 @@ export function AiPanel({
     const timer = setInterval(() => void load(), 4000);
     return () => clearInterval(timer);
   }, [load]);
+  // Asked once up front so a workspace with no way to pay is told before it
+  // clicks, rather than after a request it was never going to be allowed.
+  useEffect(() => {
+    void fetchFresh("/api/ai/entitlement").then(async (response) => {
+      if (!response.ok) return;
+      const payload = (await response.json()) as WorkspaceEntitlements;
+      setBlocked(
+        payload.analysis.lane === "NONE" ? payload.analysis.reason : undefined,
+      );
+    });
+  }, []);
   const request = async (capability: string) => {
     setBusy(true);
     setError(undefined);
@@ -58,7 +76,9 @@ export function AiPanel({
       const body = (await response.json().catch(() => ({}))) as {
         error?: { code?: string };
       };
-      setError(body.error?.code ?? "AI request failed");
+      const code = body.error?.code;
+      setError(aiErrorMessage(code));
+      if (isEntitlementDenial(code)) setBlocked(code);
       return;
     }
     setQuestion("");
@@ -77,11 +97,17 @@ export function AiPanel({
       <p className="eyebrow">AI ASSISTANT</p>
       <h2>Recording intelligence</h2>
       <p>Generated output is a suggestion. Review it before accepting.</p>
+      {blocked && (
+        <p className="form-error">
+          {aiErrorMessage(blocked)}{" "}
+          <Link href="/admin#ai">Open AI settings</Link>
+        </p>
+      )}
       <div className="ai-actions">
         {capabilities.map((capability) => (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || Boolean(blocked)}
             key={capability}
             onClick={() => void request(capability)}
           >
@@ -103,7 +129,7 @@ export function AiPanel({
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask a question grounded in this transcript"
         />
-        <button disabled={busy}>Ask</button>
+        <button disabled={busy || Boolean(blocked)}>Ask</button>
       </form>
       <form
         onSubmit={(event) => {
@@ -118,7 +144,7 @@ export function AiPanel({
           onChange={(event) => setTargetLanguage(event.target.value)}
           placeholder="Target language (e.g. es, fr, pt-BR)"
         />
-        <button disabled={busy}>Translate</button>
+        <button disabled={busy || Boolean(blocked)}>Translate</button>
       </form>
       {error && <p className="form-error">{error}</p>}
       <div className="ai-results">

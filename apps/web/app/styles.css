@@ -5385,6 +5385,66 @@ h4 {
   }
 }
 
+/* Who-pays summary and Cap AI plan, inside the AI settings panel. */
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.admin-metrics div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.admin-metrics dt {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.admin-metrics dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.admin-note {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.plan-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.plan-list li span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.plan-list li button {
+  margin-top: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

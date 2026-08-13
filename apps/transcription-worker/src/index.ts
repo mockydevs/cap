@@ -1,13 +1,13 @@
 import { createServer } from "node:http";
 import { Worker } from "bullmq";
 import { Pool } from "pg";
+import { KMSClient } from "@aws-sdk/client-kms";
 import {
   createRedisConnection,
   TRANSCRIPTION_QUEUE,
   type TranscriptionJob,
 } from "@cap/queue";
 import { processJob } from "./process-job";
-import { providerFromEnvironment } from "./provider";
 import { PostgresTranscriptPersistence } from "./persistence";
 const required = (name: string) => {
   const value = process.env[name];
@@ -16,12 +16,16 @@ const required = (name: string) => {
 };
 const pool = new Pool({ connectionString: required("DATABASE_URL") });
 const connection = createRedisConnection(required("REDIS_URL"));
-const provider = providerFromEnvironment();
+// No provider is built here: which credential transcribes a recording is a
+// per-workspace decision, resolved inside the job.
+const kms = new KMSClient(
+  process.env.AWS_REGION ? { region: process.env.AWS_REGION } : {},
+);
 const persistence = new PostgresTranscriptPersistence(pool);
 let ready = false;
 const worker = new Worker<TranscriptionJob>(
   TRANSCRIPTION_QUEUE,
-  (job) => processJob(pool, provider, persistence, job),
+  (job) => processJob(pool, kms, persistence, job),
   {
     connection,
     concurrency: Number(process.env.TRANSCRIPTION_WORKER_CONCURRENCY ?? "2"),
