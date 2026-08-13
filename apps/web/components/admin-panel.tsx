@@ -61,6 +61,16 @@ const WEBHOOK_EVENTS = [
   "comment.created",
 ] as const;
 
+type AdminTab = "members" | "retention" | "integrations" | "ai" | "security";
+
+const ADMIN_TABS: ReadonlyArray<readonly [AdminTab, string]> = [
+  ["members", "Members"],
+  ["retention", "Retention"],
+  ["integrations", "Integrations"],
+  ["ai", "AI"],
+  ["security", "Security"],
+];
+
 export function AdminPanel() {
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -260,6 +270,8 @@ export function AdminPanel() {
     );
   };
 
+  const [tab, setTab] = useState<AdminTab>("members");
+
   if (!isAdmin)
     return (
       <section className="ai-settings">
@@ -270,123 +282,120 @@ export function AdminPanel() {
     );
 
   return (
-    <div className="ai-settings">
-      <section className="admin-section admin-section-members" id="members">
-        <header className="admin-section-heading">
-          <div>
-            <span>01</span>
-            <h2>Members</h2>
-          </div>
-          <p>Control who can access this workspace and what they can do.</p>
-        </header>
-        {members.map((member) => (
-          <div key={member.userId} className="admin-row">
-            <span>
-              {member.displayName} &lt;{member.email}&gt;
-            </span>
-            <select
-              value={member.role}
-              onChange={(event) =>
-                void updateRole(
-                  member.userId,
-                  event.target.value as WorkspaceRole,
-                )
-              }
-            >
-              {ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => void removeMember(member.userId)}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-      </section>
-
-      <section className="admin-section admin-section-invite">
-        <header className="admin-section-heading compact">
-          <div>
-            <span>+</span>
-            <h2>Invite a member</h2>
-          </div>
-          <p>Add a teammate using their email address.</p>
-        </header>
-        <div className="admin-form-row">
-          <label className="admin-field admin-field-grow">
-            Email
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-            />
-          </label>
-          <label className="admin-field">
-            Role
-            <select
-              value={inviteRole}
-              onChange={(event) =>
-                setInviteRole(event.target.value as WorkspaceRole)
-              }
-            >
-              {ROLES.filter((role) => role !== "OWNER").map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="admin-panel">
+      <nav className="admin-tabs" aria-label="Settings sections">
+        {ADMIN_TABS.map(([id, label]) => (
           <button
-            className="admin-form-action"
+            key={id}
             type="button"
-            onClick={() => void inviteMember()}
+            id={id}
+            className={tab === id ? "active" : undefined}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => setTab(id)}
           >
-            Invite
+            {label}
           </button>
-        </div>
-        {inviteLink && <p className="hint">{inviteLink}</p>}
-        {message && <p className="hint">{message}</p>}
-      </section>
+        ))}
+      </nav>
+      {tab === "members" && (
+        <>
+          <section className="admin-section admin-section-members">
+            {members.map((member) => (
+              <div key={member.userId} className="admin-row">
+                <span>
+                  {member.displayName} &lt;{member.email}&gt;
+                </span>
+                <select
+                  value={member.role}
+                  onChange={(event) =>
+                    void updateRole(
+                      member.userId,
+                      event.target.value as WorkspaceRole,
+                    )
+                  }
+                >
+                  {ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void removeMember(member.userId)}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </section>
 
-      {invitations.length > 0 && (
-        <section className="admin-section admin-section-invitations">
-          <header className="admin-section-heading compact">
-            <div>
-              <span>↗</span>
-              <h2>Pending invitations</h2>
-            </div>
-          </header>
-          {invitations.map((invitation) => (
-            <div key={invitation.id} className="admin-row">
-              <span>
-                {invitation.email} — {invitation.role}
-              </span>
+          <section className="admin-section admin-section-invite">
+            <header className="admin-section-heading">
+              <h2>Invite a member</h2>
+            </header>
+            <div className="admin-form-row">
+              <label className="admin-field admin-field-grow">
+                Email
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                />
+              </label>
+              <label className="admin-field">
+                Role
+                <select
+                  value={inviteRole}
+                  onChange={(event) =>
+                    setInviteRole(event.target.value as WorkspaceRole)
+                  }
+                >
+                  {ROLES.filter((role) => role !== "OWNER").map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
+                className="admin-form-action"
                 type="button"
-                onClick={() => void revokeInvitation(invitation.id)}
+                onClick={() => void inviteMember()}
               >
-                Revoke
+                Invite
               </button>
             </div>
-          ))}
-        </section>
-      )}
+            {inviteLink && <p className="hint">{inviteLink}</p>}
+            {message && <p className="hint">{message}</p>}
+          </section>
 
-      {retention && (
+          {invitations.length > 0 && (
+            <section className="admin-section admin-section-invitations">
+              <header className="admin-section-heading">
+                <h2>Pending invitations</h2>
+              </header>
+              {invitations.map((invitation) => (
+                <div key={invitation.id} className="admin-row">
+                  <span>
+                    {invitation.email} — {invitation.role}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void revokeInvitation(invitation.id)}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
+        </>
+      )}
+      {tab === "retention" && retention && (
         <section className="admin-section admin-section-retention">
           <header className="admin-section-heading">
-            <div>
-              <span>02</span>
-              <h2>Retention policy</h2>
-            </div>
-            <p>
-              Choose how long recordings and deleted items remain available.
-            </p>
+            <h2>Retention policy</h2>
           </header>
           <div className="admin-field-stack">
             <label className="admin-field admin-field-inline">
@@ -429,163 +438,151 @@ export function AdminPanel() {
           </button>
         </section>
       )}
-
-      <section
-        className="admin-section admin-section-webhooks"
-        id="integrations"
-      >
-        <header className="admin-section-heading">
-          <div>
-            <span>03</span>
+      {tab === "integrations" && (
+        <section className="admin-section admin-section-webhooks">
+          <header className="admin-section-heading">
             <h2>Webhooks</h2>
-          </div>
-          <p>Send recording events to your own HTTPS endpoint.</p>
-        </header>
-        {webhooks.map((webhook) => (
-          <div key={webhook.id} className="admin-row">
-            <span>
-              {webhook.url} — {webhook.enabledEvents.join(", ")} — secret …
-              {webhook.secretFingerprint}
-              {webhook.lastDeliveryStatus
-                ? ` — last delivery ${webhook.lastDeliveryStatus.toLowerCase()}`
-                : ""}
-            </span>
-            <button
-              type="button"
-              onClick={() => void deleteWebhook(webhook.id)}
-            >
-              Delete
-            </button>
-          </div>
-        ))}
-        <label className="admin-field">
-          Endpoint URL (HTTPS)
-          <input
-            type="url"
-            value={webhookUrl}
-            onChange={(event) => setWebhookUrl(event.target.value)}
-            placeholder="https://example.com/webhooks/cap"
-          />
-        </label>
-        <fieldset className="webhook-event-grid">
-          {WEBHOOK_EVENTS.map((event) => (
-            <label key={event}>
-              <input
-                type="checkbox"
-                checked={webhookEvents.includes(event)}
-                onChange={(changeEvent) =>
-                  setWebhookEvents((current) =>
-                    changeEvent.target.checked
-                      ? [...current, event]
-                      : current.filter((value) => value !== event),
-                  )
-                }
-              />
-              {event}
-            </label>
-          ))}
-        </fieldset>
-        <button
-          type="button"
-          disabled={!webhookUrl || webhookEvents.length === 0}
-          onClick={() => void createWebhook()}
-        >
-          Add webhook
-        </button>
-        {newWebhookSecret && (
-          <p className="hint">
-            Signing secret (shown once, store it now): {newWebhookSecret}
-          </p>
-        )}
-      </section>
-
-      <section className="admin-section admin-section-ai" id="ai">
-        <header className="admin-section-heading">
-          <div>
-            <span>04</span>
-            <h2>AI providers</h2>
-          </div>
-          <p>
-            Connect providers, route each capability, and cap monthly AI spend.
-          </p>
-        </header>
-        <AiSettings />
-      </section>
-
-      <section className="admin-section admin-section-api" id="security">
-        <header className="admin-section-heading">
-          <div>
-            <span>05</span>
-            <h2>API keys</h2>
-          </div>
-          <p>Create scoped credentials for trusted tools and integrations.</p>
-        </header>
-        {apiKeys.map((apiKey) => (
-          <div key={apiKey.id} className="admin-row">
-            <span>
-              {apiKey.name} — {apiKey.keyPrefix}…
-              {apiKey.revokedAt
-                ? " — revoked"
-                : apiKey.lastUsedAt
-                  ? ` — last used ${new Date(apiKey.lastUsedAt).toLocaleString()}`
-                  : " — never used"}
-            </span>
-            {!apiKey.revokedAt && (
+          </header>
+          {webhooks.map((webhook) => (
+            <div key={webhook.id} className="admin-row">
+              <span>
+                {webhook.url} — {webhook.enabledEvents.join(", ")} — secret …
+                {webhook.secretFingerprint}
+                {webhook.lastDeliveryStatus
+                  ? ` — last delivery ${webhook.lastDeliveryStatus.toLowerCase()}`
+                  : ""}
+              </span>
               <button
                 type="button"
-                onClick={() => void revokeApiKey(apiKey.id)}
+                onClick={() => void deleteWebhook(webhook.id)}
               >
-                Revoke
+                Delete
               </button>
-            )}
-          </div>
-        ))}
-        <label className="admin-field">
-          Key name
-          <input
-            value={apiKeyName}
-            onChange={(event) => setApiKeyName(event.target.value)}
-            placeholder="e.g. Zapier integration"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={apiKeyName.trim().length < 2}
-          onClick={() => void createApiKey()}
-        >
-          Create API key
-        </button>
-        {newApiKey && (
-          <p className="hint">Key (shown once, store it now): {newApiKey}</p>
-        )}
-      </section>
-
-      <section className="admin-section admin-section-audit">
-        <header className="admin-section-heading">
-          <div>
-            <span>06</span>
-            <h2>Audit log</h2>
-          </div>
-          <p>A chronological record of important workspace activity.</p>
-        </header>
-        {auditEvents.map((event) => (
-          <div key={event.id} className="admin-row">
-            <span>
-              {new Date(event.createdAt).toLocaleString()} —{" "}
-              {event.actorEmail ?? "system"} — {event.action}
-              {event.targetId ? ` (${event.targetType}:${event.targetId})` : ""}
-            </span>
-          </div>
-        ))}
-        {auditCursor && (
+            </div>
+          ))}
+          <label className="admin-field">
+            Endpoint URL (HTTPS)
+            <input
+              type="url"
+              value={webhookUrl}
+              onChange={(event) => setWebhookUrl(event.target.value)}
+              placeholder="https://example.com/webhooks/cap"
+            />
+          </label>
+          <fieldset className="webhook-event-grid">
+            {WEBHOOK_EVENTS.map((event) => (
+              <label key={event}>
+                <input
+                  type="checkbox"
+                  checked={webhookEvents.includes(event)}
+                  onChange={(changeEvent) =>
+                    setWebhookEvents((current) =>
+                      changeEvent.target.checked
+                        ? [...current, event]
+                        : current.filter((value) => value !== event),
+                    )
+                  }
+                />
+                {event}
+              </label>
+            ))}
+          </fieldset>
           <button
             type="button"
-            onClick={() => void loadAuditEvents(auditCursor)}
+            disabled={!webhookUrl || webhookEvents.length === 0}
+            onClick={() => void createWebhook()}
           >
-            Load more
+            Add webhook
           </button>
-        )}
-      </section>
+          {newWebhookSecret && (
+            <p className="hint">
+              Signing secret (shown once, store it now): {newWebhookSecret}
+            </p>
+          )}
+        </section>
+      )}
+      {tab === "ai" && (
+        <section className="admin-section admin-section-ai">
+          <header className="admin-section-heading">
+            <h2>AI providers</h2>
+          </header>
+          <AiSettings />
+        </section>
+      )}
+      {tab === "security" && (
+        <>
+          <section className="admin-section admin-section-api">
+            <header className="admin-section-heading">
+              <h2>API keys</h2>
+            </header>
+            {apiKeys.map((apiKey) => (
+              <div key={apiKey.id} className="admin-row">
+                <span>
+                  {apiKey.name} — {apiKey.keyPrefix}…
+                  {apiKey.revokedAt
+                    ? " — revoked"
+                    : apiKey.lastUsedAt
+                      ? ` — last used ${new Date(apiKey.lastUsedAt).toLocaleString()}`
+                      : " — never used"}
+                </span>
+                {!apiKey.revokedAt && (
+                  <button
+                    type="button"
+                    onClick={() => void revokeApiKey(apiKey.id)}
+                  >
+                    Revoke
+                  </button>
+                )}
+              </div>
+            ))}
+            <label className="admin-field">
+              Key name
+              <input
+                value={apiKeyName}
+                onChange={(event) => setApiKeyName(event.target.value)}
+                placeholder="e.g. Zapier integration"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={apiKeyName.trim().length < 2}
+              onClick={() => void createApiKey()}
+            >
+              Create API key
+            </button>
+            {newApiKey && (
+              <p className="hint">
+                Key (shown once, store it now): {newApiKey}
+              </p>
+            )}
+          </section>
+
+          <section className="admin-section admin-section-audit">
+            <header className="admin-section-heading">
+              <h2>Audit log</h2>
+            </header>
+            {auditEvents.map((event) => (
+              <div key={event.id} className="admin-row">
+                <span>
+                  {new Date(event.createdAt).toLocaleString()} —{" "}
+                  {event.actorEmail ?? "system"} — {event.action}
+                  {event.targetId
+                    ? ` (${event.targetType}:${event.targetId})`
+                    : ""}
+                </span>
+              </div>
+            ))}
+            {auditCursor && (
+              <button
+                type="button"
+                onClick={() => void loadAuditEvents(auditCursor)}
+              >
+                Load more
+              </button>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

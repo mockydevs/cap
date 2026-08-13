@@ -308,19 +308,47 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 10px;
 }
-.ai-settings summary {
-  cursor: pointer;
+.ai-settings h4 {
+  margin: 0 0 4px;
+  font-size: var(--text-body);
   font-weight: 700;
 }
+/* Label above input, at a readable width. Previously a flex row pushed the
+   control to the far right of the panel, which read as two unrelated columns
+   once the panel got wide. Checkboxes keep the inline form. */
 .ai-settings label {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  max-width: 420px;
+  color: var(--muted);
+}
+/* Grouped choices sit at the same width as the fields around them. */
+.ai-settings fieldset {
+  max-width: 420px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.ai-settings fieldset legend {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.ai-settings fieldset label {
+  margin: 6px 0;
+}
+
+.ai-settings label:has(input[type="checkbox"]) {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin: 12px 0;
-  color: var(--muted);
+  max-width: none;
 }
 .ai-settings label input[type="number"] {
-  margin-left: auto;
   width: 140px;
 }
 .admin-row {
@@ -2158,19 +2186,60 @@ h4 {
   color: var(--muted);
 }
 
-.admin-content > .ai-settings {
-  padding: 0;
-  border: 0;
+.admin-content > .admin-panel > section {
+  padding: 4px 0 28px;
 }
 
-.admin-content > .ai-settings > section {
-  padding: 24px 0 28px;
+.admin-content > .admin-panel > section h2,
+.admin-content > .admin-panel > * > section h2 {
+  margin: 0 0 18px;
+  font-size: var(--text-xl);
+}
+
+/* Section navigation. One panel is visible at a time, so the tab label is the
+   only heading a reader needs to place themselves — the per-section blurbs
+   that used to sit beside each heading are gone. */
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 24px;
+  padding-bottom: 2px;
   border-bottom: 2px solid var(--line);
 }
 
-.admin-content > .ai-settings > section h2 {
-  margin: 0 0 18px;
-  font-size: var(--text-xl);
+.admin-tabs button {
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -4px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--workspace-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-tabs button:hover {
+  color: var(--ink);
+}
+
+.admin-tabs button.active {
+  background: transparent;
+  border-bottom-color: var(--lime);
+  color: var(--ink);
+}
+
+/* Fields read as label-above-input at one width, rather than a label pinned
+   left and a box drifting to the far right edge of a wide panel. */
+.admin-content .admin-field,
+.admin-settings-form .admin-field {
+  max-width: 420px;
+}
+
+.admin-content .admin-field-grow {
+  max-width: none;
 }
 
 .admin-content input,
@@ -3366,9 +3435,9 @@ h4 {
 }
 
 .admin-heading h1 {
-  margin: 7px 0 10px;
-  font-size: clamp(3rem, 5vw, 4.65rem);
-  line-height: 0.92;
+  margin: 0 0 4px;
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
+  line-height: 1.1;
 }
 
 .admin-heading > div > p:last-child {
@@ -3548,8 +3617,8 @@ h4 {
 }
 
 .admin-content .admin-field-inline {
-  grid-template-columns: minmax(0, 1fr) 110px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   margin: 0;
   padding: 8px 0;
 }
@@ -5409,6 +5478,13 @@ h4 {
 .admin-metrics dd {
   margin: 4px 0 0;
   font-weight: 600;
+}
+
+.admin-hint {
+  max-width: 640px;
+  margin: 10px 0 0;
+  color: var(--workspace-muted);
+  font-size: var(--text-sm);
 }
 
 .admin-note {

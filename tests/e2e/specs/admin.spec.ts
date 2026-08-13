@@ -7,28 +7,35 @@ import { signUpAndSignIn } from "./helpers";
 // route this panel calls (all require at least the ADMIN role), so the full
 // panel renders without any additional setup.
 
-test("shows a fresh workspace owner the full admin panel", async ({ page }) => {
+// Settings is a tabbed surface: one panel at a time, so each section is
+// reached by its tab rather than by scrolling one long page.
+test("gives a fresh workspace owner every settings section", async ({
+  page,
+}) => {
   const user = await signUpAndSignIn(page, "Admin Owner");
   await page.goto("/admin");
 
-  await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
+  // Members is the landing tab.
   await expect(page.getByText(user.email, { exact: false })).toBeVisible();
-
   await expect(
     page.getByRole("heading", { name: "Invite a member" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Retention policy" }),
-  ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Webhooks" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "AI providers" }),
-  ).toBeVisible();
-  // The summary comes from apps/web/components/ai-settings.tsx, so this fails
-  // if the AI panel is ever detached from the admin page again.
-  await expect(page.getByText("Workspace AI policy")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "API keys" })).toBeVisible();
+
+  for (const [tab, heading] of [
+    ["Retention", "Retention policy"],
+    ["Integrations", "Webhooks"],
+    ["AI", "AI providers"],
+    ["Security", "API keys"],
+  ] as const) {
+    await page.getByRole("button", { name: tab, exact: true }).click();
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+  }
+
+  // Security holds two sections; the second must come with it.
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+  // Fails if the AI panel is ever detached from the admin page again.
+  await page.getByRole("button", { name: "AI", exact: true }).click();
+  await expect(page.getByText("Workspace policy")).toBeVisible();
 });
 
 test("invites a new member and saves the retention policy", async ({
@@ -47,6 +54,8 @@ test("invites a new member and saves the retention policy", async ({
     page.getByRole("heading", { name: "Pending invitations" }),
   ).toBeVisible();
 
+  // Retention lives on its own tab now.
+  await page.getByRole("button", { name: "Retention", exact: true }).click();
   await page
     .getByLabel("Auto-delete recordings after (days, blank = keep forever)")
     .fill("90");
@@ -63,9 +72,7 @@ test("tells a fresh workspace who pays for each AI feature", async ({
 }) => {
   await signUpAndSignIn(page, "AI Entitlements");
   await page.goto("/admin");
-
-  // The panel is a <details>; its contents are collapsed until opened.
-  await page.getByText("Workspace AI policy").click();
+  await page.getByRole("button", { name: "AI", exact: true }).click();
 
   await expect(
     page.getByRole("heading", { name: "Who pays for AI" }),

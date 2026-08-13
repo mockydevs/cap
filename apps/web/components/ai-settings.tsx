@@ -88,6 +88,22 @@ export function AiSettings() {
     });
     void refreshProviders();
   }, [refreshProviders]);
+  // One line for however many features share a cause, instead of the same
+  // sentence repeated in every card.
+  const blockedReasons = entitlements
+    ? [
+        ...new Set(
+          [
+            entitlements.transcription,
+            entitlements.analysis,
+            entitlements.embeddings,
+          ]
+            .filter((item) => item.lane === "NONE")
+            .map((item) => (item as { reason: string }).reason),
+        ),
+      ]
+    : [];
+
   if (!policy) return null;
   const save = async () => {
     const response = await sendJson("/api/ai/policy", "PUT", policy);
@@ -202,8 +218,8 @@ export function AiSettings() {
     if (response.ok) await refreshProviders();
   };
   return (
-    <details className="ai-settings">
-      <summary>Workspace AI policy</summary>
+    <div className="ai-settings">
+      <h4>Workspace policy</h4>
       <label>
         <input
           type="checkbox"
@@ -290,12 +306,6 @@ export function AiSettings() {
         <>
           <hr />
           <h3>Who pays for AI</h3>
-          <p>
-            Each feature runs on the first source that can cover it: a provider
-            key you have routed, then a Cap plan. Anything showing
-            &ldquo;Unavailable&rdquo; stays switched off until one of those
-            exists.
-          </p>
           <dl className="admin-metrics">
             {(
               [
@@ -306,23 +316,21 @@ export function AiSettings() {
             ).map(([label, entitlement]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd>
-                  {laneLabel(entitlement)}
-                  {entitlement.lane === "NONE" && (
-                    <> — {aiErrorMessage(entitlement.reason)}</>
-                  )}
-                </dd>
+                <dd>{laneLabel(entitlement)}</dd>
               </div>
             ))}
           </dl>
+          {blockedReasons.length > 0 && (
+            <p className="admin-hint">
+              {blockedReasons.map((reason) => aiErrorMessage(reason)).join(" ")}
+            </p>
+          )}
         </>
       )}
       <hr />
       <h3>Provider connections</h3>
-      <p>
-        Keys are validated against the provider, sealed with this
-        deployment&rsquo;s credential key, and never shown again. Workspace
-        members can use an approved connection but cannot read its credential.
+      <p className="admin-hint">
+        Keys are validated, sealed, and never shown again.
       </p>
       <label>
         Provider
@@ -546,6 +554,6 @@ export function AiSettings() {
       <h3>Cap AI plan</h3>
       <BillingSettings />
       {message && <p>{message}</p>}
-    </details>
+    </div>
   );
 }

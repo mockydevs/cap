@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  aiPolicySchema,
   providerConnectionSchema,
   providerModelsLookupSchema,
   providerRouteSchema,
@@ -87,5 +88,32 @@ describe("AI provider connection rotation validation", () => {
     expect(
       rotateProviderConnectionSchema.parse({ apiKey: "sk-rotated-key" }).apiKey,
     ).toBe("sk-rotated-key");
+  });
+});
+
+describe("AI policy round trip", () => {
+  // The settings form posts back exactly what GET /api/ai/policy returned, so
+  // the read shape and the write schema have to agree. They did not: the read
+  // returned the whole row, the schema is strict, and every save failed with a
+  // validation error — which left AI impossible to switch on.
+  const editable = {
+    enabled: true,
+    allowedProvider: "openai-compatible" as const,
+    allowExternalProcessing: true,
+    monthlyTokenLimit: 1_000_000,
+    monthlyCostLimitMicrounits: 25_000_000,
+  };
+
+  it("accepts the shape the policy endpoint hands the form", () => {
+    expect(aiPolicySchema.parse(editable).enabled).toBe(true);
+  });
+
+  it("rejects a payload carrying a persistence column", () => {
+    expect(() =>
+      aiPolicySchema.parse({
+        ...editable,
+        workspaceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      }),
+    ).toThrow();
   });
 });

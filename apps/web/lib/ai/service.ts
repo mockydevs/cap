@@ -28,6 +28,8 @@ import {
   unknownModelRate,
 } from "./entitlement";
 import { AiServiceError } from "./errors";
+import type { aiPolicySchema } from "./validation";
+import type { z } from "zod";
 export { AiServiceError };
 const approvedText = sql<string>`string_agg('['||${transcriptSegments.startMs}||'-'||${transcriptSegments.endMs}||'] '||coalesce(${transcriptSegments.correctedText},${transcriptSegments.providerText}), E'\n' ORDER BY ${transcriptSegments.ordinal})`;
 /** Exposes the same monthly consumption the entitlement resolver enforces
@@ -203,23 +205,47 @@ export async function decideArtifact(
   if (!updated) throw new AiServiceError("AI_NOT_FOUND", 404);
   return updated;
 }
-export async function getPolicy(actor: Actor) {
-  return (
-    (
-      await db()
-        .select()
-        .from(aiWorkspacePolicies)
-        .where(eq(aiWorkspacePolicies.workspaceId, actor.workspaceId))
-        .limit(1)
-    )[0] ?? {
-      workspaceId: actor.workspaceId,
+/**
+ * The editable policy, and nothing else.
+ *
+ * The settings form reads this and posts the same object straight back, so the
+ * shape returned here has to be exactly what `aiPolicySchema` accepts. It used
+ * to `select()` the whole row — which carries `workspaceId`, `updatedAt` and
+ * `updatedBy` — and the schema is strict, so every save was rejected with a
+ * validation error and AI could never be switched on through the UI at all.
+ */
+export async function getPolicy(
+  actor: Actor,
+): Promise<z.infer<typeof aiPolicySchema>> {
+  const [policy] = await db()
+    .select({
+      enabled: aiWorkspacePolicies.enabled,
+      allowedProvider: aiWorkspacePolicies.allowedProvider,
+      allowExternalProcessing: aiWorkspacePolicies.allowExternalProcessing,
+      monthlyTokenLimit: aiWorkspacePolicies.monthlyTokenLimit,
+      monthlyCostLimitMicrounits:
+        aiWorkspacePolicies.monthlyCostLimitMicrounits,
+    })
+    .from(aiWorkspacePolicies)
+    .where(eq(aiWorkspacePolicies.workspaceId, actor.workspaceId))
+    .limit(1);
+  if (!policy)
+    return {
       enabled: false,
       allowedProvider: "openai-compatible",
       allowExternalProcessing: false,
       monthlyTokenLimit: 1_000_000,
       monthlyCostLimitMicrounits: 25_000_000,
-    }
-  );
+    };
+  return {
+    ...policy,
+    // The column is text; only these two values are ever written, and anything
+    // else is treated as the safer external-processing-controlled mode.
+    allowedProvider:
+      policy.allowedProvider === "self-hosted"
+        ? "self-hosted"
+        : "openai-compatible",
+  };
 }
 export async function setPolicy(
   actor: Actor,
@@ -234,19 +260,30 @@ export async function setPolicy(
   if (actor.role !== "OWNER" && actor.role !== "ADMIN")
     throw new AiServiceError("AI_NOT_FOUND", 403);
   return (
-    await db()
-      .insert(aiWorkspacePolicies)
-      .values({
-        ...input,
-        workspaceId: actor.workspaceId,
-        updatedBy: actor.userId,
-      })
-      .onConflictDoUpdate({
-        target: aiWorkspacePolicies.workspaceId,
-        set: { ...input, updatedBy: actor.userId, updatedAt: new Date() },
-      })
-      .returning()
-  )[0]!;
+    (
+      await db()
+        .insert(aiWorkspacePolicies)
+        .values({
+          ...input,
+          workspaceId: actor.workspaceId,
+          updatedBy: actor.userId,
+        })
+        .onConflictDoUpdate({
+          target: aiWorkspacePolicies.workspaceId,
+          set: { ...input, updatedBy: actor.userId, updatedAt: new Date() },
+        })
+        // Same projection as the read, so a caller that feeds this response back
+        // into the form cannot reintroduce the strict-schema rejection.
+        .returning({
+          enabled: aiWorkspacePolicies.enabled,
+          allowedProvider: aiWorkspacePolicies.allowedProvider,
+          allowExternalProcessing: aiWorkspacePolicies.allowExternalProcessing,
+          monthlyTokenLimit: aiWorkspacePolicies.monthlyTokenLimit,
+          monthlyCostLimitMicrounits:
+            aiWorkspacePolicies.monthlyCostLimitMicrounits,
+        })
+    )[0]!
+  );
 }
 
 export async function semanticSearch(
