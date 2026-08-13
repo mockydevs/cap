@@ -2745,7 +2745,7 @@ h4 {
 }
 
 .user-nav > a {
-  color: var(--workspace-muted);
+  color: var(--workspace-muted, var(--muted));
   transition: color 180ms ease;
 }
 
@@ -2753,12 +2753,26 @@ h4 {
   color: var(--ink);
 }
 
+/* Last in the bar, so the rule reads as a divider between what you can do
+   and who you are signed in as. */
 .account-pill {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding-left: 16px;
-  border-left: 1px solid var(--workspace-line);
+  margin-left: 2px;
+  padding-left: 18px;
+  border-left: 1px solid var(--workspace-line, var(--line));
+}
+
+.account-copy {
+  display: grid;
+  line-height: 1.2;
+}
+
+.account-copy small {
+  color: var(--workspace-muted, var(--muted));
+  font-size: var(--text-xs);
+  text-transform: capitalize;
 }
 
 .account-avatar {

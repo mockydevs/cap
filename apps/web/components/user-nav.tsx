@@ -41,6 +41,13 @@ export function UserNav() {
       <Link href="/library">Library</Link>
       {(session.workspace.role === "OWNER" ||
         session.workspace.role === "ADMIN") && <Link href="/admin">Admin</Link>}
+      <form method="post" action="/api/auth/logout">
+        <button className="nav-link" type="submit">
+          Sign out
+        </button>
+      </form>
+      {/* Identity sits at the end, after the things you do, so the bar reads
+          as actions then account rather than being split by the avatar. */}
       <span className="account-pill">
         <span className="account-avatar" aria-hidden="true">
           {initials}
@@ -50,11 +57,6 @@ export function UserNav() {
           <small>{session.workspace.role.toLowerCase()}</small>
         </span>
       </span>
-      <form method="post" action="/api/auth/logout">
-        <button className="nav-link" type="submit">
-          Sign out
-        </button>
-      </form>
     </div>
   );
 }
