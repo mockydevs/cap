@@ -11,6 +11,16 @@ import {
   resumeUpload,
 } from "../lib/uploads/resumable-client";
 
+const captureStateLabel: Record<CaptureState, string> = {
+  idle: "Ready",
+  requesting: "Selecting",
+  recording: "Recording",
+  stopping: "Finishing",
+  uploading: "Uploading",
+  ready: "Recorded",
+  error: "Needs attention",
+};
+
 /**
  * Explains an upload failure by what actually went wrong.
  *
@@ -35,7 +45,7 @@ export function uploadFailureMessage(error: unknown): string {
 export function CaptureStudio() {
   const [state, setState] = useState<CaptureState>("idle");
   const [elapsed, setElapsed] = useState(0);
-  const [message, setMessage] = useState("Choose a source when you are ready.");
+  const [message, setMessage] = useState("");
   const [includeMic, setIncludeMic] = useState(true);
   const [includeCamera, setIncludeCamera] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string>();
@@ -218,18 +228,14 @@ export function CaptureStudio() {
   return (
     <section className="studio" aria-live="polite">
       <header className="studio-heading">
-        <div>
-          <p className="eyebrow">Capture setup</p>
-          <h2>Ready when you are</h2>
-        </div>
+        <h1>New recording</h1>
         <span className={`studio-state studio-state-${state}`}>
           <span aria-hidden="true" />
-          {state === "recording" ? "Recording" : state.replace("ing", "")}
+          {captureStateLabel[state]}
         </span>
       </header>
       <div className="recording-panel">
         <div className="timer-block">
-          <span>Duration</span>
           <strong className="timer">{formatDuration(elapsed)}</strong>
         </div>
         <div className="capture-options">
@@ -240,10 +246,7 @@ export function CaptureStudio() {
               disabled={state === "recording" || state === "requesting"}
               onChange={(event) => setIncludeMic(event.target.checked)}
             />
-            <span>
-              <strong>Microphone</strong>
-              <small>Include your voice</small>
-            </span>
+            <span>Microphone</span>
           </label>
           <label className="toggle">
             <input
@@ -252,10 +255,7 @@ export function CaptureStudio() {
               disabled={state === "recording" || state === "requesting"}
               onChange={(event) => setIncludeCamera(event.target.checked)}
             />
-            <span>
-              <strong>Camera</strong>
-              <small>Add a separate camera track</small>
-            </span>
+            <span>Camera</span>
           </label>
         </div>
         <div className="capture-primary-action">
@@ -274,13 +274,14 @@ export function CaptureStudio() {
               {state === "requesting" ? "Choose a screen…" : "Start capture"}
             </button>
           )}
-          <small>No download or extension required</small>
         </div>
       </div>
-      <p className="hint">
-        <span aria-hidden="true" />
-        {message}
-      </p>
+      {message && (
+        <p className="hint">
+          <span aria-hidden="true" />
+          {message}
+        </p>
+      )}
       {recordingUrl && (
         <div className="preview">
           <video controls src={recordingUrl} />

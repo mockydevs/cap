@@ -77,7 +77,7 @@ export function TranscriptSearch() {
           Search transcripts
           <input
             value={query}
-            placeholder="Find a spoken phrase"
+            placeholder="Search transcripts"
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
@@ -88,7 +88,7 @@ export function TranscriptSearch() {
             checked={semantic}
             onChange={(event) => setSemantic(event.target.checked)}
           />
-          Meaning-based AI search
+          AI search
         </label>
       </form>
       {error ? (

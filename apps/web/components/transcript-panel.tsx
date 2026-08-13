@@ -89,13 +89,13 @@ export function TranscriptPanel({
         <div className="panel-empty">
           <span aria-hidden="true">TXT</span>
           <strong>{title}</strong>
-          <p>{detail}</p>
+          {detail ? <p>{detail}</p> : null}
           <button
             type="button"
             disabled={requesting}
             onClick={() => void requestTranscription()}
           >
-            {requesting ? "Requesting…" : "Transcribe this recording"}
+            {requesting ? "Requesting…" : "Transcribe"}
           </button>
           {error ? (
             <p className="form-error">
@@ -160,11 +160,7 @@ export function TranscriptPanel({
         </div>
       </section>
     );
-  if (!page.transcript)
-    return transcribeAction(
-      "No transcript yet.",
-      "Transcribe this recording to get a searchable, editable transcript and unlock AI features.",
-    );
+  if (!page.transcript) return transcribeAction("No transcript", "");
   if (page.transcript.status === "DISABLED")
     return transcribeAction(
       "Transcription is not switched on.",
@@ -180,10 +176,7 @@ export function TranscriptPanel({
       <section className="transcript-panel">
         <div className="panel-empty">
           <span aria-hidden="true">TXT</span>
-          <strong>Transcript is processing.</strong>
-          <p>
-            A searchable, editable transcript will appear here when it is ready.
-          </p>
+          <strong>Processing transcript</strong>
         </div>
       </section>
     );

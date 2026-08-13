@@ -16,10 +16,6 @@ export default function AdminPage() {
       <section className="admin-content">
         <header className="admin-heading">
           <h1>Settings</h1>
-          <span className="admin-status">
-            <span aria-hidden="true" />
-            Private workspace
-          </span>
         </header>
         {/* Section navigation lives in the panel, which owns the active tab. */}
         <AdminPanel />

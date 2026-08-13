@@ -141,8 +141,18 @@ export function RecordingViewer({
       <div className="viewer-layout">
         <div className="viewer-main">
           <div className="viewer-heading">
-            <div>
-              <p className="eyebrow">Recording / {recording.status}</p>
+            <div className="viewer-title">
+              <span
+                className={`viewer-status viewer-status-${recording.status.toLowerCase()}`}
+              >
+                {recording.status === "UPLOADING"
+                  ? "Uploading"
+                  : recording.status === "PROCESSING"
+                    ? "Processing"
+                    : recording.status === "READY"
+                      ? "Ready"
+                      : "Failed"}
+              </span>
               <h1>{recording.title}</h1>
             </div>
             <dl className="viewer-meta">
@@ -192,11 +202,12 @@ export function RecordingViewer({
                   ? "Processing failed"
                   : "Preparing playback…"}
               </h2>
-              <p>
-                {recording.status === "FAILED"
-                  ? "The source is safe. Contact a workspace administrator to retry processing."
-                  : "This page updates automatically when your video is ready."}
-              </p>
+              {recording.status === "FAILED" && (
+                <p>
+                  The source is safe. Contact a workspace administrator to retry
+                  processing.
+                </p>
+              )}
             </div>
           )}
           {recording.canManageSharing && (

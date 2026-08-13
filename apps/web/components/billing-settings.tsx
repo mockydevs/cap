@@ -13,7 +13,6 @@ type Plan = {
 
 type Overview = {
   available: boolean;
-  markupPercent: number;
   plans: Plan[];
   subscription: {
     planCode: string;
@@ -117,14 +116,6 @@ export function BillingSettings() {
         </>
       ) : (
         <>
-          <p>
-            Start a plan to use AI features without supplying your own provider
-            key. Usage is metered at provider cost
-            {overview.markupPercent > 0
-              ? ` plus ${overview.markupPercent}%`
-              : ""}{" "}
-            and drawn from the plan&rsquo;s included credit.
-          </p>
           <ul className="plan-list">
             {overview.plans.map((plan) => (
               <li key={plan.code}>

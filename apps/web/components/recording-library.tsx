@@ -30,46 +30,25 @@ type Page = { items: RecordingSummary[]; nextCursor: string | null };
 const viewContent: Record<
   LibraryView,
   {
-    eyebrow: string;
     title: string;
-    description: string;
     emptyTitle: string;
-    emptyBody: string;
   }
 > = {
   library: {
-    eyebrow: "Browser-first screen recording",
     title: "Recordings",
-    description:
-      "Capture, organize, and share everything your team needs to see.",
-    emptyTitle: "Make your first recording.",
-    emptyBody:
-      "Record a product walkthrough, a quick update, or anything that is easier to show than explain.",
+    emptyTitle: "No recordings",
   },
   shared: {
-    eyebrow: "Workspace collaboration",
     title: "Shared with me",
-    description: "Recordings created by other people in your active workspace.",
-    emptyTitle: "Nothing shared yet.",
-    emptyBody:
-      "When a teammate creates a recording in this workspace, it will appear here automatically.",
+    emptyTitle: "Nothing shared",
   },
   starred: {
-    eyebrow: "Quick access",
     title: "Starred",
-    description:
-      "Keep important recordings close without moving or duplicating them.",
-    emptyTitle: "No starred recordings.",
-    emptyBody: "Use the star on any recording to add it to this focused view.",
+    emptyTitle: "No starred recordings",
   },
   trash: {
-    eyebrow: "Recoverable deletion",
     title: "Trash",
-    description:
-      "Restore deleted recordings or permanently remove them from storage.",
-    emptyTitle: "Trash is empty.",
-    emptyBody:
-      "Deleted recordings remain recoverable here until your workspace retention policy removes them.",
+    emptyTitle: "Trash is empty",
   },
 };
 
@@ -222,42 +201,21 @@ export function RecordingLibrary({
         </nav>
         <div className="sidebar-footer">
           <Link href="/admin">Settings</Link>
-          <div className="workspace-chip">
-            <span className="avatar">W</span>
-            <span>
-              <strong>Your workspace</strong>
-              <small>Private recordings</small>
-            </span>
-          </div>
         </div>
       </aside>
       <div className="library-panel">
         <div className="library-heading">
           <div className="library-title">
-            <p className="eyebrow">{content.eyebrow}</p>
             <h1>{content.title}</h1>
-            <p>{content.description}</p>
           </div>
           <div className="library-heading-actions">
-            <span className="recording-count">{items.length} shown</span>
-            {initialView !== "trash" && (
-              <Link className="library-new-recording" href="/record">
-                <span className="record-dot" aria-hidden="true" />
-                New recording
-              </Link>
-            )}
+            <span className="recording-count">{items.length}</span>
           </div>
         </div>
         <div className="library-command-bar">
           <div className="library-tools">
             <TranscriptSearch />
           </div>
-          <span className="library-privacy">
-            <span aria-hidden="true" />
-            {initialView === "trash"
-              ? "Retention protected"
-              : "Private workspace"}
-          </span>
         </div>
         {initialView !== "trash" && (
           <nav className="library-filters" aria-label="Recording filters">
@@ -293,23 +251,8 @@ export function RecordingLibrary({
         )}
         {!loading && items.length === 0 && (
           <div className={`empty-state empty-state-${initialView}`}>
-            <div className="empty-state-visual" aria-hidden="true">
-              <div className="empty-window-bar">
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="empty-window-play">
-                <span />
-              </div>
-              <div className="empty-window-track">
-                <span />
-              </div>
-            </div>
             <div className="empty-state-copy">
-              <p className="eyebrow">{content.eyebrow}</p>
               <h2>{content.emptyTitle}</h2>
-              <p>{content.emptyBody}</p>
               {initialView === "library" && (
                 <Link className="nav-cta" href="/record">
                   <span className="record-dot" aria-hidden="true" /> Start

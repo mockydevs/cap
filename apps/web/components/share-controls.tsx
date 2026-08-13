@@ -51,9 +51,6 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
   return (
     <aside className="share-panel">
       <h2>Share recording</h2>
-      <p className="share-intro">
-        Control who can watch, then send one secure link.
-      </p>
       <form onSubmit={save} className="share-form">
         <label>
           Access

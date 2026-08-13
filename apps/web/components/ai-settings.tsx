@@ -217,299 +217,401 @@ export function AiSettings() {
     );
     if (response.ok) await refreshProviders();
   };
+  const usageItems = usage
+    ? [
+        {
+          label: "Tokens",
+          value: `${usage.tokens.toLocaleString()} / ${policy.monthlyTokenLimit.toLocaleString()}`,
+        },
+        {
+          label: "Transcribed",
+          value: `${Math.round(usage.audioMs / 60_000).toLocaleString()} min`,
+        },
+        {
+          label: "Spend",
+          value: `$${(usage.costMicrounits / 1_000_000).toFixed(2)} / $${(policy.monthlyCostLimitMicrounits / 1_000_000).toFixed(2)}`,
+        },
+      ]
+    : [];
   return (
     <div className="ai-settings">
-      <h4>Workspace policy</h4>
-      <label>
-        <input
-          type="checkbox"
-          checked={policy.enabled}
-          onChange={(event) =>
-            setPolicy({ ...policy, enabled: event.target.checked })
-          }
-        />{" "}
-        Enable AI features
-      </label>
-      <label>
-        Allowed provider mode
-        <select
-          value={policy.allowedProvider}
-          onChange={(event) =>
-            setPolicy({
-              ...policy,
-              allowedProvider: event.target.value as Policy["allowedProvider"],
-            })
-          }
-        >
-          <option value="openai-compatible">
-            OpenAI-compatible (external processing controlled below)
-          </option>
-          <option value="self-hosted">Self-hosted only</option>
-        </select>
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={policy.allowExternalProcessing}
-          onChange={(event) =>
-            setPolicy({
-              ...policy,
-              allowExternalProcessing: event.target.checked,
-            })
-          }
-        />{" "}
-        Allow approved transcript text to leave this deployment
-      </label>
-      <label>
-        Monthly token limit
-        <input
-          type="number"
-          min="0"
-          max="100000000"
-          value={policy.monthlyTokenLimit}
-          onChange={(event) =>
-            setPolicy({
-              ...policy,
-              monthlyTokenLimit: Number(event.target.value),
-            })
-          }
-        />
-      </label>
-      <label>
-        Monthly cost limit (USD)
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={policy.monthlyCostLimitMicrounits / 1_000_000}
-          onChange={(event) =>
-            setPolicy({
-              ...policy,
-              monthlyCostLimitMicrounits: Math.round(
-                Number(event.target.value) * 1_000_000,
-              ),
-            })
-          }
-        />
-      </label>
-      {usage && (
-        <p>
-          Used this month: {usage.tokens.toLocaleString()} /{" "}
-          {policy.monthlyTokenLimit.toLocaleString()} tokens,{" "}
-          {Math.round(usage.audioMs / 60_000).toLocaleString()} minutes
-          transcribed, ${(usage.costMicrounits / 1_000_000).toFixed(2)} / $
-          {(policy.monthlyCostLimitMicrounits / 1_000_000).toFixed(2)}
-        </p>
-      )}
-      <button onClick={() => void save()}>Save AI policy</button>
-      {entitlements && (
-        <>
-          <hr />
-          <h3>Who pays for AI</h3>
-          <dl className="admin-metrics">
-            {(
-              [
-                ["Transcripts", entitlements.transcription],
-                ["Analysis", entitlements.analysis],
-                ["Semantic search", entitlements.embeddings],
-              ] as const
-            ).map(([label, entitlement]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{laneLabel(entitlement)}</dd>
-              </div>
-            ))}
-          </dl>
-          {blockedReasons.length > 0 && (
-            <p className="admin-hint">
-              {blockedReasons.map((reason) => aiErrorMessage(reason)).join(" ")}
-            </p>
-          )}
-        </>
-      )}
-      <hr />
-      <h3>Provider connections</h3>
-      <p className="admin-hint">
-        Keys are validated, sealed, and never shown again.
-      </p>
-      <label>
-        Provider
-        <select
-          value={provider}
-          onChange={(event) => {
-            const value = event.target.value as typeof provider;
-            setProvider(value);
-            setDisplayName(
-              value === "ANTHROPIC"
-                ? "Claude"
-                : value === "OPENAI"
-                  ? "OpenAI"
-                  : "Private AI",
-            );
-            setFetchedModels([]);
-          }}
-        >
-          <option value="OPENAI">OpenAI</option>
-          <option value="ANTHROPIC">Anthropic Claude</option>
-          <option value="OPENAI_COMPATIBLE">OpenAI-compatible endpoint</option>
-        </select>
-      </label>
-      <label>
-        Connection name
-        <input
-          value={displayName}
-          maxLength={80}
-          onChange={(event) => setDisplayName(event.target.value)}
-        />
-      </label>
-      {provider === "OPENAI_COMPATIBLE" && (
-        <label>
-          HTTPS API base URL
-          <input
-            type="url"
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-        </label>
-      )}
-      <label>
-        API key
-        <input
-          type="password"
-          autoComplete="off"
-          value={apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-        />
-      </label>
-      <fieldset>
-        <legend>Use this connection for</legend>
-        {PURPOSES.map((capability) => (
-          <label key={capability}>
+      {message && <p className="ai-settings-message">{message}</p>}
+
+      <div className="ai-settings-overview">
+        <section className="ai-settings-card ai-policy-card">
+          <header className="ai-card-heading">
+            <span>01</span>
+            <div>
+              <h3>Workspace policy</h3>
+              <p>Access and monthly limits</p>
+            </div>
+          </header>
+          <label className="ai-toggle-row">
+            <span>
+              <strong>AI features</strong>
+              <small>Enable transcription, analysis, and search</small>
+            </span>
             <input
               type="checkbox"
-              checked={capabilities.includes(capability)}
-              onChange={() => toggleCapability(capability)}
-            />{" "}
-            {capability}
+              checked={policy.enabled}
+              onChange={(event) =>
+                setPolicy({ ...policy, enabled: event.target.checked })
+              }
+            />
           </label>
-        ))}
-      </fieldset>
-      <button
-        type="button"
-        disabled={!apiKey || fetchingModels}
-        onClick={() => void fetchModels()}
-      >
-        {fetchingModels ? "Checking…" : "Fetch available models"}
-      </button>
-      {fetchedModels.length > 0 && (
-        <fieldset>
-          <legend>Models available from this provider</legend>
-          {fetchedModels.map((model) => (
-            <label key={model}>
-              <input
-                type="checkbox"
-                checked={selectedModels.includes(model)}
-                onChange={() => toggleModel(model)}
-              />{" "}
-              {model}
+          <label className="ai-toggle-row">
+            <span>
+              <strong>External processing</strong>
+              <small>Allow approved content to reach your provider</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={policy.allowExternalProcessing}
+              onChange={(event) =>
+                setPolicy({
+                  ...policy,
+                  allowExternalProcessing: event.target.checked,
+                })
+              }
+            />
+          </label>
+          <div className="ai-field-grid">
+            <label>
+              Provider mode
+              <select
+                value={policy.allowedProvider}
+                onChange={(event) =>
+                  setPolicy({
+                    ...policy,
+                    allowedProvider: event.target
+                      .value as Policy["allowedProvider"],
+                  })
+                }
+              >
+                <option value="openai-compatible">External API</option>
+                <option value="self-hosted">Self-hosted only</option>
+              </select>
             </label>
-          ))}
-        </fieldset>
-      )}
-      <label>
-        Additional models, comma separated (used if the list above is empty or
-        incomplete)
-        <input
-          value={manualModels}
-          onChange={(event) => setManualModels(event.target.value)}
-        />
-      </label>
-      {candidateModels.length > 0 && (
-        <label>
-          Default model
-          <select
-            value={defaultModel}
-            onChange={(event) => setDefaultModel(event.target.value)}
-          >
-            <option value="">Select a default model</option>
-            {candidateModels.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <button
-        disabled={
-          !apiKey ||
-          !displayName ||
-          capabilities.length === 0 ||
-          candidateModels.length === 0
-        }
-        onClick={() => void addProvider()}
-      >
-        Test, encrypt, and add
-      </button>
-      {providers.length > 0 && (
-        <>
-          <h4>Provider routing</h4>
-          {PURPOSES.map((purpose) => {
-            const eligible = providers.filter(
-              (item) =>
-                item.status === "ACTIVE" &&
-                item.allowedCapabilities.includes(purpose),
-            );
-            const current = providers.find(
-              (item) => item.id === routesByPurpose[purpose],
-            );
-            return (
-              <div key={purpose}>
-                <label>
-                  {purpose}
-                  <select
-                    value={routeSelection[purpose]}
-                    onChange={(event) =>
-                      setRouteSelection((prev) => ({
-                        ...prev,
-                        [purpose]: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">
-                      {eligible.length === 0
-                        ? "No eligible connection"
-                        : "Select a connection"}
-                    </option>
-                    {eligible.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.displayName} · {item.provider} · …
-                        {item.credentialFingerprint.slice(-4)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  disabled={!routeSelection[purpose]}
-                  onClick={() => void saveRoute(purpose)}
-                >
-                  Use for {purpose.toLowerCase()}
-                </button>
-                {current && <span> Currently: {current.displayName}</span>}
+            <label>
+              Token limit
+              <input
+                type="number"
+                min="0"
+                max="100000000"
+                value={policy.monthlyTokenLimit}
+                onChange={(event) =>
+                  setPolicy({
+                    ...policy,
+                    monthlyTokenLimit: Number(event.target.value),
+                  })
+                }
+              />
+            </label>
+            <label>
+              Cost limit (USD)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={policy.monthlyCostLimitMicrounits / 1_000_000}
+                onChange={(event) =>
+                  setPolicy({
+                    ...policy,
+                    monthlyCostLimitMicrounits: Math.round(
+                      Number(event.target.value) * 1_000_000,
+                    ),
+                  })
+                }
+              />
+            </label>
+          </div>
+          {usageItems.length > 0 && (
+            <dl className="ai-usage-strip">
+              {usageItems.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <button className="ai-primary-action" onClick={() => void save()}>
+            Save policy
+          </button>
+        </section>
+
+        {entitlements && (
+          <section className="ai-settings-card ai-access-card">
+            <header className="ai-card-heading">
+              <span>02</span>
+              <div>
+                <h3>Feature access</h3>
+                <p>Current workspace routes</p>
               </div>
-            );
-          })}
-          <ul>
+            </header>
+            <dl className="ai-access-list">
+              {(
+                [
+                  ["Transcripts", entitlements.transcription],
+                  ["Analysis", entitlements.analysis],
+                  ["Semantic search", entitlements.embeddings],
+                ] as const
+              ).map(([label, entitlement]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{laneLabel(entitlement)}</dd>
+                </div>
+              ))}
+            </dl>
+            {blockedReasons.length > 0 && (
+              <p className="ai-access-note">
+                {blockedReasons
+                  .map((reason) => aiErrorMessage(reason))
+                  .join(" ")}
+              </p>
+            )}
+          </section>
+        )}
+      </div>
+
+      <section className="ai-settings-card ai-provider-card">
+        <header className="ai-card-heading">
+          <span>03</span>
+          <div>
+            <h3>Connect a provider</h3>
+            <p>{providers.length} connected</p>
+          </div>
+        </header>
+        <div className="ai-provider-layout">
+          <div className="ai-provider-form">
+            <div className="ai-field-grid ai-provider-basics">
+              <label>
+                Provider
+                <select
+                  value={provider}
+                  onChange={(event) => {
+                    const value = event.target.value as typeof provider;
+                    setProvider(value);
+                    setDisplayName(
+                      value === "ANTHROPIC"
+                        ? "Claude"
+                        : value === "OPENAI"
+                          ? "OpenAI"
+                          : "Private AI",
+                    );
+                    setFetchedModels([]);
+                  }}
+                >
+                  <option value="OPENAI">OpenAI</option>
+                  <option value="ANTHROPIC">Anthropic Claude</option>
+                  <option value="OPENAI_COMPATIBLE">
+                    OpenAI-compatible endpoint
+                  </option>
+                </select>
+              </label>
+              <label>
+                Connection name
+                <input
+                  value={displayName}
+                  maxLength={80}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                />
+              </label>
+              {provider === "OPENAI_COMPATIBLE" && (
+                <label className="ai-field-wide">
+                  HTTPS API base URL
+                  <input
+                    type="url"
+                    value={baseUrl}
+                    onChange={(event) => setBaseUrl(event.target.value)}
+                  />
+                </label>
+              )}
+              <label className="ai-field-wide">
+                API key
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+              </label>
+            </div>
+            <fieldset className="ai-choice-group">
+              <legend>Capabilities</legend>
+              <div>
+                {PURPOSES.map((capability) => (
+                  <label key={capability}>
+                    <input
+                      type="checkbox"
+                      checked={capabilities.includes(capability)}
+                      onChange={() => toggleCapability(capability)}
+                    />
+                    {capability.toLowerCase()}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="ai-inline-actions">
+              <button
+                type="button"
+                className="admin-secondary-action"
+                disabled={!apiKey || fetchingModels}
+                onClick={() => void fetchModels()}
+              >
+                {fetchingModels ? "Checking…" : "Check key and models"}
+              </button>
+            </div>
+          </div>
+          <aside className="ai-auth-note">
+            <span>Subscription sign-in</span>
+            <strong>Chat subscriptions do not include API usage.</strong>
+            <p>Use an API Platform key or activate a Cap AI plan below.</p>
+            {provider === "OPENAI" && (
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Create OpenAI API key ↗
+              </a>
+            )}
+          </aside>
+        </div>
+        {fetchedModels.length > 0 && (
+          <fieldset className="ai-choice-group ai-model-list">
+            <legend>Available models</legend>
+            <div>
+              {fetchedModels.map((model) => (
+                <label key={model}>
+                  <input
+                    type="checkbox"
+                    checked={selectedModels.includes(model)}
+                    onChange={() => toggleModel(model)}
+                  />
+                  {model}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        <div className="ai-model-footer">
+          <label>
+            Additional models
+            <input
+              value={manualModels}
+              placeholder="model-a, model-b"
+              onChange={(event) => setManualModels(event.target.value)}
+            />
+          </label>
+          {candidateModels.length > 0 && (
+            <label>
+              Default model
+              <select
+                value={defaultModel}
+                onChange={(event) => setDefaultModel(event.target.value)}
+              >
+                <option value="">Select model</option>
+                {candidateModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            className="ai-primary-action"
+            disabled={
+              !apiKey ||
+              !displayName ||
+              capabilities.length === 0 ||
+              candidateModels.length === 0
+            }
+            onClick={() => void addProvider()}
+          >
+            Save connection
+          </button>
+        </div>
+      </section>
+
+      {providers.length > 0 && (
+        <section className="ai-settings-card ai-routing-card">
+          <header className="ai-card-heading">
+            <span>04</span>
+            <div>
+              <h3>Routes and credentials</h3>
+              <p>Choose a provider for each capability</p>
+            </div>
+          </header>
+          <div className="ai-route-grid">
+            {PURPOSES.map((purpose) => {
+              const eligible = providers.filter(
+                (item) =>
+                  item.status === "ACTIVE" &&
+                  item.allowedCapabilities.includes(purpose),
+              );
+              const current = providers.find(
+                (item) => item.id === routesByPurpose[purpose],
+              );
+              return (
+                <div className="ai-route" key={purpose}>
+                  <label>
+                    {purpose.toLowerCase()}
+                    <select
+                      value={routeSelection[purpose]}
+                      onChange={(event) =>
+                        setRouteSelection((prev) => ({
+                          ...prev,
+                          [purpose]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">
+                        {eligible.length === 0
+                          ? "No eligible connection"
+                          : "Select connection"}
+                      </option>
+                      {eligible.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.displayName} · …
+                          {item.credentialFingerprint.slice(-4)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    disabled={!routeSelection[purpose]}
+                    onClick={() => void saveRoute(purpose)}
+                  >
+                    Apply
+                  </button>
+                  <small>{current ? current.displayName : "Not routed"}</small>
+                </div>
+              );
+            })}
+          </div>
+          <div className="ai-connection-list">
             {providers.map((item) => (
-              <li key={item.id}>
-                {item.displayName} — {item.status} — key …
-                {item.credentialFingerprint.slice(-4)} —{" "}
-                {item.allowedCapabilities.join(", ")}
+              <article key={item.id}>
+                <div className="ai-connection-summary">
+                  <span
+                    className={`ai-connection-status ${item.status === "ACTIVE" ? "active" : ""}`}
+                  >
+                    {item.status}
+                  </span>
+                  <strong>{item.displayName}</strong>
+                  <small>
+                    {item.provider} · key …
+                    {item.credentialFingerprint.slice(-4)} ·{" "}
+                    {item.allowedCapabilities.join(", ").toLowerCase()}
+                  </small>
+                </div>
                 {item.status === "ACTIVE" && (
-                  <>
-                    {" "}
+                  <div className="ai-credential-actions">
                     <input
                       type="password"
+                      aria-label={`New API key for ${item.displayName}`}
                       placeholder="New API key"
                       autoComplete="off"
                       value={rotateKeys[item.id] ?? ""}
@@ -524,9 +626,10 @@ export function AiSettings() {
                       disabled={!rotateKeys[item.id]}
                       onClick={() => void rotateKey(item.id)}
                     >
-                      Rotate key
+                      Rotate
                     </button>
                     <button
+                      className="ai-danger-action"
                       onClick={async () => {
                         if (
                           !confirm(
@@ -543,17 +646,24 @@ export function AiSettings() {
                     >
                       Revoke
                     </button>
-                  </>
+                  </div>
                 )}
-              </li>
+              </article>
             ))}
-          </ul>
-        </>
+          </div>
+        </section>
       )}
-      <hr />
-      <h3>Cap AI plan</h3>
-      <BillingSettings />
-      {message && <p>{message}</p>}
+
+      <section className="ai-settings-card ai-billing-card">
+        <header className="ai-card-heading">
+          <span>{providers.length > 0 ? "05" : "04"}</span>
+          <div>
+            <h3>Cap AI plan</h3>
+            <p>Managed monthly AI credit</p>
+          </div>
+        </header>
+        <BillingSettings />
+      </section>
     </div>
   );
 }
