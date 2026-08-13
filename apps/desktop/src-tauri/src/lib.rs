@@ -9,7 +9,7 @@ use model::{Capabilities, CaptureOptions, Project, ProjectStatus};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::{io::Write, process::Child, sync::Mutex, time::Instant};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
@@ -514,8 +514,7 @@ const CHROME_WEB_STORE_URL: &str =
     "https://chromewebstore.google.com/detail/REPLACE_WITH_CHROME_EXTENSION_ID";
 const EDGE_ADDONS_URL: &str =
     "https://microsoftedge.microsoft.com/addons/detail/REPLACE_WITH_EDGE_EXTENSION_ID";
-const FIREFOX_AMO_URL: &str =
-    "https://addons.mozilla.org/firefox/addon/REPLACE_WITH_FIREFOX_SLUG/";
+const FIREFOX_AMO_URL: &str = "https://addons.mozilla.org/firefox/addon/REPLACE_WITH_FIREFOX_SLUG/";
 const EXTENSION_RELEASES_FALLBACK_URL: &str =
     "https://github.com/mockydevs/cap/releases?q=extension-&expanded=true";
 

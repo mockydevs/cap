@@ -71,12 +71,7 @@ fn compile_macos_system_audio_helper() {
 
     let arch_output = macos_dir.join(format!(".sck-audio-capture-{swift_arch}"));
     let compile_status = std::process::Command::new(&swiftc)
-        .args([
-            "-O",
-            "-parse-as-library",
-            "-target",
-            &swift_target_triple,
-        ])
+        .args(["-O", "-parse-as-library", "-target", &swift_target_triple])
         .arg(&source)
         .arg("-o")
         .arg(&arch_output)
@@ -113,8 +108,16 @@ fn compile_macos_system_audio_helper() {
 /// script during a universal-binary build), combine both into a universal
 /// binary via `lipo`. Otherwise just use this architecture's binary as-is
 /// (this is the common case: a plain single-arch `cargo build`).
-fn finalize_helper_binary(macos_dir: &std::path::Path, swift_arch: &str, arch_output: &std::path::Path) {
-    let other_arch = if swift_arch == "arm64" { "x86_64" } else { "arm64" };
+fn finalize_helper_binary(
+    macos_dir: &std::path::Path,
+    swift_arch: &str,
+    arch_output: &std::path::Path,
+) {
+    let other_arch = if swift_arch == "arm64" {
+        "x86_64"
+    } else {
+        "arm64"
+    };
     let other_output = macos_dir.join(format!(".sck-audio-capture-{other_arch}"));
     let final_output = macos_dir.join("sck-audio-capture");
 

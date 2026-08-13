@@ -311,13 +311,17 @@ fn macos_system_audio_helper_binary() -> Result<std::path::PathBuf, String> {
     // `cargo tauri dev` / a plain `cargo run` has no app bundle around it;
     // fall back to where build.rs places the compiled binary in the source
     // tree so local development still works.
-    candidates.push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("macos/sck-audio-capture"));
+    candidates
+        .push(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("macos/sck-audio-capture"));
 
-    candidates.into_iter().find(|path| path.is_file()).ok_or_else(|| {
-        "The macOS system-audio capture helper is missing from this build. \
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            "The macOS system-audio capture helper is missing from this build. \
          Select a microphone, or disable system audio, or rebuild with Xcode/swiftc installed."
-            .into()
-    })
+                .into()
+        })
 }
 
 /// SAFETY: `path` is converted to a NUL-terminated `CString` immediately

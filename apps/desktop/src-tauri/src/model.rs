@@ -12,6 +12,9 @@ pub struct CaptureSource {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+// These variants are part of the serialized capture-source contract even
+// before each device enumerator is available on every desktop platform.
+#[allow(dead_code)]
 pub enum SourceKind {
     Monitor,
     Window,
