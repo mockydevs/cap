@@ -22,22 +22,6 @@ variable "web_origins" {
   }
 }
 
-variable "enable_cloudfront" {
-  type    = bool
-  default = false
-}
-
-variable "cloudfront_public_key_pem" {
-  type      = string
-  default   = null
-  nullable  = true
-  sensitive = true
-  validation {
-    condition     = !var.enable_cloudfront || var.cloudfront_public_key_pem != null
-    error_message = "cloudfront_public_key_pem is required when CloudFront playback is enabled"
-  }
-}
-
 variable "source_noncurrent_retention_days" {
   type    = number
   default = 30

@@ -163,12 +163,14 @@ workspaces/{workspaceId}/recordings/{recordingId}/thumbnails/...
 
 Object keys use internal identifiers, not user-provided filenames. Credentials are scoped to the required bucket and operations.
 
-Production uses a separate private AWS S3 bucket and customer-managed KMS key per
-environment. S3 Block Public Access and bucket-owner-enforced object ownership are
-mandatory. Browser uploads use short-lived multipart presigned requests; HLS
-delivery uses CloudFront with Origin Access Control and path-scoped signed cookies.
-AWS SDK types remain inside the storage adapter so local tests can use an
-S3-compatible emulator without leaking provider details into domain code.
+Production uses one private S3-compatible bucket per environment. AWS S3
+deployments use a customer-managed KMS key, Block Public Access, and
+bucket-owner-enforced object ownership; Cloudflare R2 deployments rely on R2's
+managed encryption and leave `AWS_KMS_KEY_ARN` empty. Browser uploads use
+short-lived multipart presigned requests, and authorized playback uses
+short-lived presigned GET requests directly against the configured bucket. AWS
+SDK types remain inside the storage adapter so provider details do not leak
+into domain code.
 
 ## 7. Recording and upload flow
 

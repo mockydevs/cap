@@ -15,6 +15,7 @@ import {
   createStorageClient,
   describeCorsVerdict,
   requiredCorsRule,
+  storageBucketUrl,
   verifyBucketCors,
 } from "@cap/storage";
 
@@ -25,13 +26,6 @@ function required(name: string): string {
     process.exit(2);
   }
   return value;
-}
-
-function bucketUrl(bucket: string): string {
-  const endpoint = process.env.AWS_S3_ENDPOINT?.trim();
-  if (endpoint) return `${endpoint.replace(/\/$/, "")}/${bucket}/`;
-  const region = process.env.AWS_REGION?.trim() ?? "us-east-1";
-  return `https://${bucket}.s3.${region}.amazonaws.com/`;
 }
 
 async function main() {
@@ -49,7 +43,7 @@ async function main() {
 
   // Trust the write only after a real preflight agrees with it.
   const verdict = await verifyBucketCors({
-    bucketUrl: bucketUrl(bucket),
+    bucketUrl: storageBucketUrl(bucket),
     origin,
   });
   console.log(describeCorsVerdict(verdict));

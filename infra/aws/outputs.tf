@@ -10,10 +10,6 @@ output "ai_credentials_kms_key_arn" {
   value = aws_kms_key.ai_credentials.arn
 }
 
-output "cloudfront_domain" {
-  value = var.enable_cloudfront ? aws_cloudfront_distribution.media[0].domain_name : null
-}
-
 output "web_policy_arn" {
   value = aws_iam_policy.web.arn
 }

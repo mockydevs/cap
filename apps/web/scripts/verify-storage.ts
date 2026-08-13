@@ -14,6 +14,7 @@
 import {
   describeCorsVerdict,
   requiredCorsRule,
+  storageBucketUrl,
   verifyBucketCors,
 } from "@cap/storage";
 
@@ -26,18 +27,10 @@ function required(name: string): string {
   return value;
 }
 
-/** Where the browser sends parts: a custom endpoint, or AWS virtual-host style. */
-function bucketUrl(bucket: string): string {
-  const endpoint = process.env.AWS_S3_ENDPOINT?.trim();
-  if (endpoint) return `${endpoint.replace(/\/$/, "")}/${bucket}/`;
-  const region = process.env.AWS_REGION?.trim() ?? "us-east-1";
-  return `https://${bucket}.s3.${region}.amazonaws.com/`;
-}
-
 async function main() {
   const bucket = required("AWS_S3_BUCKET_NAME");
   const origin = new URL(required("NEXT_PUBLIC_APP_URL")).origin;
-  const url = bucketUrl(bucket);
+  const url = storageBucketUrl(bucket);
 
   console.log(`Bucket:  ${url}`);
   console.log(`Origin:  ${origin}`);

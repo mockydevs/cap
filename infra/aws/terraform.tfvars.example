@@ -2,4 +2,3 @@ aws_region  = "us-east-1"
 environment = "staging"
 bucket_name = "cap-staging-media-123456789012-us-east-1"
 web_origins = ["https://staging.example.com"]
-enable_cloudfront = false

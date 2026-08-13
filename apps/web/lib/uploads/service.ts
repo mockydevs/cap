@@ -13,6 +13,7 @@ import {
   assertManagedMediaObjectKey,
   buildSourceMediaObjectKey,
   multipartUploadId,
+  storageKmsKeyArn,
   type MultipartObjectStorage,
 } from "@cap/storage";
 import { PROCESSING_VERSION } from "@cap/queue";
@@ -348,8 +349,7 @@ function assertStoredObject(
   if (
     object.contentLength !== session.expectedSizeBytes ||
     object.contentType !== session.contentType ||
-    (object.kmsKeyId ?? undefined) !==
-      (process.env.AWS_KMS_KEY_ARN ?? undefined)
+    (object.kmsKeyId ?? undefined) !== storageKmsKeyArn()
   ) {
     throw new UploadServiceError(
       "UPLOAD_INTEGRITY_ERROR",

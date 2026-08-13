@@ -148,23 +148,6 @@ data "aws_iam_policy_document" "bucket" {
       values   = ["false"]
     }
   }
-  dynamic "statement" {
-    for_each = var.enable_cloudfront ? [1] : []
-    content {
-      sid       = "AllowCloudFrontRead"
-      actions   = ["s3:GetObject"]
-      resources = ["${aws_s3_bucket.media.arn}/*"]
-      principals {
-        type        = "Service"
-        identifiers = ["cloudfront.amazonaws.com"]
-      }
-      condition {
-        test     = "StringEquals"
-        variable = "AWS:SourceArn"
-        values   = [aws_cloudfront_distribution.media[0].arn]
-      }
-    }
-  }
 }
 
 resource "aws_s3_bucket_policy" "media" {
@@ -221,53 +204,4 @@ resource "aws_iam_policy" "transcription_worker" {
     # unseals credentials the same way the AI worker does.
     { Effect = "Allow", Action = ["kms:Decrypt", "kms:DescribeKey"], Resource = aws_kms_key.ai_credentials.arn }
   ] })
-}
-
-resource "aws_cloudfront_public_key" "media" {
-  count       = var.enable_cloudfront ? 1 : 0
-  name        = "cap-${var.environment}-playback"
-  encoded_key = var.cloudfront_public_key_pem
-}
-
-resource "aws_cloudfront_key_group" "media" {
-  count = var.enable_cloudfront ? 1 : 0
-  name  = "cap-${var.environment}-playback"
-  items = [aws_cloudfront_public_key.media[0].id]
-}
-
-resource "aws_cloudfront_origin_access_control" "media" {
-  count                             = var.enable_cloudfront ? 1 : 0
-  name                              = "cap-${var.environment}-media"
-  description                       = "Private Cap S3 origin"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-resource "aws_cloudfront_distribution" "media" {
-  count           = var.enable_cloudfront ? 1 : 0
-  enabled         = true
-  is_ipv6_enabled = true
-  origin {
-    domain_name              = aws_s3_bucket.media.bucket_regional_domain_name
-    origin_id                = "media"
-    origin_access_control_id = aws_cloudfront_origin_access_control.media[0].id
-  }
-  default_cache_behavior {
-    target_origin_id       = "media"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    cache_policy_id        = "413f160f-01fd-4e89-9ac0-7388c1f8b4f1"
-    trusted_key_groups     = [aws_cloudfront_key_group.media[0].id]
-  }
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
 }

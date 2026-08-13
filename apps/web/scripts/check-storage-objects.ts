@@ -12,7 +12,7 @@
  *   pnpm --filter @cap/web storage:check-objects
  */
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
-import { createStorageClient } from "@cap/storage";
+import { createStorageClient, isMissingObjectError } from "@cap/storage";
 import { eq, ne } from "drizzle-orm";
 import { db } from "../db/client";
 import {
@@ -88,8 +88,16 @@ async function main() {
       await client.send(
         new HeadObjectCommand({ Bucket: bucket, Key: object.key }),
       );
-    } catch {
-      missing.push(object);
+    } catch (error) {
+      if (isMissingObjectError(error)) {
+        missing.push(object);
+        continue;
+      }
+      throw new Error(
+        `Could not verify ${object.kind} object ${object.key}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

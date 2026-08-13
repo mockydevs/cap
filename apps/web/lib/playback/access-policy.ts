@@ -61,7 +61,7 @@ export function canListRecordingInWorkspace(
 
 /**
  * Decides whether a caller may receive playback access to private media.
- * This must run before issuing a signed URL or CloudFront signed cookie.
+ * This must run before issuing a presigned object-storage URL.
  */
 export function authorizePlayback(input: PlaybackAccess): PlaybackDecision {
   if (input.availability !== "READY") {

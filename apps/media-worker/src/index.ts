@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { createStorageClient } from "@cap/storage";
+import { createStorageClient, storageWriteEncryption } from "@cap/storage";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
 import {
@@ -127,12 +127,7 @@ async function processMedia(
           Key: asset.objectKey,
           Body: createReadStream(asset.filePath),
           ContentType: asset.contentType,
-          ServerSideEncryption: process.env.AWS_KMS_KEY_ARN
-            ? "aws:kms"
-            : "AES256",
-          ...(process.env.AWS_KMS_KEY_ARN
-            ? { SSEKMSKeyId: process.env.AWS_KMS_KEY_ARN }
-            : {}),
+          ...storageWriteEncryption(),
         }),
       );
     }

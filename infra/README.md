@@ -15,10 +15,16 @@ Create one private bucket per environment, such as `cap-recordings-staging` and 
 - Configure CORS only for the approved web origins and required `PUT`, `POST`, `GET`, `HEAD` methods when multipart upload is introduced.
 - Expose the `ETag` response header; the browser must retain it to complete multipart uploads safely.
 
-The application will persist object keys, never presigned URLs. Presigned URLs remain short-lived API responses.
-
-CloudFront is disabled by default. To enable it, provide a public key and set `enable_cloudfront=true`; the distribution then requires signed URLs/cookies through its trusted key group and uses S3 Origin Access Control. Keep the matching private signing key in the web service secret store. Keep S3 private and do not log presigned URLs or signed-cookie values.
+The application persists object keys, never presigned URLs. Upload and playback
+URLs are short-lived API responses signed directly against the bucket. The
+application does not implement CloudFront URL or cookie signing, so this module
+does not provision a distribution.
 
 ## Coolify environment variables
 
-Set `NEXT_PUBLIC_APP_URL`, `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_KMS_KEY_ARN`, `DATABASE_URL`, and `REDIS_URL`. Configure the optional provider and worker values shown in `.env.example`. Add AWS credentials via the Coolify secret store only if the running service has no AWS workload role. Never commit them or expose them as public variables.
+Set `NEXT_PUBLIC_APP_URL`, `AWS_REGION`, `AWS_S3_BUCKET_NAME`,
+`AWS_KMS_KEY_ARN`, `DATABASE_URL`, and `REDIS_URL`. Leave
+`AWS_S3_ENDPOINT` empty for AWS S3. Configure the optional provider and worker
+values shown in `.env.example`. Add AWS credentials through the Coolify secret
+store only if the running service has no AWS workload role. Never commit them
+or expose them as public variables.

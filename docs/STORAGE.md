@@ -70,8 +70,10 @@ bucket directly (`presignPlayback`), so it behaves the same on either
 provider. There is no CDN to reconfigure — the `AWS_CLOUDFRONT_*` settings
 that used to be declared were never read by any code and have been removed.
 
-1. Create the bucket in the Cloudflare dashboard, then an S3-compatible API
-   token with object read/write on it.
+1. Create the bucket in the Cloudflare dashboard. Create an S3-compatible
+   runtime token scoped to that bucket with object read/write. Applying CORS
+   through the script also requires a temporary setup credential with bucket
+   configuration permission; do not keep that broader credential in Coolify.
 2. Copy existing objects. Use `rclone`, which handles resume and parallelism:
 
    ```sh
@@ -92,7 +94,9 @@ that used to be declared were never read by any code and have been removed.
    `AWS_S3_ENDPOINT` also switches the client to path-style addressing and
    relaxes the CRC32 checksum behaviour R2 rejects.
 
-4. Allow browser uploads: `pnpm --filter @cap/web storage:apply-cors`.
+4. With the setup credential, allow browser uploads:
+   `pnpm --filter @cap/web storage:apply-cors`. Then put the narrower runtime
+   credential back in Coolify and run `storage:verify`.
 5. Prove nothing was left behind:
    `pnpm --filter @cap/web storage:check-objects`. It reads every object key
    the database references — sources, playback assets, caption tracks — and
@@ -109,10 +113,10 @@ it is materially harder than customer-owned AI keys:
 - **CORS becomes per-customer onboarding.** Every customer must apply the rule
   above to their own bucket, including the exposed `ETag`. A mistake surfaces
   as an unexplained upload failure at the end of their first recording.
-- **Playback assumes one distribution.** Signed playback uses the deployment's
-  CloudFront distribution. Serving a customer's bucket through it requires
-  per-customer access grants and an origin access control each; the fallback is
-  presigning every HLS segment, which gives up CDN caching.
+- **Playback credentials become per customer.** Playback currently presigns
+  each `GET` against the deployment's configured bucket. Customer-owned
+  buckets require selecting the correct endpoint, region and credential for
+  every manifest, segment and MP4 request.
 - **Every worker needs the credential.** Media, transcription, render and
   retention all read and write. The credential envelope in `@cap/crypto`
   already supports this shape — it would take a new purpose alongside the AI

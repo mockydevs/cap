@@ -1,4 +1,8 @@
-import { createStorageClient, S3MultipartStorage } from "@cap/storage";
+import {
+  createStorageClient,
+  S3MultipartStorage,
+  storageKmsKeyArn,
+} from "@cap/storage";
 
 let instance: S3MultipartStorage | undefined;
 
@@ -11,11 +15,11 @@ let instance: S3MultipartStorage | undefined;
 export function uploadStorage(): S3MultipartStorage {
   if (instance) return instance;
 
-  const bucketName = process.env.AWS_S3_BUCKET_NAME;
+  const bucketName = process.env.AWS_S3_BUCKET_NAME?.trim();
   if (!bucketName) {
     throw new Error("AWS_UPLOAD_STORAGE_NOT_CONFIGURED");
   }
-  const kmsKeyArn = process.env.AWS_KMS_KEY_ARN;
+  const kmsKeyArn = storageKmsKeyArn();
 
   instance = new S3MultipartStorage({
     client: createStorageClient(),
