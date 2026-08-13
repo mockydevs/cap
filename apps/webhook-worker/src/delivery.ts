@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
-import { DecryptCommand, KMSClient } from "@aws-sdk/client-kms";
+import type { KMSClient } from "@aws-sdk/client-kms";
+import { decryptCredential } from "@cap/crypto";
 import type { Pool } from "pg";
 
 interface DeliveryRow {
@@ -36,20 +37,13 @@ export async function deliverWebhook(
   const delivery = rows[0];
   if (!delivery) return;
 
-  const decrypted = await kms.send(
-    new DecryptCommand({
-      KeyId: delivery.secret_key_arn,
-      CiphertextBlob: Buffer.from(delivery.encrypted_secret, "base64"),
-      EncryptionContext: {
-        application: "cap",
-        workspaceId: delivery.workspace_id,
-        purpose: "webhook-endpoint-secret",
-      },
-    }),
-  );
-  if (!decrypted.Plaintext)
-    throw new Error("Webhook secret could not be decrypted");
-  const secret = Buffer.from(decrypted.Plaintext).toString("utf8");
+  const secret = await decryptCredential({
+    workspaceId: delivery.workspace_id,
+    purpose: "webhook-endpoint-secret",
+    ciphertext: delivery.encrypted_secret,
+    keyReference: delivery.secret_key_arn,
+    kms,
+  });
 
   const body = JSON.stringify({
     id: delivery.id,

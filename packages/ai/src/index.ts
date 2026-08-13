@@ -26,23 +26,6 @@ export const providerCapabilitySchema = z.enum([
 ]);
 export type ProviderCapability = z.infer<typeof providerCapabilitySchema>;
 
-export const AI_PROVIDER_CREDENTIAL_PURPOSE = "ai-provider-credential";
-
-/**
- * KMS EncryptionContext for a stored AI provider credential. The web app mints
- * the ciphertext and the AI worker decrypts it from a separate process; KMS
- * refuses to decrypt when the context differs by a single field, so both sides
- * derive it here instead of restating it.
- */
-export function aiCredentialEncryptionContext(
-  workspaceId: string,
-): Record<string, string> {
-  return {
-    application: "cap",
-    workspaceId,
-    purpose: AI_PROVIDER_CREDENTIAL_PURPOSE,
-  };
-}
 export const aiJobSchema = z
   .object({
     jobId: z.string().uuid(),

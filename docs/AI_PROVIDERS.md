@@ -4,11 +4,31 @@ Cap supports workspace-owned BYOK connections for OpenAI, Anthropic Claude, and 
 
 ## Security and lifecycle
 
-The API validates a credential against the provider before saving it. It sends the secret to AWS KMS `Encrypt` with a workspace-bound encryption context and stores only the ciphertext, KMS key ARN, and a 12-character SHA-256 fingerprint. Read APIs never return ciphertext or plaintext. The AI worker loads an active connection for the job, calls KMS `Decrypt` with the same context immediately before use, and does not persist or log the plaintext.
+The API validates a credential against the provider before saving it, then seals
+it with the envelope in `@cap/crypto` and stores only the ciphertext, the key
+reference, and a 12-character SHA-256 fingerprint. Read APIs never return
+ciphertext or plaintext. The AI worker loads an active connection for the job,
+unseals it immediately before use, and does not persist or log the plaintext.
+Every ciphertext is bound to one workspace and to the AI purpose, so a
+credential cannot be read from another workspace or reused for webhook signing.
 
 Revocation overwrites the stored ciphertext and prevents queued jobs from resolving the connection. Provider routes and model allowlists are workspace-scoped. Each AI job records its selected connection, model, usage, estimated cost, prompt version, transcript revision, and hashed provider request identifier.
 
-Configure `AI_CREDENTIALS_KMS_KEY_ARN` for web and AI worker. The Terraform module exposes a dedicated credentials key plus distinct web-encrypt and worker-decrypt IAM policies. Do not reuse the media key or grant the web service decrypt permission.
+## Configuring the key
+
+Set one of these for both the web app and the AI worker:
+
+| Variable                     | Scheme                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_CREDENTIALS_KMS_KEY_ARN` | AWS KMS. The Terraform module exposes a dedicated credentials key plus distinct web-encrypt and worker-decrypt IAM policies. Do not reuse the media key. |
+| `AI_CREDENTIALS_LOCAL_KEY`   | 32 bytes, base64. AES-256-GCM in-process, for deployments without AWS. Generate with `openssl rand -base64 32`.                                          |
+
+KMS wins if both are set. A local key is the simpler choice when self-hosting,
+with the trade-off that it lives in the deployment's environment rather than in a
+hardware-backed key service: back it up, because losing it makes every stored
+provider credential unreadable, and treat rotation as re-entering each key. Cap
+records which key sealed each credential and refuses to guess when the
+configured key does not match.
 
 ## Current routing
 

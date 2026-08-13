@@ -87,7 +87,7 @@ export async function createWebhookEndpoint(
         url: input.url,
         description: input.description ?? null,
         encryptedSecret: encrypted.ciphertext,
-        secretKeyArn: encrypted.keyArn,
+        secretKeyArn: encrypted.keyReference,
         secretFingerprint: encrypted.fingerprint,
         enabledEvents: input.enabledEvents,
         createdBy: actor.userId,

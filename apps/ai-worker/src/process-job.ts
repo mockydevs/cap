@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Job } from "bullmq";
 import type { Pool } from "pg";
-import { DecryptCommand, type KMSClient } from "@aws-sdk/client-kms";
+import type { KMSClient } from "@aws-sdk/client-kms";
 import { aiJobSchema, type AiJob } from "@cap/queue";
-import { aiCredentialEncryptionContext, transcriptInputHash } from "@cap/ai";
+import { transcriptInputHash } from "@cap/ai";
+import { decryptCredential } from "@cap/crypto";
 import { providerFromConnection, providerFromEnvironment } from "./provider";
 
 export async function providerForJob(pool: Pool, kms: KMSClient, data: AiJob) {
@@ -32,19 +33,17 @@ export async function providerForJob(pool: Pool, kms: KMSClient, data: AiJob) {
     !connection.model
   )
     throw new Error("AI provider connection is unavailable");
-  const decrypted = await kms.send(
-    new DecryptCommand({
-      KeyId: connection.credential_key_arn,
-      CiphertextBlob: Buffer.from(connection.encrypted_credential, "base64"),
-      EncryptionContext: aiCredentialEncryptionContext(data.workspaceId),
-    }),
-  );
-  if (!decrypted.Plaintext)
-    throw new Error("AI provider credential could not be decrypted");
+  const apiKey = await decryptCredential({
+    workspaceId: data.workspaceId,
+    purpose: "ai-provider-credential",
+    ciphertext: connection.encrypted_credential,
+    keyReference: connection.credential_key_arn,
+    kms,
+  });
   return providerFromConnection({
     provider: connection.provider,
     baseUrl: connection.base_url,
-    apiKey: Buffer.from(decrypted.Plaintext).toString("utf8"),
+    apiKey,
     model: connection.model,
   });
 }

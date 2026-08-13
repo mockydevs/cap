@@ -3,33 +3,30 @@ import { db } from "../../db/client";
 import { aiProviderConnections, aiProviderRoutes } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
-import { aiCredentialEncryptionContext } from "@cap/ai";
 import {
+  credentialEncryptionConfigured,
   encryptCredential,
-  EnvelopeEncryptionError,
-  requireKeyArn,
-} from "../crypto/envelope";
+  CredentialEncryptionError,
+} from "@cap/crypto";
 import { AiServiceError } from "./service";
-
-const keyArn = () => {
-  try {
-    return requireKeyArn("AI_CREDENTIALS_KMS_KEY_ARN");
-  } catch (error) {
-    if (error instanceof EnvelopeEncryptionError)
-      throw new AiServiceError("AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE", 503);
-    throw error;
-  }
-};
 
 export async function encryptProviderCredential(
   workspaceId: string,
   secret: string,
 ) {
-  return encryptCredential({
-    secret,
-    keyArn: keyArn(),
-    encryptionContext: aiCredentialEncryptionContext(workspaceId),
-  });
+  if (!credentialEncryptionConfigured("ai-provider-credential"))
+    throw new AiServiceError("AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE", 503);
+  try {
+    return await encryptCredential({
+      workspaceId,
+      purpose: "ai-provider-credential",
+      secret,
+    });
+  } catch (error) {
+    if (error instanceof CredentialEncryptionError)
+      throw new AiServiceError("AI_CREDENTIAL_ENCRYPTION_UNAVAILABLE", 503);
+    throw error;
+  }
 }
 
 const endpoint = (provider: string, baseUrl?: string | null) =>
@@ -131,7 +128,7 @@ export async function createProviderConnection(
         displayName: input.displayName,
         ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
         encryptedCredential: encrypted.ciphertext,
-        credentialKeyArn: encrypted.keyArn,
+        credentialKeyArn: encrypted.keyReference,
         credentialFingerprint: encrypted.fingerprint,
         allowedCapabilities: input.allowedCapabilities,
         allowedModels: input.allowedModels,
@@ -216,7 +213,7 @@ export async function rotateProviderConnection(
       .update(aiProviderConnections)
       .set({
         encryptedCredential: encrypted.ciphertext,
-        credentialKeyArn: encrypted.keyArn,
+        credentialKeyArn: encrypted.keyReference,
         credentialFingerprint: encrypted.fingerprint,
         lastValidatedAt: new Date(),
         updatedAt: new Date(),

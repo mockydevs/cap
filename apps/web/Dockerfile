@@ -6,6 +6,7 @@ FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/ai/package.json packages/ai/package.json
+COPY packages/crypto/package.json packages/crypto/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/editor-domain/package.json packages/editor-domain/package.json
 COPY packages/queue/package.json packages/queue/package.json

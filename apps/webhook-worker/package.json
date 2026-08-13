@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.758.0",
+    "@cap/crypto": "workspace:*",
     "@cap/queue": "workspace:*",
     "bullmq": "^5.58.5",
     "pg": "^8.15.6",

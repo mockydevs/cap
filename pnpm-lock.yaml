@@ -29,6 +29,9 @@ importers:
       '@cap/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@cap/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@cap/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -232,6 +235,9 @@ importers:
       '@cap/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@cap/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@cap/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -317,6 +323,9 @@ importers:
       '@aws-sdk/client-kms':
         specifier: ^3.758.0
         version: 3.1106.0
+      '@cap/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@cap/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -358,6 +367,16 @@ importers:
       zod:
         specifier: ^3.24.4
         version: 3.25.76
+    devDependencies:
+      vitest:
+        specifier: ^3.1.4
+        version: 3.2.7(@types/node@22.20.1)(jsdom@25.0.1)(tsx@4.23.11)
+
+  packages/crypto:
+    dependencies:
+      '@aws-sdk/client-kms':
+        specifier: ^3.758.0
+        version: 3.1106.0
     devDependencies:
       vitest:
         specifier: ^3.1.4
