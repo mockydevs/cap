@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WorkspaceMark } from "../components/workspace-mark";
 import Link from "next/link";
 import { UserNav } from "../components/user-nav";
 
@@ -73,10 +74,7 @@ export default function HomePage() {
   return (
     <main className="marketing-shell">
       <header className="marketing-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <nav className="marketing-nav" aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
           <a href="#features">Features</a>
@@ -274,10 +272,7 @@ export default function HomePage() {
       </section>
 
       <footer className="marketing-footer">
-        <Link className="brand" href="/">
-          <span className="brand-mark" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <p>Browser-first screen recording for clear, asynchronous work.</p>
         <div>
           <Link href="/login">Sign in</Link>

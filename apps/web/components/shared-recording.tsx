@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceMark } from "./workspace-mark";
 import { useState } from "react";
 import { sendJson } from "../lib/http/json";
 import { CommentThread } from "./comment-thread";
@@ -46,10 +47,7 @@ export function SharedRecording({
   return (
     <main className="shared-shell">
       <header className="shared-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <div className="shared-header-actions">
           <span>Shared with Cap</span>
           <Link className="nav-cta" href="/signup">

@@ -1,13 +1,11 @@
 import Link from "next/link";
+import { WorkspaceMark } from "../components/workspace-mark";
 
 export default function NotFound() {
   return (
     <main className="system-page">
       <header className="system-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <span>404 / Not found</span>
       </header>
       <section className="system-card">

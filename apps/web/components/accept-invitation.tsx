@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { WorkspaceMark } from "./workspace-mark";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { sendJson } from "../lib/http/json";
@@ -44,10 +45,7 @@ export function AcceptInvitation() {
   return (
     <section className="invite-shell">
       <header className="invite-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <span>Workspace invitation</span>
       </header>
       <div className="invite-card" aria-live="polite">

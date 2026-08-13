@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WorkspaceMark } from "./workspace-mark";
 
 export function AuthForm({
   mode,
@@ -12,10 +13,7 @@ export function AuthForm({
     <main className="auth-shell">
       <section className={`auth-card ${signup ? "auth-card-signup" : ""}`}>
         <div className="auth-content">
-          <Link className="brand" href="/">
-            <span className="brand-mark" aria-hidden="true" />
-            cap
-          </Link>
+          <WorkspaceMark href="/" />
           <p className="eyebrow">
             {signup ? "Create your workspace" : "Welcome back"}
           </p>

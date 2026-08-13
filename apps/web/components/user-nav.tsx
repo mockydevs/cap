@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { initialsOf } from "../lib/format/display";
 import Link from "next/link";
 
 type SessionView = {
@@ -29,12 +30,6 @@ export function UserNav() {
         </Link>
       </nav>
     );
-  const initials = session.user.displayName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
   return (
     <div className="user-nav">
       <Link href="/record">Record</Link>
@@ -49,8 +44,8 @@ export function UserNav() {
       {/* Identity sits at the end, after the things you do, so the bar reads
           as actions then account rather than being split by the avatar. */}
       <span className="account-pill">
-        <span className="account-avatar" aria-hidden="true">
-          {initials}
+        <span className="avatar" aria-hidden="true">
+          {initialsOf(session.user.displayName)}
         </span>
         <span className="account-copy">
           <strong>{session.user.displayName}</strong>

@@ -1,13 +1,10 @@
-import Link from "next/link";
+import { WorkspaceMark } from "../components/workspace-mark";
 
 export default function Loading() {
   return (
     <main className="system-page" aria-live="polite">
       <header className="system-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <span>Loading</span>
       </header>
       <section className="system-card system-card-loading">

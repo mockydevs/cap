@@ -1,6 +1,11 @@
 import { and, desc, eq, isNotNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "../../../db/client";
-import { recordingStars, recordings, users } from "../../../db/schema";
+import {
+  recordingStars,
+  recordings,
+  users,
+  viewSessions,
+} from "../../../db/schema";
 import { requireActor } from "../../../lib/auth/authorization";
 import { recordingError } from "../../../lib/recordings/http";
 import { canManageRecording } from "../../../lib/recordings/library-policy";
@@ -38,10 +43,12 @@ export async function GET(request: Request) {
         previousStatus: recordings.previousStatus,
         visibility: recordings.visibility,
         sizeBytes: recordings.sizeBytes,
+        durationMs: recordings.durationMs,
         createdAt: recordings.createdAt,
         updatedAt: recordings.updatedAt,
         deletedAt: recordings.deletedAt,
         isStarred: sql<boolean>`${recordingStars.recordingId} is not null`,
+        viewCount: sql<number>`(select count(*) from ${viewSessions} where ${viewSessions.recordingId} = ${recordings.id})::int`,
       })
       .from(recordings)
       .innerJoin(users, eq(users.id, recordings.ownerId))

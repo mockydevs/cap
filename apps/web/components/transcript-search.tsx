@@ -20,10 +20,16 @@ export function TranscriptSearch() {
   const [error, setError] = useState<string>();
   const [blocked, setBlocked] = useState(false);
   const [semantic, setSemantic] = useState(false);
-  async function search(event?: React.FormEvent, cursor?: string) {
+  async function search(
+    event?: React.FormEvent,
+    cursor?: string,
+    // Explicit so flipping the AI toggle can re-run the query in the new mode
+    // without waiting for the state update to land.
+    mode = semantic,
+  ) {
     event?.preventDefault();
     if (query.trim().length < 2) return;
-    const response = semantic
+    const response = mode
       ? await sendJson("/api/ai/search", "POST", {
           query: query.trim(),
           limit: 10,
@@ -40,11 +46,11 @@ export function TranscriptSearch() {
       };
       const code = body.error?.code;
       setError(
-        semantic && code
+        mode && code
           ? aiErrorMessage(code)
           : "Could not search workspace transcripts.",
       );
-      setBlocked(semantic && isEntitlementDenial(code));
+      setBlocked(mode && isEntitlementDenial(code));
       return;
     }
     setError(undefined);
@@ -53,7 +59,7 @@ export function TranscriptSearch() {
       items: SearchHit[];
       nextCursor: string | null;
     };
-    const page = semantic
+    const page = mode
       ? {
           items: raw.items.map(
             (item: SearchHit & { title?: string }, index: number) => ({
@@ -70,59 +76,92 @@ export function TranscriptSearch() {
     setItems((current) => (cursor ? [...current, ...page.items] : page.items));
     setNextCursor(page.nextCursor);
   }
+  // Results hang below the field as a panel so the search can live in the
+  // workspace bar without pushing the page around.
+  const open = Boolean(items.length || error);
   return (
-    <section className="transcript-search">
-      <form onSubmit={search}>
-        <label>
-          Search transcripts
-          <input
-            value={query}
-            placeholder="Search transcripts"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <button type="submit">Search</button>
-        <label className="search-mode">
-          <input
-            type="checkbox"
-            checked={semantic}
-            onChange={(event) => setSemantic(event.target.checked)}
-          />
-          AI search
-        </label>
+    <div className="transcript-search">
+      <form onSubmit={search} role="search">
+        <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <label htmlFor="workspace-search">Search transcripts</label>
+        <input
+          id="workspace-search"
+          value={query}
+          placeholder="Search transcripts…"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {open ? (
+          <button
+            className="search-clear"
+            type="button"
+            aria-label="Clear search"
+            onClick={() => {
+              setItems([]);
+              setError(undefined);
+              setBlocked(false);
+            }}
+          >
+            ✕
+          </button>
+        ) : null}
       </form>
-      {error ? (
-        <p className="form-error">
-          {error}
-          {blocked ? (
-            <>
-              {" "}
-              <Link href="/admin#ai">Open AI settings</Link>
-            </>
+      {open ? (
+        <div className="search-results">
+          <div className="search-results-head">
+            <span>
+              {items.length
+                ? `${items.length} result${items.length === 1 ? "" : "s"}`
+                : "No results"}
+            </span>
+            <label className="search-mode">
+              <input
+                type="checkbox"
+                checked={semantic}
+                onChange={(event) => {
+                  setSemantic(event.target.checked);
+                  void search(undefined, undefined, event.target.checked);
+                }}
+              />
+              AI search
+            </label>
+          </div>
+          {error ? (
+            <p className="form-error">
+              {error}
+              {blocked ? (
+                <>
+                  {" "}
+                  <Link href="/admin#ai">Open AI settings</Link>
+                </>
+              ) : null}
+            </p>
           ) : null}
-        </p>
-      ) : null}
-      {items.length ? (
-        <>
-          <ul>
-            {items.map((item) => (
-              <li key={item.id}>
-                <Link href={`/library/${item.recordingId}?t=${item.startMs}`}>
-                  <strong>{item.recordingTitle}</strong> · {item.text}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {items.length ? (
+            <ul>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <Link href={`/library/${item.recordingId}?t=${item.startMs}`}>
+                    <strong>{item.recordingTitle}</strong>
+                    <span>{item.text}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {nextCursor ? (
             <button
+              className="btn-secondary"
               type="button"
               onClick={() => void search(undefined, nextCursor)}
             >
               More results
             </button>
           ) : null}
-        </>
+        </div>
       ) : null}
-    </section>
+    </div>
   );
 }

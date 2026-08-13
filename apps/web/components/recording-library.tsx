@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  formatBytes,
+  formatCount,
+  formatDate,
+  formatDuration,
+  formatViews,
+  initialsOf,
+} from "../lib/format/display";
 import { fetchFresh } from "../lib/http/json";
-import { TranscriptSearch } from "./transcript-search";
 
 type LibraryView = "library" | "shared" | "starred" | "trash";
 type RecordingStatus =
@@ -19,13 +26,32 @@ type RecordingSummary = {
   previousStatus: RecordingStatus | null;
   visibility: "PRIVATE" | "LINK" | "PASSWORD" | "PUBLIC";
   sizeBytes: number | null;
+  durationMs: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
   isStarred: boolean;
   canDelete: boolean;
+  viewCount: number;
 };
 type Page = { items: RecordingSummary[]; nextCursor: string | null };
+type Overview = {
+  stats: {
+    recordings: number;
+    views: number;
+    transcribed: number;
+    storageBytes: number;
+  };
+  featured: {
+    id: string;
+    title: string;
+    ownerName: string;
+    createdAt: string;
+    durationMs: number | null;
+    views: number;
+    resumeAtMs: number | null;
+  } | null;
+};
 
 const STALLED_UPLOAD_AFTER_MS = 15 * 60 * 1_000;
 
@@ -41,26 +67,27 @@ export function isUploadStalled(
 
 const viewContent: Record<
   LibraryView,
-  {
-    title: string;
-    emptyTitle: string;
-  }
+  { title: string; emptyTitle: string; emptyBody: string }
 > = {
   library: {
-    title: "Recordings",
-    emptyTitle: "No recordings",
+    title: "Recent recordings",
+    emptyTitle: "No recordings yet",
+    emptyBody: "Your first walkthrough is one click away.",
   },
   shared: {
     title: "Shared with me",
     emptyTitle: "Nothing shared",
+    emptyBody: "Recordings your teammates share land here.",
   },
   starred: {
     title: "Starred",
     emptyTitle: "No starred recordings",
+    emptyBody: "Star a recording to keep it within reach.",
   },
   trash: {
     title: "Trash",
     emptyTitle: "Trash is empty",
+    emptyBody: "Deleted recordings wait here before they are purged.",
   },
 };
 
@@ -71,12 +98,16 @@ export function RecordingLibrary({
 }) {
   const router = useRouter();
   const [items, setItems] = useState<RecordingSummary[]>([]);
+  const [overview, setOverview] = useState<Overview>();
   const [nextCursor, setNextCursor] = useState<string | null>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [activeAction, setActiveAction] = useState<string>();
   const content = viewContent[initialView];
+  // The hero and the ribbon summarise the whole workspace, so they belong to
+  // the workspace's own view rather than to a filtered slice of it.
+  const isHome = initialView === "library";
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -104,9 +135,19 @@ export function RecordingLibrary({
     [initialView, router],
   );
 
+  const loadOverview = useCallback(async () => {
+    if (!isHome) return;
+    const response = await fetchFresh("/api/workspace/overview");
+    if (response.ok) setOverview((await response.json()) as Overview);
+  }, [isHome]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
 
   useEffect(() => {
     if (
@@ -166,6 +207,7 @@ export function RecordingLibrary({
       return;
     }
     await load();
+    await loadOverview();
   }
 
   const processingCount = items.filter((item) => {
@@ -174,137 +216,109 @@ export function RecordingLibrary({
   }).length;
 
   return (
-    <section className="library-shell">
-      <aside className="library-sidebar">
-        <Link className="sidebar-brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>Cap</span>
-        </Link>
-        <Link className="sidebar-record" href="/record">
-          <span className="record-dot" aria-hidden="true" />
-          New recording
-        </Link>
-        <nav className="sidebar-nav" aria-label="Library navigation">
-          <LibraryNavLink
-            view="library"
-            activeView={initialView}
-            label="Library"
-          >
-            <rect x="3" y="5" width="18" height="14" />
-            <path d="m10 9 5 3-5 3Z" />
-          </LibraryNavLink>
-          <LibraryNavLink
-            view="shared"
-            activeView={initialView}
-            label="Shared with me"
-          >
-            <path d="M4 12v8h16v-8M12 3v13m-5-5 5 5 5-5" />
-          </LibraryNavLink>
-          <LibraryNavLink
-            view="starred"
-            activeView={initialView}
-            label="Starred"
-          >
-            <path d="m12 3 2.5 5.5 6 .5-4.5 4 1.4 6L12 16l-5.4 3L8 13 3.5 9l6-.5Z" />
-          </LibraryNavLink>
-          <LibraryNavLink view="trash" activeView={initialView} label="Trash">
-            <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" />
-          </LibraryNavLink>
-        </nav>
-        <div className="sidebar-footer">
-          <Link href="/admin">Settings</Link>
-        </div>
-      </aside>
-      <div className="library-panel">
-        <div className="library-heading">
-          <div className="library-title">
-            <h1>{content.title}</h1>
-          </div>
-          <div className="library-heading-actions">
-            <span className="recording-count">{items.length}</span>
-          </div>
-        </div>
-        <div className="library-command-bar">
-          <div className="library-tools">
-            <TranscriptSearch />
-          </div>
-        </div>
-        {initialView !== "trash" && (
-          <nav className="library-filters" aria-label="Recording filters">
-            {(
-              [
-                ["ALL", `All · ${items.length}`],
+    <>
+      {isHome && overview?.featured && (
+        <FeaturedRecording featured={overview.featured} />
+      )}
+      {isHome && overview && <StatsRibbon stats={overview.stats} />}
+      <section className="workspace-wall">
+        <div className="wall-heading">
+          <h1>{content.title}</h1>
+          {initialView !== "trash" && (
+            <nav className="wall-filters" aria-label="Recording filters">
+              {(
                 [
-                  "READY",
-                  `Ready · ${items.filter((item) => effectiveStatus(item) === "READY").length}`,
-                ],
-                ["PROCESSING", `Processing · ${processingCount}`],
-                [
-                  "FAILED",
-                  `Failed · ${items.filter((item) => effectiveStatus(item) === "FAILED").length}`,
-                ],
-              ] as const
-            ).map(([filter, label]) => (
-              <button
-                key={filter}
-                type="button"
-                className={statusFilter === filter ? "active" : ""}
-                onClick={() => setStatusFilter(filter)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        )}
+                  ["ALL", "All", items.length],
+                  [
+                    "READY",
+                    "Ready",
+                    items.filter((item) => effectiveStatus(item) === "READY")
+                      .length,
+                  ],
+                  ["PROCESSING", "Processing", processingCount],
+                  [
+                    "FAILED",
+                    "Failed",
+                    items.filter((item) => effectiveStatus(item) === "FAILED")
+                      .length,
+                  ],
+                ] as const
+              ).map(([filter, label, total]) => (
+                <button
+                  key={filter}
+                  type="button"
+                  className={`tag${statusFilter === filter ? " tag-active" : ""}`}
+                  aria-pressed={statusFilter === filter}
+                  onClick={() => setStatusFilter(filter)}
+                >
+                  {label}
+                  <em>{total}</em>
+                </button>
+              ))}
+            </nav>
+          )}
+        </div>
+
         {error && (
           <p className="form-error" role="alert">
             {error}
           </p>
         )}
+
         {!loading && items.length === 0 && (
-          <div className={`empty-state empty-state-${initialView}`}>
-            <div className="empty-state-copy">
-              <h2>{content.emptyTitle}</h2>
-              {initialView === "library" && (
-                <Link className="nav-cta" href="/record">
-                  <span className="record-dot" aria-hidden="true" /> Start
-                  recording
-                </Link>
-              )}
-              {initialView !== "library" && (
-                <Link className="nav-cta empty-library-link" href="/library">
-                  Return to library
-                </Link>
-              )}
-            </div>
+          <div className="empty-state">
+            <h2>{content.emptyTitle}</h2>
+            <p>{content.emptyBody}</p>
+            {initialView === "library" ? (
+              <Link className="btn" href="/record">
+                <span className="record-dot" aria-hidden="true" />
+                Start recording
+              </Link>
+            ) : (
+              <Link className="btn btn-secondary" href="/library">
+                Return to library
+              </Link>
+            )}
           </div>
         )}
+
         {!loading && items.length > 0 && filteredItems.length === 0 && (
           <div className="library-filter-empty">
             <strong>No recordings match this filter.</strong>
-            <button type="button" onClick={() => setStatusFilter("ALL")}>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+            >
               Show all
             </button>
           </div>
         )}
+
         <div className="recording-grid">
           {filteredItems.map((recording) => {
             const status = effectiveStatus(recording);
             const uploadStalled = isUploadStalled(recording);
+            const duration = formatDuration(recording.durationMs);
             const cardContent = (
               <>
                 <div
                   className={`recording-art${uploadStalled ? " recording-art-stalled" : ""}`}
                 >
-                  <span
-                    className={`recording-status status-${status.toLowerCase()}`}
-                  >
-                    {recording.status === "DELETED" ? "TRASHED" : status}
-                  </span>
                   {status === "READY" && (
-                    <span className="recording-play" aria-hidden="true">
-                      ▶
+                    <span className="play-mark" aria-hidden="true">
+                      <PlayGlyph />
                     </span>
+                  )}
+                  {status !== "READY" && (
+                    <span
+                      className={`recording-status status-${status.toLowerCase()}`}
+                    >
+                      {recording.status === "DELETED" ? "TRASHED" : status}
+                    </span>
+                  )}
+                  {duration && status === "READY" && (
+                    <span className="thumb-time">{duration}</span>
                   )}
                   {(status === "UPLOADING" || status === "PROCESSING") && (
                     <div className="recording-progress">
@@ -346,14 +360,19 @@ export function RecordingLibrary({
                 <div className="recording-card-copy">
                   <h2>{recording.title}</h2>
                   <p>
-                    {initialView === "shared" &&
-                      `Shared by ${recording.ownerName} · `}
-                    {recording.status === "DELETED" && recording.deletedAt
-                      ? `Deleted ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(recording.deletedAt))}`
-                      : new Intl.DateTimeFormat(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        }).format(new Date(recording.createdAt))}
+                    {initialView === "shared" && (
+                      <>
+                        <span>{recording.ownerName}</span>
+                        <i aria-hidden="true">·</i>
+                      </>
+                    )}
+                    <span>
+                      {recording.status === "DELETED" && recording.deletedAt
+                        ? `Deleted ${formatDate(recording.deletedAt)}`
+                        : formatDate(recording.createdAt)}
+                    </span>
+                    <i aria-hidden="true">·</i>
+                    <span>{formatViews(recording.viewCount)}</span>
                   </p>
                 </div>
               </>
@@ -416,6 +435,7 @@ export function RecordingLibrary({
                   {initialView === "trash" && recording.canDelete && (
                     <>
                       <button
+                        className="btn-secondary"
                         type="button"
                         disabled={Boolean(activeAction)}
                         onClick={() => void performAction(recording, "restore")}
@@ -439,40 +459,115 @@ export function RecordingLibrary({
         </div>
         {nextCursor && (
           <button
-            className="load-more"
+            className="load-more btn-secondary"
             disabled={loading}
             onClick={() => void load(nextCursor)}
           >
             {loading ? "Loading…" : "Load more"}
           </button>
         )}
+      </section>
+    </>
+  );
+}
+
+function PlayGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function FeaturedRecording({
+  featured,
+}: {
+  featured: NonNullable<Overview["featured"]>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const duration = formatDuration(featured.durationMs);
+  const resumeAt = formatDuration(featured.resumeAtMs);
+  const progress =
+    featured.resumeAtMs && featured.durationMs
+      ? Math.min(100, (featured.resumeAtMs / featured.durationMs) * 100)
+      : 0;
+  const href = featured.resumeAtMs
+    ? `/library/${featured.id}?t=${featured.resumeAtMs}`
+    : `/library/${featured.id}`;
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(
+      new URL(`/library/${featured.id}`, window.location.origin).toString(),
+    );
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2_000);
+  }
+
+  return (
+    <section className="workspace-hero">
+      <Link className="hero-art" href={href}>
+        <span className="play-mark play-mark-lg" aria-hidden="true">
+          <PlayGlyph />
+        </span>
+        <span className="hero-flag">
+          {featured.resumeAtMs ? "Continue watching" : "Latest recording"}
+        </span>
+        {duration && (
+          <span className="thumb-time">
+            {resumeAt ? `${resumeAt} / ${duration}` : duration}
+          </span>
+        )}
+        {progress > 0 && (
+          <span className="hero-progress" aria-hidden="true">
+            <i style={{ width: `${progress}%` }} />
+          </span>
+        )}
+      </Link>
+      <div className="hero-copy">
+        <h2>{featured.title}</h2>
+        <p className="hero-meta">
+          <span className="avatar avatar-sm" aria-hidden="true">
+            {initialsOf(featured.ownerName)}
+          </span>
+          <span>{featured.ownerName}</span>
+          <i aria-hidden="true">·</i>
+          <span>{formatDate(featured.createdAt)}</span>
+          <i aria-hidden="true">·</i>
+          <span>{formatViews(featured.views)}</span>
+        </p>
+        <div className="hero-actions">
+          <Link className="btn" href={href}>
+            <PlayGlyph />
+            {featured.resumeAtMs ? "Resume" : "Play"}
+          </Link>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void copyLink()}
+          >
+            {copied ? "Link copied" : "Copy link"}
+          </button>
+        </div>
       </div>
     </section>
   );
 }
 
-function LibraryNavLink({
-  view,
-  activeView,
-  label,
-  children,
-}: {
-  view: LibraryView;
-  activeView: LibraryView;
-  label: string;
-  children: React.ReactNode;
-}) {
-  const active = view === activeView;
+function StatsRibbon({ stats }: { stats: Overview["stats"] }) {
+  const cells: [string, string][] = [
+    [formatCount(stats.recordings), "Recordings"],
+    [formatCount(stats.views), "Total views"],
+    [formatCount(stats.transcribed), "Transcribed"],
+    [formatBytes(stats.storageBytes), "Storage"],
+  ];
   return (
-    <Link
-      className={active ? "active" : ""}
-      href={view === "library" ? "/library" : `/library?view=${view}`}
-      aria-current={active ? "page" : undefined}
-    >
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        {children}
-      </svg>
-      {label}
-    </Link>
+    <dl className="workspace-stats">
+      {cells.map(([value, label]) => (
+        <div key={label}>
+          <dd>{value}</dd>
+          <dt>{label}</dt>
+        </div>
+      ))}
+    </dl>
   );
 }

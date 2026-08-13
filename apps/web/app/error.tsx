@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceMark } from "../components/workspace-mark";
 import { useEffect } from "react";
 
 export default function ErrorPage({
@@ -17,10 +18,7 @@ export default function ErrorPage({
   return (
     <main className="system-page">
       <header className="system-header">
-        <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />
-          cap
-        </Link>
+        <WorkspaceMark href="/" />
         <span>Application error</span>
       </header>
       <section className="system-card">

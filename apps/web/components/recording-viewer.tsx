@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatBytes, formatDate } from "../lib/format/display";
 import { fetchFresh, sendJson } from "../lib/http/json";
 import { ShareControls } from "./share-controls";
 import { CommentThread } from "./comment-thread";
@@ -22,12 +23,6 @@ type Playback = {
   expiresAt: string;
 };
 type InspectorTab = "transcript" | "comments" | "ai";
-
-function formatSize(bytes: number | null) {
-  if (!bytes) return "Processing";
-  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-}
 
 export function RecordingViewer({
   recordingId,
@@ -89,15 +84,11 @@ export function RecordingViewer({
   if (error)
     return (
       <section className="viewer-shell viewer-state-page">
-        <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />
-          Cap
-        </Link>
         <div className="viewer-state-card">
           <span className="state-code">Playback unavailable</span>
           <h1>We couldn&apos;t open this recording.</h1>
           <p className="form-error">{error}</p>
-          <Link className="editor-launch" href="/library">
+          <Link className="btn btn-secondary" href="/library">
             Return to library
           </Link>
         </div>
@@ -106,10 +97,6 @@ export function RecordingViewer({
   if (!recording)
     return (
       <section className="viewer-shell viewer-state-page" aria-live="polite">
-        <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />
-          Cap
-        </Link>
         <div className="viewer-state-card viewer-loading-card">
           <span className="processing-pulse" />
           <p className="eyebrow">Loading recording</p>
@@ -119,25 +106,21 @@ export function RecordingViewer({
     );
   return (
     <section className="viewer-shell">
-      <header className="viewer-topbar">
-        <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />
-          Cap
-        </Link>
+      <div className="viewer-context">
         <Link className="viewer-back" href="/library">
           ← All recordings
         </Link>
         <div className="viewer-actions">
           {recording.status === "READY" && (
             <Link
-              className="editor-launch"
+              className="btn btn-secondary"
               href={`/library/${recording.id}/edit`}
             >
               Edit recording
             </Link>
           )}
         </div>
-      </header>
+      </div>
       <div className="viewer-layout">
         <div className="viewer-main">
           <div className="viewer-heading">
@@ -158,15 +141,15 @@ export function RecordingViewer({
             <dl className="viewer-meta">
               <div>
                 <dt>Created</dt>
-                <dd>
-                  {new Intl.DateTimeFormat(undefined, {
-                    dateStyle: "medium",
-                  }).format(new Date(recording.createdAt))}
-                </dd>
+                <dd>{formatDate(recording.createdAt)}</dd>
               </div>
               <div>
                 <dt>Size</dt>
-                <dd>{formatSize(recording.sizeBytes)}</dd>
+                <dd>
+                  {recording.sizeBytes
+                    ? formatBytes(recording.sizeBytes)
+                    : "Processing"}
+                </dd>
               </div>
               <div>
                 <dt>Access</dt>

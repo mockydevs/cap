@@ -40,12 +40,20 @@ function clientAddress(request: Request): string {
   );
 }
 
+/**
+ * The hash a signed-in viewer's sessions are recorded under. Stable across
+ * requests, which is what lets the workspace pick up where someone left off.
+ */
+export function viewerHashForUser(userId: string): string {
+  return hmac(`user:${userId}`);
+}
+
 export function privacySafeViewerHash(
   request: Request,
   actorUserId: string | undefined,
   now = new Date(),
 ): string {
-  if (actorUserId) return hmac(`user:${actorUserId}`);
+  if (actorUserId) return viewerHashForUser(actorUserId);
   const day = Math.floor(now.getTime() / (24 * 60 * 60 * 1000));
   const userAgent = (request.headers.get("user-agent") ?? "unknown").slice(
     0,
