@@ -26,13 +26,12 @@ export const memberIdentity = (actor: Actor): Identity => ({
 export async function guestIdentity(
   request: Request,
   token: string,
-  password: string | undefined,
   guestName: string | undefined,
   viewerKey: string | undefined,
 ) {
   if (!guestName || !viewerKey)
     throw new CommentError("GUEST_IDENTITY_REQUIRED", 400);
-  const playback = await authorizeSharePlayback(request, token, password);
+  const playback = await authorizeSharePlayback(request, token);
   const guestKeyHash = digest(`share:${token}:${viewerKey}`);
   return {
     recordingId: playback.recordingId,

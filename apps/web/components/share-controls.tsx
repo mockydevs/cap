@@ -11,7 +11,6 @@ type ShareResult = {
 };
 export function ShareControls({ recordingId }: { recordingId: string }) {
   const [visibility, setVisibility] = useState<RecordingVisibility>("PRIVATE");
-  const [password, setPassword] = useState("");
   const [result, setResult] = useState<ShareResult>();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -25,10 +24,7 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
       "PUT",
       {
         visibility,
-        ...(visibility === "PASSWORD" ? { password } : {}),
-        ...(visibility === "LINK" || visibility === "PASSWORD"
-          ? { expiresInHours: 168 }
-          : {}),
+        ...(visibility === "LINK" ? { expiresInHours: 168 } : {}),
       },
     );
     if (!response.ok) {
@@ -62,24 +58,9 @@ export function ShareControls({ recordingId }: { recordingId: string }) {
           >
             <option value="PRIVATE">Private workspace</option>
             <option value="LINK">Anyone with the link</option>
-            <option value="PASSWORD">Password protected</option>
             <option value="PUBLIC">Public</option>
           </select>
         </label>
-        {visibility === "PASSWORD" && (
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={10}
-              maxLength={256}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-        )}
         <button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save access"}
         </button>

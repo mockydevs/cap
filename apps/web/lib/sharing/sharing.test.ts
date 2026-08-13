@@ -12,19 +12,21 @@ describe("share-link primitives", () => {
     expect(hashShareToken(first)).not.toContain(first);
   });
 
-  it("requires passwords and only allows expiry on link modes", () => {
-    expect(() =>
-      updateSharingSchema.parse({ visibility: "PASSWORD" }),
-    ).toThrow();
+  it("only allows expiry on link shares", () => {
     expect(() =>
       updateSharingSchema.parse({ visibility: "PUBLIC", expiresInHours: 24 }),
     ).toThrow();
+    expect(() =>
+      updateSharingSchema.parse({ visibility: "PRIVATE", expiresInHours: 24 }),
+    ).toThrow();
     expect(
-      updateSharingSchema.parse({
-        visibility: "PASSWORD",
-        password: "correct horse battery staple",
-        expiresInHours: 24,
-      }),
-    ).toMatchObject({ visibility: "PASSWORD", expiresInHours: 24 });
+      updateSharingSchema.parse({ visibility: "LINK", expiresInHours: 24 }),
+    ).toMatchObject({ visibility: "LINK", expiresInHours: 24 });
+  });
+
+  it("no longer accepts a password-protected mode", () => {
+    expect(() =>
+      updateSharingSchema.parse({ visibility: "PASSWORD" }),
+    ).toThrow();
   });
 });

@@ -45,5 +45,4 @@ export const embedPlaybackSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{43}$/)
     .optional(),
-  password: z.string().min(1).max(256).optional(),
 });

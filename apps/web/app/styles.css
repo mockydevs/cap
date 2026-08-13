@@ -151,10 +151,10 @@ button,
 }
 /* Every text-entry control wears the same box: one border, one ground, and
    enough padding that the value sits inside the field rather than against its
-   edge. Contexts below adjust the size; none should have to restate this. */
-input:not([type="checkbox"]):not([type="radio"]),
-select,
-textarea {
+   edge. Held at zero specificity with :where() so it reads as a default —
+   a field that needs different metrics, like the search box with an icon in
+   its gutter, simply says so and wins. */
+:where(input:not([type="checkbox"], [type="radio"]), select, textarea) {
   min-height: 40px;
   padding: 9px 12px;
   border: 1px solid var(--line-strong);
@@ -1988,10 +1988,20 @@ h6 {
 }
 
 @media (max-width: 580px) {
-  .marketing-header .user-nav a:not(.nav-cta),
-  .marketing-header .user-nav > span,
-  .marketing-header .user-nav > form {
+  /* A signed-in visitor keeps the way back into their workspace and the tile
+     that says whose it is; the rest of the account bar can wait for a wider
+     screen. Trimming all of it left this header empty. */
+  .marketing-header .user-nav a[href="/record"],
+  .marketing-header .user-nav a[href="/admin"],
+  .marketing-header .user-nav > form,
+  .marketing-header .user-nav .account-copy {
     display: none;
+  }
+
+  .marketing-header .account-pill {
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
   .marketing-hero {
@@ -1999,8 +2009,10 @@ h6 {
     padding-top: 58px;
   }
 
+  /* Sized so the headline still lands with the call to action in reach,
+     rather than filling the screen on its own. */
   .marketing-hero h1 {
-    font-size: clamp(3.8rem, 18vw, 5.1rem);
+    font-size: clamp(2.9rem, 13vw, 5.1rem);
   }
 
   .marketing-actions {
@@ -2644,15 +2656,14 @@ h6 {
 @media (max-width: 460px) {
   .studio-heading {
     align-items: flex-start;
+    gap: 12px;
   }
 
+  /* The state still says READY or RECORDING here. Hiding the word left a
+     bare dot, which tells a first-time recorder nothing. */
   .studio-state {
     padding-inline: 7px;
-    font-size: 0;
-  }
-
-  .studio-state > span {
-    margin: 0;
+    letter-spacing: 0.04em;
   }
 }
 
@@ -4808,31 +4819,47 @@ h6 {
 
 .search-icon {
   position: absolute;
-  left: 10px;
+  top: 50%;
+  left: 12px;
   width: 15px;
   height: 15px;
+  transform: translateY(-50%);
   fill: none;
   stroke: var(--muted);
   stroke-width: 2;
+  pointer-events: none;
 }
 
+/* The icon owns the left gutter, so the value starts clear of it. */
 .transcript-search input {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 30px 6px 32px;
+  min-height: 38px;
+  padding: 8px 34px 8px 35px;
   border: 1px solid var(--line);
   background: var(--surface-2);
   color: var(--ink);
   font-size: var(--text-body-sm);
 }
 
+.transcript-search input::placeholder {
+  color: var(--dim);
+}
+
 .search-clear {
   position: absolute;
-  right: 0;
-  min-height: 36px;
+  top: 50%;
+  right: 1px;
+  min-height: 0;
+  height: 26px;
   padding: 0 9px;
+  transform: translateY(-50%);
   background: transparent;
   color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.search-clear:hover {
+  color: var(--ink);
 }
 
 .search-results {
@@ -5414,46 +5441,147 @@ h6 {
   }
 }
 
+/* Rows of links and chips that outrun a narrow screen scroll sideways rather
+   than wrap or clip. The scrollbar is hidden because the row bleeds to the
+   screen edge, which is the affordance that matters on touch. */
+.workspace-nav,
+.wall-filters,
+.admin-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.workspace-nav::-webkit-scrollbar,
+.wall-filters::-webkit-scrollbar,
+.admin-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 @media (max-width: 860px) {
+  /* Two sticky rows: who and what you can do, then where you can go. */
   .workspace-bar {
     flex-wrap: wrap;
-    gap: 12px 18px;
-    padding: 12px 20px;
+    gap: 10px 12px;
+    padding: 10px 0 0;
   }
 
-  .workspace-nav {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
+  .workspace-bar > * {
+    order: 1;
+  }
+
+  .workspace-brand {
+    margin-inline: 16px 0;
   }
 
   .transcript-search {
-    width: min(260px, 40vw);
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .account-menu {
+    margin-right: 16px;
+  }
+
+  /* The nav becomes the bar's second row, edge to edge so a partly visible
+     last item reads as more to scroll rather than as a clipped one. */
+  .workspace-nav {
+    order: 2;
+    width: 100%;
+    gap: 20px;
+    margin: 0;
+    padding: 2px 16px 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .workspace-nav a {
+    padding-top: 8px;
+    white-space: nowrap;
+  }
+
+  /* Harmless when search is present and stretching, and the thing that keeps
+     the row balanced on the pages that have no search. */
+  .workspace-record {
+    margin-left: auto;
+    padding-inline: 12px;
   }
 
   .workspace-wall,
   .hero-copy,
   .admin-content,
   .record-workspace {
-    padding: 24px 20px;
+    padding: 24px 16px;
   }
 
   .workspace-stats > div {
-    padding: 14px 20px;
+    padding: 14px 16px;
+  }
+
+  /* Filters lead the row on a phone; the heading sits above them. */
+  .wall-heading {
+    gap: 12px;
+  }
+
+  .wall-filters {
+    width: 100%;
+    margin-left: 0;
+    padding-bottom: 2px;
+    flex-wrap: nowrap;
+  }
+
+  .admin-tabs {
+    flex-wrap: nowrap;
+  }
+
+  .admin-tabs button {
+    white-space: nowrap;
   }
 }
 
 @media (max-width: 560px) {
-  .workspace-brand span:not(.workspace-mark) {
-    display: none;
-  }
-
   .workspace-stats {
     grid-template-columns: 1fr 1fr;
   }
 
   .recording-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-copy h2 {
+    font-size: clamp(1.35rem, 6vw, 1.7rem);
+  }
+}
+
+/* Below this the wordmark and the Record label stop earning their width.
+   They are clipped rather than removed: both are the accessible name of the
+   link they sit in, and a red square with no name is not a control. */
+@media (max-width: 420px) {
+  .workspace-bar .workspace-brand span:not(.workspace-mark),
+  .workspace-record-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .workspace-record {
+    padding-inline: 11px;
+  }
+}
+
+/* Touch has no hover to reveal anything, so the controls that sit on a
+   thumbnail have to be big enough to hit on their own. */
+@media (hover: none) {
+  .recording-card-actions button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .recording-card:hover {
+    transform: none;
   }
 }
 

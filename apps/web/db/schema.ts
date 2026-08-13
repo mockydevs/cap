@@ -59,10 +59,9 @@ export const processingOutboxTopic = pgEnum("processing_outbox_topic", [
 export const recordingVisibility = pgEnum("recording_visibility", [
   "PRIVATE",
   "LINK",
-  "PASSWORD",
   "PUBLIC",
 ]);
-export const shareLinkMode = pgEnum("share_link_mode", ["LINK", "PASSWORD"]);
+export const shareLinkMode = pgEnum("share_link_mode", ["LINK"]);
 export const viewSessionKind = pgEnum("view_session_kind", [
   "WORKSPACE",
   "SHARE",
@@ -489,7 +488,6 @@ export const shareLinks = pgTable(
       .references(() => users.id),
     mode: shareLinkMode("mode").notNull(),
     tokenHash: text("token_hash").notNull(),
-    passwordHash: text("password_hash"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -504,10 +502,6 @@ export const shareLinks = pgTable(
     index("share_links_workspace_recording_idx").on(
       table.workspaceId,
       table.recordingId,
-    ),
-    check(
-      "share_links_password_mode_check",
-      sql`(${table.mode} = 'PASSWORD' AND ${table.passwordHash} IS NOT NULL) OR (${table.mode} = 'LINK' AND ${table.passwordHash} IS NULL)`,
     ),
     check(
       "share_links_token_hash_length_check",

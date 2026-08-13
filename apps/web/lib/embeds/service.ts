@@ -82,7 +82,7 @@ export async function assertEmbedOrigin(
 export async function authorizeEmbedPlayback(
   request: Request,
   recordingId: string,
-  input: { shareToken?: string | undefined; password?: string | undefined },
+  input: { shareToken?: string | undefined },
 ) {
   const origin = await assertEmbedOrigin(
     recordingId,
@@ -94,7 +94,6 @@ export async function authorizeEmbedPlayback(
       playback: await authorizeSharePlayback(
         request,
         input.shareToken,
-        input.password,
         undefined,
         {
           viewKind: "EMBED",

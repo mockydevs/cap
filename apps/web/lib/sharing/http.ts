@@ -1,11 +1,10 @@
-import { ShareConfigurationError } from "@cap/domain";
 import { ZodError } from "zod";
 import { AuthenticationError, AuthorizationError } from "../auth/authorization";
 import { ShareRateLimitError } from "./rate-limit";
 import { SharingServiceError } from "./service";
 
 export function sharingError(error: unknown): Response {
-  if (error instanceof ZodError || error instanceof ShareConfigurationError) {
+  if (error instanceof ZodError) {
     return Response.json(
       { error: { code: "VALIDATION_ERROR" } },
       { status: 400 },

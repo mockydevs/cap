@@ -46,7 +46,7 @@ Delivery remains phased so each subsystem can be tested and operated safely, but
 - AI-generated titles, summaries, chapters, action items, and highlights
 - Semantic search across recordings and transcripts
 - Translation and subtitle export
-- Private, unlisted, password-protected, and public sharing
+- Private, unlisted, and public sharing
 - Shareable playback pages
 - Timestamped comments
 - Basic view analytics
@@ -469,10 +469,9 @@ Supported visibility modes:
 
 - `PRIVATE`: authenticated and authorized workspace members
 - `LINK`: anyone possessing a high-entropy unlisted link
-- `PASSWORD`: unlisted link plus a password
 - `PUBLIC`: explicitly discoverable content
 
-Share passwords are stored using a modern password-hashing function. The bucket remains private. After authorization, the server issues short-lived access to playback assets.
+An unlisted link is itself the credential: holding an unexpired, unrevoked token is what grants playback, and links can be revoked or given an expiry at any time. The bucket remains private. After authorization, the server issues short-lived access to playback assets.
 
 Playback endpoints support range requests, seeking, correct content types, and caching rules that do not leak private assets.
 
@@ -606,7 +605,7 @@ Database migrations run as a controlled release task, not independently from eve
 
 ## 20. Observability
 
-Every request and job carries a correlation ID. Logs use structured JSON and must not contain credentials, magic links, signed media URLs, share passwords, or recording contents.
+Every request and job carries a correlation ID. Logs use structured JSON and must not contain credentials, magic links, signed media URLs, or recording contents.
 
 Monitor:
 
@@ -661,7 +660,6 @@ Recovery point and recovery time objectives must be agreed before production lau
 - Input validation at all trust boundaries
 - File type, size, and duration limits
 - Rate limits on authentication, sharing, comments, and uploads
-- Password hashing for protected shares
 - Audit events for sensitive workspace actions
 - Secret rotation procedure
 - Dependency and container scanning
@@ -708,7 +706,7 @@ User-provided titles and comments are treated as untrusted content and safely es
 - Seek within playback
 - Enforce private access
 - Open an unlisted link
-- Validate password protection
+- Confirm a revoked or expired link stops playing
 - Add a timestamped comment
 - Edit and export a multi-track project
 - Transcribe, correct, and search a recording

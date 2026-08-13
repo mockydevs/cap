@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { WorkspaceMark } from "./workspace-mark";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { sendJson } from "../lib/http/json";
 import { CommentThread } from "./comment-thread";
 
@@ -12,6 +12,12 @@ type Playback = {
   url: string;
   expiresAt: string;
 };
+
+const unavailable = (code: string | undefined) =>
+  code === "RECORDING_NOT_READY"
+    ? "This recording is still being processed. Try again in a few minutes."
+    : "This recording is unavailable or the link has expired.";
+
 export function SharedRecording({
   token,
   recordingId,
@@ -19,31 +25,35 @@ export function SharedRecording({
   token?: string;
   recordingId?: string;
 }) {
-  const [password, setPassword] = useState("");
   const [playback, setPlayback] = useState<Playback>();
   const [error, setError] = useState<string>();
+  const [opening, setOpening] = useState(true);
   const [timestampMs, setTimestampMs] = useState(0);
   const endpoint = token
     ? `/api/shares/${token}/playback`
     : `/api/recordings/${recordingId}/playback`;
-  async function open(event?: React.FormEvent) {
-    event?.preventDefault();
-    setError(undefined);
-    const response = await sendJson(
-      endpoint,
-      "POST",
-      password ? { password } : {},
-    );
-    if (!response.ok) {
-      setError(
-        response.status === 401
-          ? "A valid password is required."
-          : "This recording is unavailable or the link has expired.",
-      );
-      return;
-    }
-    setPlayback((await response.json()) as Playback);
-  }
+
+  // The link is the credential, so arriving with it is the whole request:
+  // open the recording rather than asking the recipient to ask for it.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const response = await sendJson(endpoint, "POST", {});
+      if (cancelled) return;
+      setOpening(false);
+      if (response.ok) {
+        setPlayback((await response.json()) as Playback);
+        return;
+      }
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: { code?: string };
+      };
+      setError(unavailable(body.error?.code));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoint]);
   return (
     <main className="shared-shell">
       <header className="shared-header">
@@ -77,8 +87,20 @@ export function SharedRecording({
                 onTimeUpdate={(event) =>
                   setTimestampMs(event.currentTarget.currentTime * 1000)
                 }
+                // A signed URL that the browser cannot load would otherwise
+                // leave a black rectangle and no explanation.
+                onError={() =>
+                  setError(
+                    "The video could not be loaded. The link may have expired — reload the page to try again.",
+                  )
+                }
               />
             </div>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
             <div className="shared-context">
               <span>Private playback link</span>
               <span>Comments stay attached to the timeline</span>
@@ -89,7 +111,7 @@ export function SharedRecording({
               <CommentThread
                 recordingId={playback.recordingId}
                 timestampMs={timestampMs}
-                share={{ token, password }}
+                share={{ token }}
               />
             </aside>
           )}
@@ -99,38 +121,26 @@ export function SharedRecording({
           <section className="share-gate">
             <span className="share-gate-index">01 / Playback</span>
             <p className="eyebrow">Shared recording</p>
-            <h1>Ready when you are.</h1>
-            <p>
-              This recording was shared securely through Cap. Open it directly,
-              or enter the password supplied by the sender.
-            </p>
-            <form onSubmit={open} className="share-form">
-              <label>
-                Password <small>Only if the sender provided one</small>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Enter recording password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-              </label>
-              <button type="submit">
-                Open recording <span aria-hidden="true">→</span>
-              </button>
-            </form>
+            {opening ? (
+              <>
+                <h1>Opening the recording.</h1>
+                <p>One moment while playback is prepared.</p>
+                <span className="state-loader" aria-hidden="true" />
+              </>
+            ) : (
+              <>
+                <h1>This link is not available.</h1>
+                <p>
+                  Ask the sender for a new link — shared links expire, and can
+                  be turned off at any time.
+                </p>
+              </>
+            )}
             {error && (
               <p className="form-error" role="alert">
                 {error}
               </p>
             )}
-            <button
-              className="share-skip"
-              type="button"
-              onClick={() => void open()}
-            >
-              Continue without a password
-            </button>
           </section>
           <aside className="share-assurance" aria-label="About secure sharing">
             <div className="share-assurance-graphic" aria-hidden="true">

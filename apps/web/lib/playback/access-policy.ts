@@ -28,8 +28,6 @@ export type PlaybackAccess = {
   actor?: PlaybackActor | null;
   /** A non-expired, non-revoked token bound to this recording. */
   hasValidShareLink?: boolean;
-  /** A server-issued, non-expired grant bound to this share link and recording. */
-  hasValidPasswordGrant?: boolean;
 };
 
 export type PlaybackDecision =
@@ -39,8 +37,7 @@ export type PlaybackDecision =
       reason:
         | "RECORDING_UNAVAILABLE"
         | "WORKSPACE_MEMBERSHIP_REQUIRED"
-        | "SHARE_LINK_REQUIRED"
-        | "PASSWORD_REQUIRED";
+        | "SHARE_LINK_REQUIRED";
     };
 
 const allowed: PlaybackDecision = { allowed: true };
@@ -72,7 +69,6 @@ export function authorizePlayback(input: PlaybackAccess): PlaybackDecision {
     visibility: input.visibility,
     isWorkspaceMember: input.actor?.workspaceId === input.recordingWorkspaceId,
     hasActiveShareLink: Boolean(input.hasValidShareLink),
-    passwordVerified: Boolean(input.hasValidPasswordGrant),
   });
   if (decision.allowed) return allowed;
 
@@ -81,7 +77,5 @@ export function authorizePlayback(input: PlaybackAccess): PlaybackDecision {
       return { allowed: false, reason: "WORKSPACE_MEMBERSHIP_REQUIRED" };
     case "LINK_REQUIRED":
       return { allowed: false, reason: "SHARE_LINK_REQUIRED" };
-    case "PASSWORD_REQUIRED":
-      return { allowed: false, reason: "PASSWORD_REQUIRED" };
   }
 }

@@ -2,7 +2,7 @@
 import { formatDuration } from "@cap/recording";
 import { useCallback, useEffect, useState } from "react";
 import { sendJson } from "../lib/http/json";
-type Share = { token: string; password: string };
+type Share = { token: string };
 type Comment = {
   id: string;
   body: string;
@@ -45,7 +45,6 @@ export function CommentThread({
         action,
         guestName,
         viewerKey,
-        password: target.password || undefined,
         ...extra,
       }),
     [guestName, viewerKey],

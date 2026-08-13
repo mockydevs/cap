@@ -90,17 +90,14 @@ workspace," not "recording and uploading a sample" end-to-end.
   which only the FFmpeg worker produces; there is no UI trigger for that and
   no way to fabricate it short of a direct database write, which this suite
   avoids.
-- **Open an unlisted link**, **Validate password protection** — `share-
-controls.tsx` can set `LINK`/`PASSWORD` visibility on any recording
-  regardless of status, so a real share token can be minted. But
-  `authorizeSharePlayback` (`lib/sharing/service.ts`) calls
+- **Open an unlisted link** — `share-controls.tsx` can set `LINK` visibility
+  on any recording regardless of status, so a real share token can be minted.
+  But `authorizeSharePlayback` (`lib/sharing/service.ts`) calls
   `playableRecording()`, which requires `status === "READY"` and a joined
-  `MP4` asset row _before_ it ever checks the password — so with no way to
-  reach `READY`, every share-page visit fails with the same generic
-  "unavailable" message regardless of whether the password was right,
-  wrong, or absent. A spec here could only assert that generic message,
-  which would not actually validate password enforcement — worse than no
-  spec, so this is skipped rather than faked.
+  `MP4` asset row — so with no way to reach `READY`, every share-page visit
+  fails with the same generic "unavailable" message. A spec here could only
+  assert that message, which would not show that a valid link actually
+  plays — worse than no spec, so this is skipped rather than faked.
 - **Edit and export a multi-track project** — `editor-studio.tsx` operates
   on a processed recording's tracks; not reachable without `READY` media
   for the same reason as above.

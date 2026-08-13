@@ -24,7 +24,7 @@ type RecordingSummary = {
   title: string;
   status: RecordingStatus;
   previousStatus: RecordingStatus | null;
-  visibility: "PRIVATE" | "LINK" | "PASSWORD" | "PUBLIC";
+  visibility: "PRIVATE" | "LINK" | "PUBLIC";
   sizeBytes: number | null;
   durationMs: number | null;
   createdAt: string;

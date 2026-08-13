@@ -60,7 +60,9 @@ export function WorkspaceBar({
         aria-current={current === "record" ? "page" : undefined}
       >
         <span className="record-dot" aria-hidden="true" />
-        Record
+        {/* Collapses to the dot alone on a phone, where the bar has no room
+            for the word and the red pill already reads as "record". */}
+        <span className="workspace-record-label">Record</span>
       </Link>
       <details className="account-menu">
         <summary aria-label={`Account: ${account.displayName}`}>

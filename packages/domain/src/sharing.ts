@@ -1,22 +1,26 @@
-export type RecordingVisibility = "PRIVATE" | "LINK" | "PASSWORD" | "PUBLIC";
+export type RecordingVisibility = "PRIVATE" | "LINK" | "PUBLIC";
 
 export type PlaybackAuthorization =
   | {
       readonly allowed: true;
-      readonly grant: "WORKSPACE" | "LINK" | "PASSWORD" | "PUBLIC";
+      readonly grant: "WORKSPACE" | "LINK" | "PUBLIC";
     }
   | {
       readonly allowed: false;
-      readonly reason:
-        "WORKSPACE_REQUIRED" | "LINK_REQUIRED" | "PASSWORD_REQUIRED";
+      readonly reason: "WORKSPACE_REQUIRED" | "LINK_REQUIRED";
     };
 
-/** Pure deny-by-default policy used by every playback route. */
+/**
+ * Pure deny-by-default policy used by every playback route.
+ *
+ * Access is carried by the link itself: holding an unexpired, unrevoked token
+ * is what grants playback. There is no second secret to present — a recipient
+ * who has the link can watch.
+ */
 export function authorizePlayback(input: {
   readonly visibility: RecordingVisibility;
   readonly isWorkspaceMember: boolean;
   readonly hasActiveShareLink: boolean;
-  readonly passwordVerified: boolean;
 }): PlaybackAuthorization {
   if (input.isWorkspaceMember) return { allowed: true, grant: "WORKSPACE" };
   switch (input.visibility) {
@@ -26,41 +30,7 @@ export function authorizePlayback(input: {
       return input.hasActiveShareLink
         ? { allowed: true, grant: "LINK" }
         : { allowed: false, reason: "LINK_REQUIRED" };
-    case "PASSWORD":
-      return input.hasActiveShareLink && input.passwordVerified
-        ? { allowed: true, grant: "PASSWORD" }
-        : { allowed: false, reason: "PASSWORD_REQUIRED" };
     case "PRIVATE":
       return { allowed: false, reason: "WORKSPACE_REQUIRED" };
-  }
-}
-
-export class ShareConfigurationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ShareConfigurationError";
-  }
-}
-
-export function validateShareConfiguration(input: {
-  readonly visibility: RecordingVisibility;
-  readonly password?: string;
-}): void {
-  if (input.visibility === "PASSWORD") {
-    if (
-      !input.password ||
-      input.password.length < 10 ||
-      input.password.length > 256
-    ) {
-      throw new ShareConfigurationError(
-        "Password shares require a 10-256 character password",
-      );
-    }
-    return;
-  }
-  if (input.password !== undefined) {
-    throw new ShareConfigurationError(
-      "Passwords are only valid for PASSWORD sharing",
-    );
   }
 }

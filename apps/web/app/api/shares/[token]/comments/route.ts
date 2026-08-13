@@ -16,7 +16,6 @@ import {
 import { shareTokenParamsSchema } from "../../../../../lib/sharing/validation";
 import { z } from "zod";
 const base = z.object({
-  password: z.string().max(256).optional(),
   guestName: z.string().trim().min(2).max(80),
   viewerKey: z.string().uuid(),
 });
@@ -52,7 +51,6 @@ export async function POST(
     const guest = await guestIdentity(
       request,
       token,
-      input.password,
       input.guestName,
       input.viewerKey,
     );

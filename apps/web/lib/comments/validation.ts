@@ -13,7 +13,6 @@ export const createCommentSchema = z.object({
   timestampMs: z.number().int().min(0).max(86_400_000),
   guestName: z.string().trim().min(2).max(80).optional(),
   viewerKey: z.string().uuid().optional(),
-  password: z.string().max(256).optional(),
 });
 export const updateCommentSchema = z.object({
   body: z.string().trim().min(1).max(2_000),

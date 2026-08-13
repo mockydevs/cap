@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
 import Redis from "ioredis";
 
-const WINDOW_SECONDS = 15 * 60;
 let redis: Redis | undefined;
 
 function connection(): Redis {
@@ -42,34 +40,6 @@ export async function enforceFixedWindowRateLimit(
     windowSeconds,
   );
   if (Number(current) > limit) throw new ShareRateLimitError();
-}
-
-/** Fails closed so password shares never become unbounded when Redis is unavailable. */
-export async function enforceSharePasswordRateLimit(
-  request: Request,
-  tokenHash: string,
-): Promise<void> {
-  const addressHash = createHash("sha256")
-    .update(requestAddress(request))
-    .digest("hex");
-  const client = connection();
-  const [perAddress, perLink] = await Promise.all([
-    client.eval(
-      incrementScript,
-      1,
-      `cap:share-password:${tokenHash}:${addressHash}`,
-      WINDOW_SECONDS,
-    ),
-    client.eval(
-      incrementScript,
-      1,
-      `cap:share-password:${tokenHash}:all`,
-      WINDOW_SECONDS,
-    ),
-  ]);
-  if (Number(perAddress) > 10 || Number(perLink) > 100) {
-    throw new ShareRateLimitError();
-  }
 }
 
 export class ShareRateLimitError extends Error {

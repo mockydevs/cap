@@ -79,35 +79,17 @@ describe("share and playback authorization", () => {
     expect(
       authorizePlayback({
         ...readyPrivate,
-        visibility: "PASSWORD",
+        visibility: "LINK",
         actor: { workspaceId, role: "MEMBER" },
       }),
     ).toEqual({ allowed: true });
   });
 
-  it("requires both a bound link and a password grant for protected shares", () => {
-    expect(
-      authorizePlayback({
-        ...readyPrivate,
-        visibility: "PASSWORD",
-        hasValidPasswordGrant: true,
-      }),
-    ).toEqual({ allowed: false, reason: "PASSWORD_REQUIRED" });
-    expect(
-      authorizePlayback({
-        ...readyPrivate,
-        visibility: "PASSWORD",
-        hasValidShareLink: true,
-      }),
-    ).toEqual({ allowed: false, reason: "PASSWORD_REQUIRED" });
-    expect(
-      authorizePlayback({
-        ...readyPrivate,
-        visibility: "PASSWORD",
-        hasValidShareLink: true,
-        hasValidPasswordGrant: true,
-      }),
-    ).toEqual({ allowed: true });
+  it("requires a bound link before serving a link share to an outsider", () => {
+    expect(authorizePlayback({ ...readyPrivate, visibility: "LINK" })).toEqual({
+      allowed: false,
+      reason: "SHARE_LINK_REQUIRED",
+    });
   });
 
   it("allows ready public recordings without a session but never leaks unready media", () => {

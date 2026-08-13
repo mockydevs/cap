@@ -9,8 +9,7 @@ export const shareTokenParamsSchema = z.object({
 
 export const updateSharingSchema = z
   .object({
-    visibility: z.enum(["PRIVATE", "LINK", "PASSWORD", "PUBLIC"]),
-    password: z.string().min(10).max(256).optional(),
+    visibility: z.enum(["PRIVATE", "LINK", "PUBLIC"]),
     expiresInHours: z
       .number()
       .int()
@@ -19,24 +18,7 @@ export const updateSharingSchema = z
       .optional(),
   })
   .superRefine((value, context) => {
-    if (value.visibility === "PASSWORD" && !value.password) {
-      context.addIssue({
-        code: "custom",
-        message: "Password is required",
-        path: ["password"],
-      });
-    }
-    if (value.visibility !== "PASSWORD" && value.password !== undefined) {
-      context.addIssue({
-        code: "custom",
-        message: "Password is only valid for PASSWORD mode",
-        path: ["password"],
-      });
-    }
-    if (
-      (value.visibility === "PRIVATE" || value.visibility === "PUBLIC") &&
-      value.expiresInHours !== undefined
-    ) {
+    if (value.visibility !== "LINK" && value.expiresInHours !== undefined) {
       context.addIssue({
         code: "custom",
         message: "Expiry is only valid for share links",
@@ -44,7 +26,3 @@ export const updateSharingSchema = z
       });
     }
   });
-
-export const sharePlaybackSchema = z.object({
-  password: z.string().min(1).max(256).optional(),
-});

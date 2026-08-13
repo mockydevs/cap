@@ -1,10 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
-import {
-  authorizePlayback,
-  validateShareConfiguration,
-  type RecordingVisibility,
-} from "@cap/domain";
+import { authorizePlayback, type RecordingVisibility } from "@cap/domain";
 import {
   assertManagedMediaObjectKey,
   type PlaybackObjectStorage,
@@ -12,10 +8,8 @@ import {
 import { db } from "../../db/client";
 import { recordingAssets, recordings, shareLinks } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
-import { hashPassword, verifyPassword } from "../auth/credentials";
 import { beginViewSession, type ViewKind } from "../analytics/service";
 import { uploadStorage } from "../uploads/storage";
-import { enforceSharePasswordRateLimit } from "./rate-limit";
 
 const PLAYBACK_URL_TTL_SECONDS = 120;
 const DEFAULT_SHARE_TTL_HOURS = 7 * 24;
@@ -31,9 +25,7 @@ export class SharingServiceError extends Error {
     | "RECORDING_NOT_FOUND"
     | "RECORDING_NOT_READY"
     | "SHARING_FORBIDDEN"
-    | "SHARE_NOT_FOUND"
-    | "SHARE_PASSWORD_REQUIRED"
-    | "SHARE_PASSWORD_INVALID";
+    | "SHARE_NOT_FOUND";
   readonly status: number;
 
   constructor(
@@ -61,22 +53,10 @@ export async function updateRecordingSharing(
   recordingId: string,
   input: {
     visibility: RecordingVisibility;
-    password?: string | undefined;
     expiresInHours?: number | undefined;
   },
 ) {
-  validateShareConfiguration({
-    visibility: input.visibility,
-    ...(input.password ? { password: input.password } : {}),
-  });
-  const passwordHash =
-    input.visibility === "PASSWORD"
-      ? await hashPassword(input.password!)
-      : undefined;
-  const token =
-    input.visibility === "LINK" || input.visibility === "PASSWORD"
-      ? generateShareToken()
-      : undefined;
+  const token = input.visibility === "LINK" ? generateShareToken() : undefined;
   const tokenHash = token ? hashShareToken(token) : undefined;
   const expiresAt = token
     ? new Date(
@@ -128,12 +108,7 @@ export async function updateRecordingSharing(
       .update(recordings)
       .set({ visibility: input.visibility, updatedAt: now })
       .where(eq(recordings.id, recording.id));
-    if (
-      (input.visibility === "LINK" || input.visibility === "PASSWORD") &&
-      token &&
-      tokenHash &&
-      expiresAt
-    ) {
+    if (input.visibility === "LINK" && token && tokenHash && expiresAt) {
       await transaction.insert(shareLinks).values({
         id: randomUUID(),
         workspaceId: actor.workspaceId,
@@ -141,7 +116,6 @@ export async function updateRecordingSharing(
         createdBy: actor.userId,
         mode: input.visibility,
         tokenHash,
-        ...(passwordHash ? { passwordHash } : {}),
         expiresAt,
       });
     }
@@ -250,10 +224,9 @@ export async function authorizeRecordingPlayback(
     visibility: recording.visibility,
     isWorkspaceMember: actor?.workspaceId === recording.workspaceId,
     hasActiveShareLink: false,
-    passwordVerified: false,
   });
   if (!decision.allowed) {
-    // Conceal private/link/password recording existence from unauthorized callers.
+    // Conceal private and link-only recording existence from unauthorized callers.
     throw new SharingServiceError(
       "RECORDING_NOT_FOUND",
       404,
@@ -267,10 +240,13 @@ export async function authorizeRecordingPlayback(
   });
 }
 
+/**
+ * Holding an unexpired, unrevoked token is the whole of the check: the link is
+ * the credential, so a recipient who has it can watch.
+ */
 export async function authorizeSharePlayback(
   request: Request,
   token: string,
-  password: string | undefined,
   storage: PlaybackObjectStorage = uploadStorage(),
   options?: { viewKind?: ViewKind; expectedRecordingId?: string },
 ) {
@@ -281,7 +257,6 @@ export async function authorizeSharePlayback(
       id: shareLinks.id,
       recordingId: shareLinks.recordingId,
       mode: shareLinks.mode,
-      passwordHash: shareLinks.passwordHash,
     })
     .from(shareLinks)
     .where(
@@ -305,38 +280,10 @@ export async function authorizeSharePlayback(
     throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
   }
 
-  let passwordVerified = false;
-  if (link.mode === "PASSWORD") {
-    await enforceSharePasswordRateLimit(request, tokenHash);
-    if (!password) {
-      throw new SharingServiceError(
-        "SHARE_PASSWORD_REQUIRED",
-        401,
-        "Share password required",
-      );
-    }
-    try {
-      passwordVerified = Boolean(
-        link.passwordHash &&
-        (await verifyPassword(link.passwordHash, password)),
-      );
-    } catch {
-      passwordVerified = false;
-    }
-    if (!passwordVerified) {
-      throw new SharingServiceError(
-        "SHARE_PASSWORD_INVALID",
-        401,
-        "Invalid share password",
-      );
-    }
-  }
-
   const decision = authorizePlayback({
     visibility: recording.visibility,
     isWorkspaceMember: false,
     hasActiveShareLink: true,
-    passwordVerified,
   });
   if (!decision.allowed)
     throw new SharingServiceError("SHARE_NOT_FOUND", 404, "Share not found");
