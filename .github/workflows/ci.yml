@@ -23,3 +23,20 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  # Routes exercised against a real Postgres, Redis and S3/KMS emulator. The
+  # unit suite covers services in isolation, which is how an endpoint pair
+  # whose read shape its own write rejected reached main unnoticed.
+  integration:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f docker-compose.test.yml up -d --wait
+      - run: pnpm --filter @cap/web test:integration
+      - if: always()
+        run: docker compose -f docker-compose.test.yml down -v

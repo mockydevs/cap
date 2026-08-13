@@ -11,6 +11,27 @@ import {
   resumeUpload,
 } from "../lib/uploads/resumable-client";
 
+/**
+ * Explains an upload failure by what actually went wrong.
+ *
+ * Every failure used to read "Sign in and retry", so a storage
+ * misconfiguration, a dropped connection or a CORS rejection all sent the
+ * person off to re-authenticate while the real cause went unreported. The
+ * recording is safe in browser storage in every case, which is the one part
+ * that was always worth saying.
+ */
+export function uploadFailureMessage(error: unknown): string {
+  const kept = "Your recording is still here — download a backup or retry.";
+  // fetch() rejects with a TypeError when the request never completed at all:
+  // no network, DNS failure, or a cross-origin rejection from the storage host.
+  if (error instanceof TypeError)
+    return `Upload failed: could not reach the upload service. Check your connection, then retry. ${kept}`;
+  if (!(error instanceof Error)) return `Upload failed. ${kept}`;
+  if (error.message === "UNAUTHENTICATED")
+    return `Upload failed: your session expired. Sign in, then retry. ${kept}`;
+  return `Upload failed: ${error.message}. ${kept}`;
+}
+
 export function CaptureStudio() {
   const [state, setState] = useState<CaptureState>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -190,11 +211,7 @@ export function CaptureStudio() {
       setMessage("Upload complete. Media processing has started.");
     } catch (error) {
       setState("error");
-      setMessage(
-        error instanceof Error
-          ? `Upload failed: ${error.message}. Sign in and retry; your recording remains in this browser.`
-          : "Upload failed. Sign in and retry; your recording remains in this browser.",
-      );
+      setMessage(uploadFailureMessage(error));
     }
   }
 

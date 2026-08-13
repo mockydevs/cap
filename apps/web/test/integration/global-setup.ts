@@ -1,6 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import pg from "pg";
 import {
   CreateBucketCommand,
   PutBucketEncryptionCommand,
@@ -17,6 +19,7 @@ const DATABASE_URL =
   "postgresql://cap:cap@localhost:5433/cap_test";
 const S3_ENDPOINT =
   process.env.INTEGRATION_S3_ENDPOINT ?? "http://localhost:4566";
+const REDIS_URL = process.env.INTEGRATION_REDIS_URL ?? "redis://localhost:6380";
 const BUCKET_NAME = "cap-integration-test";
 const REGION = "us-east-1";
 
@@ -62,11 +65,19 @@ export default async function setup() {
   const keyArn = key.KeyMetadata?.Arn;
   if (!keyArn) throw new Error("LocalStack did not return a KMS key ARN");
 
-  execFileSync("npx", ["drizzle-kit", "migrate"], {
-    cwd: fileURLToPath(new URL("../../", import.meta.url)),
-    env: { ...process.env, DATABASE_URL },
-    stdio: "inherit",
-  });
+  // Migrate in-process with the same migrator the production container runs,
+  // rather than shelling out to drizzle-kit: spawning `npx` fails outright on
+  // Windows, which meant this suite could not run there at all.
+  const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 1 });
+  try {
+    await migrate(drizzle(pool), {
+      migrationsFolder: fileURLToPath(
+        new URL("../../db/migrations", import.meta.url),
+      ),
+    });
+  } finally {
+    await pool.end();
+  }
 
   writeFileSync(
     ENV_FILE,
@@ -78,6 +89,9 @@ export default async function setup() {
       AWS_KMS_KEY_ARN: keyArn,
       AWS_ACCESS_KEY_ID: credentials.accessKeyId,
       AWS_SECRET_ACCESS_KEY: credentials.secretAccessKey,
+      REDIS_URL,
+      // Route handlers reject a request whose Origin does not match this.
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000",
     }),
   );
 }
