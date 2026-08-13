@@ -35,6 +35,13 @@ Verify a delivery by recomputing the HMAC-SHA256 of the raw request body with yo
 
 A delivery is retried with exponential backoff (up to 6 attempts over roughly 15 minutes) if the endpoint doesn't respond with a `2xx` status within 10 seconds. Deleting an endpoint stops future deliveries but does not cancel deliveries already in flight.
 
+Endpoints must resolve only to public addresses and redirects are not followed,
+which prevents workspace-controlled webhooks from reaching deployment-internal
+services. An operator can permit an intentional private destination by adding
+its exact hostname to `OUTBOUND_PRIVATE_HOST_ALLOWLIST` in both the web and
+webhook-worker environments; use this sparingly and enforce egress policy at
+the network layer as a second boundary.
+
 ## Operating the delivery worker
 
 The `webhook-worker` service polls a transactional outbox (`webhook_outbox`) written by the web app and the media/transcription/AI workers in the same database transaction as the underlying state change, so an event is never emitted for a change that didn't actually commit. It requires a key dedicated to webhook signing secrets, distinct from the media and AI-credential keys, so no other service can decrypt them: either `WEBHOOK_SECRETS_KMS_KEY_ARN` (AWS KMS) or `WEBHOOK_SECRETS_LOCAL_KEY` (32 bytes base64, from `openssl rand -base64 32`) for deployments without AWS. Both the web app and the worker need the same one. Secrets are sealed with the envelope in `@cap/crypto` and bound to the workspace and to the webhook purpose, so a signing secret cannot be unsealed as an AI credential or read from another workspace.

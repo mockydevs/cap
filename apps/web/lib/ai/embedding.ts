@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  assertSafeOutboundUrl,
+  privateHostAllowlist,
+} from "@cap/outbound-http";
 
 const responseSchema = z.object({
   data: z.array(
@@ -42,22 +46,26 @@ export async function embedTexts(
   credential: EmbeddingCredential,
 ): Promise<EmbeddingBatch> {
   if (!texts.length) return { vectors: [], inputTokens: 0 };
-  const response = await fetch(
-    `${(credential.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/embeddings`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${credential.apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: credential.model,
-        input: texts,
-        encoding_format: "float",
-      }),
-      signal: AbortSignal.timeout(30_000),
+  const endpoint = `${(credential.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "")}/embeddings`;
+  await assertSafeOutboundUrl(endpoint, {
+    allowedPrivateHosts: privateHostAllowlist(
+      process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+    ),
+  });
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${credential.apiKey}`,
+      "content-type": "application/json",
     },
-  );
+    body: JSON.stringify({
+      model: credential.model,
+      input: texts,
+      encoding_format: "float",
+    }),
+    signal: AbortSignal.timeout(30_000),
+    redirect: "error",
+  });
   if (!response.ok)
     throw new Error(`Embedding provider returned ${response.status}`);
   const parsed = responseSchema.parse(await response.json());

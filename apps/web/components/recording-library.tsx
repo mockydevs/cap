@@ -55,7 +55,7 @@ type Overview = {
 
 const STALLED_UPLOAD_AFTER_MS = 15 * 60 * 1_000;
 
-export function isUploadStalled(
+function isUploadStalled(
   recording: Pick<RecordingSummary, "status" | "updatedAt">,
   now = Date.now(),
 ): boolean {

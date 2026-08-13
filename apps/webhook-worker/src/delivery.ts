@@ -2,6 +2,10 @@ import { createHmac } from "node:crypto";
 import type { KMSClient } from "@aws-sdk/client-kms";
 import { decryptCredential } from "@cap/crypto";
 import type { Pool } from "pg";
+import {
+  assertSafeOutboundUrl,
+  privateHostAllowlist,
+} from "@cap/outbound-http";
 
 interface DeliveryRow {
   id: string;
@@ -18,7 +22,7 @@ export function signWebhookPayload(secret: string, body: string): string {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
 }
 
-export class WebhookDeliveryFailedError extends Error {}
+class WebhookDeliveryFailedError extends Error {}
 
 /** Throws on a failed/unreachable endpoint so BullMQ's attempts+backoff retry it. */
 export async function deliverWebhook(
@@ -57,6 +61,11 @@ export async function deliverWebhook(
   let responseExcerpt = "";
   let succeeded = false;
   try {
+    await assertSafeOutboundUrl(delivery.url, {
+      allowedPrivateHosts: privateHostAllowlist(
+        process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+      ),
+    });
     const response = await fetch(delivery.url, {
       method: "POST",
       headers: {
@@ -67,6 +76,7 @@ export async function deliverWebhook(
       },
       body,
       signal: AbortSignal.timeout(10_000),
+      redirect: "manual",
     });
     responseStatus = response.status;
     responseExcerpt = (await response.text()).slice(0, 2_000);

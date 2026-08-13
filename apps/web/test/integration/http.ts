@@ -18,7 +18,7 @@ import {
  * real origin, against a real database.
  */
 
-export const APP_URL = "http://localhost:3000";
+const APP_URL = "http://localhost:3000";
 
 export interface SignedInActor {
   readonly actor: Actor;

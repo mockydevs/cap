@@ -227,10 +227,7 @@ export function unknownModelRate(): TokenRate | undefined {
  * credit — a workspace paying its own provider is metered for its ceiling and
  * charged nothing here.
  */
-export function chargedMicrounits(
-  lane: AiUsageLane,
-  costMicrounits: number,
-): number {
+function chargedMicrounits(lane: AiUsageLane, costMicrounits: number): number {
   return lane === "MANAGED"
     ? applyManagedMarkup(costMicrounits, managedMarkupPercent())
     : 0;

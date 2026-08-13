@@ -19,7 +19,7 @@ export class BillingConfigurationError extends Error {
   }
 }
 
-export const aiPlanSchema = z
+const aiPlanSchema = z
   .object({
     /** Stable identifier stored on the subscription; safe to show in a URL. */
     code: z

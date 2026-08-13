@@ -4,3 +4,6 @@ dist
 coverage
 pnpm-lock.yaml
 **/target/**
+.playwright-mcp/
+.dev-server*.log
+apps/web/next-env.d.ts

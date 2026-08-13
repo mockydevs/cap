@@ -10,3 +10,6 @@ coverage
 .env.*
 !.env.example
 .integration-env.json
+.playwright-mcp/
+.dev-server*.log
+.dev-server.pid

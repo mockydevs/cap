@@ -5,6 +5,10 @@ import type {
   TranscriptionProviderRequest,
   TranscriptionProviderResult,
 } from "@cap/transcription";
+import {
+  assertSafeOutboundUrl,
+  privateHostAllowlist,
+} from "@cap/outbound-http";
 
 const responseSchema = z.object({
   language: z.string().default("en"),
@@ -32,7 +36,7 @@ async function bytes(stream: AsyncIterable<Uint8Array>) {
   return new Blob(parts as BlobPart[], { type: "audio/wav" });
 }
 
-export class OpenAICompatibleProvider implements TranscriptionProvider {
+class OpenAICompatibleProvider implements TranscriptionProvider {
   readonly name = "openai-compatible";
   constructor(
     private readonly config: {
@@ -53,14 +57,18 @@ export class OpenAICompatibleProvider implements TranscriptionProvider {
     form.append("timestamp_granularities[]", "word");
     if (request.language) form.set("language", request.language);
     form.set("file", await bytes(request.audio), "audio.wav");
-    const response = await fetch(
-      `${this.config.baseUrl.replace(/\/$/, "")}/audio/transcriptions`,
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${this.config.apiKey}` },
-        body: form,
-      },
-    );
+    const endpoint = `${this.config.baseUrl.replace(/\/$/, "")}/audio/transcriptions`;
+    await assertSafeOutboundUrl(endpoint, {
+      allowedPrivateHosts: privateHostAllowlist(
+        process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+      ),
+    });
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { authorization: `Bearer ${this.config.apiKey}` },
+      body: form,
+      redirect: "error",
+    });
     if (!response.ok)
       throw new Error(`Transcription provider returned ${response.status}`);
     const parsed = responseSchema.parse(await response.json());

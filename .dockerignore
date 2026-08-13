@@ -7,7 +7,12 @@
 **/.next
 **/dist
 **/coverage
+**/target
+.turbo
+.playwright-mcp
 tests
 infra
 docs
 *.log
+*.pid
+/*.png

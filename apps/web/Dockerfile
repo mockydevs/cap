@@ -9,6 +9,7 @@ COPY packages/ai/package.json packages/ai/package.json
 COPY packages/crypto/package.json packages/crypto/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/editor-domain/package.json packages/editor-domain/package.json
+COPY packages/outbound-http/package.json packages/outbound-http/package.json
 COPY packages/queue/package.json packages/queue/package.json
 COPY packages/recording/package.json packages/recording/package.json
 COPY packages/storage/package.json packages/storage/package.json
@@ -23,6 +24,7 @@ RUN pnpm --filter @cap/web build && \
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
+RUN npm uninstall --global npm
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static

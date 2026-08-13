@@ -9,6 +9,7 @@ Report suspected vulnerabilities privately to the repository owners. Do not incl
 - Media, render, transcription, and AI queues have distinct workers. The AI worker receives approved transcript text from PostgreSQL and has no S3 credentials.
 - Share links and presigned URLs are bearer credentials. They must not appear in logs, analytics referrers, support tickets, or monitoring payloads.
 - Uploaded media and transcript text are untrusted input. FFmpeg runs in a constrained worker; AI prompts delimit transcript content and outputs are schema-validated suggestions until accepted.
+- User-configured AI and webhook destinations are HTTPS-only on port 443, are rejected when they resolve to local/private/reserved addresses, and are rechecked immediately before outbound requests. Redirects are not followed. Operators may explicitly permit exact private or non-standard-port hostnames with `OUTBOUND_PRIVATE_HOST_ALLOWLIST` for intentional services; keep that allowlist narrow and pair it with network-level egress controls in production.
 
 ## Secret handling
 

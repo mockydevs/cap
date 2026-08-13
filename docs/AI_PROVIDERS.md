@@ -12,6 +12,12 @@ unseals it immediately before use, and does not persist or log the plaintext.
 Every ciphertext is bound to one workspace and to the AI purpose, so a
 credential cannot be read from another workspace or reused for webhook signing.
 
+Custom provider URLs must resolve only to public addresses and outbound
+requests do not follow redirects. For an intentionally private self-hosted
+provider, the operator must add its exact hostname to
+`OUTBOUND_PRIVATE_HOST_ALLOWLIST` in the web, AI-worker, and transcription-worker
+environments. This is an operator control, not a workspace setting.
+
 Revocation overwrites the stored ciphertext and prevents queued jobs from resolving the connection. Provider routes and model allowlists are workspace-scoped. Each AI job records its selected connection, model, usage, estimated cost, prompt version, transcript revision, and hashed provider request identifier.
 
 ## Configuring the key

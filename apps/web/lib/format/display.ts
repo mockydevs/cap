@@ -38,13 +38,6 @@ export function formatDate(iso: string): string {
   );
 }
 
-export function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
-}
-
 /** Up to two letters, for the square account tile in the workspace bar. */
 export function initialsOf(displayName: string): string {
   return (

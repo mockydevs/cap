@@ -4,6 +4,11 @@ import { webhookEndpoints, webhookOutbox } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
 import { encryptWebhookSecret, generateWebhookSecret } from "./crypto";
+import {
+  assertSafeOutboundUrl,
+  privateHostAllowlist,
+  UnsafeOutboundUrlError,
+} from "@cap/outbound-http";
 
 export const WEBHOOK_EVENTS = [
   "recording.ready",
@@ -15,7 +20,10 @@ export const WEBHOOK_EVENTS = [
 export type WebhookEventName = (typeof WEBHOOK_EVENTS)[number];
 
 export class WebhookServiceError extends Error {
-  readonly code: "WEBHOOK_NOT_FOUND" | "WEBHOOK_ENCRYPTION_UNAVAILABLE";
+  readonly code:
+    | "WEBHOOK_NOT_FOUND"
+    | "WEBHOOK_ENCRYPTION_UNAVAILABLE"
+    | "WEBHOOK_URL_BLOCKED";
   readonly status: number;
 
   constructor(code: WebhookServiceError["code"], status: number) {
@@ -72,6 +80,17 @@ export async function createWebhookEndpoint(
     enabledEvents: WebhookEventName[];
   },
 ) {
+  try {
+    await assertSafeOutboundUrl(input.url, {
+      allowedPrivateHosts: privateHostAllowlist(
+        process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+      ),
+    });
+  } catch (error) {
+    if (error instanceof UnsafeOutboundUrlError)
+      throw new WebhookServiceError("WEBHOOK_URL_BLOCKED", 400);
+    throw error;
+  }
   const secret = generateWebhookSecret();
   let encrypted: Awaited<ReturnType<typeof encryptWebhookSecret>>;
   try {

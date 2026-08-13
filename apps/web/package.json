@@ -24,6 +24,7 @@
     "@cap/crypto": "workspace:*",
     "@cap/domain": "workspace:*",
     "@cap/editor-domain": "workspace:*",
+    "@cap/outbound-http": "workspace:*",
     "@cap/queue": "workspace:*",
     "@cap/recording": "workspace:*",
     "@cap/storage": "workspace:*",
@@ -39,7 +40,6 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
     "@types/pg": "^8.11.13",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

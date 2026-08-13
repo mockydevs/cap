@@ -48,7 +48,7 @@ interface ResolvedTranscriptionProvider {
  * (only when the operator has explicitly opted in) the deployment credential —
  * rather than from a single provider built once at start-up.
  */
-export async function providerForJob(
+async function providerForJob(
   pool: Pool,
   kms: KMSClient,
   workspaceId: string,
