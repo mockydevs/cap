@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  durationFromPacketTimeline,
   hlsPackageArguments,
   MediaCommandError,
   playbackEncodeArguments,
   posterArguments,
 } from "../src/ffmpeg";
+
+describe("MediaRecorder duration fallback", () => {
+  it("derives duration from the final video packet when WebM metadata is absent", () => {
+    expect(
+      durationFromPacketTimeline("0.000000,0.033000\n1.966000,0.034000\n"),
+    ).toBe(2);
+  });
+
+  it("ignores N/A and malformed packet rows", () => {
+    expect(durationFromPacketTimeline("N/A,N/A\ninvalid\n2.500000,N/A\n")).toBe(
+      2.5,
+    );
+  });
+});
 
 describe("media command errors", () => {
   it("preserves bounded diagnostic output", () => {

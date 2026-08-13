@@ -64,9 +64,23 @@ export async function inspectMedia(
     streams?: Array<{ width?: number; height?: number }>;
   };
   const stream = result.streams?.[0];
-  const durationSeconds = Number(result.format?.duration);
+  let durationSeconds = Number(result.format?.duration);
   const width = stream?.width;
   const height = stream?.height;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    const packetTimeline = await execute("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "packet=pts_time,duration_time",
+      "-of",
+      "csv=p=0",
+      inputPath,
+    ]);
+    durationSeconds = durationFromPacketTimeline(packetTimeline);
+  }
   if (
     !Number.isFinite(durationSeconds) ||
     durationSeconds <= 0 ||
@@ -75,6 +89,29 @@ export async function inspectMedia(
   )
     throw new Error("source has no valid video stream");
   return { durationSeconds, width: width as number, height: height as number };
+}
+
+/**
+ * MediaRecorder's timesliced WebM output often has no container duration.
+ * ffprobe still exposes timestamps for every video packet, so the final packet
+ * end is a reliable duration fallback without decoding the whole recording.
+ */
+export function durationFromPacketTimeline(output: string): number {
+  let duration = 0;
+  for (const line of output.split(/\r?\n/)) {
+    const [timestampValue, durationValue] = line.trim().split(",");
+    const timestamp = Number(timestampValue);
+    const packetDuration = Number(durationValue);
+    if (!Number.isFinite(timestamp) || timestamp < 0) continue;
+    duration = Math.max(
+      duration,
+      timestamp +
+        (Number.isFinite(packetDuration) && packetDuration > 0
+          ? packetDuration
+          : 0),
+    );
+  }
+  return duration;
 }
 
 /** Segment length for the HLS rendition, in seconds. */
