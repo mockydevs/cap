@@ -79,6 +79,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "media" {
   }
 }
 
+# Must stay in step with requiredCorsRule() in @cap/storage, which is what
+# `pnpm --filter @cap/web storage:verify` checks a live bucket against. A
+# bucket created outside this module gets no rule at all, and browser uploads
+# then fail with an unexplained "Failed to fetch" — see docs/STORAGE.md.
 resource "aws_s3_bucket_cors_configuration" "media" {
   bucket = aws_s3_bucket.media.id
   cors_rule {

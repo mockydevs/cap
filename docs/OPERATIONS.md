@@ -18,6 +18,14 @@ receive a Coolify domain.
 
 The AI worker is optional. Configure the dedicated `AI_CREDENTIALS_KMS_KEY_ARN` and attach only the Terraform web-encrypt and worker-decrypt policies to their respective services. Deployments without AWS set `AI_CREDENTIALS_LOCAL_KEY` instead, and must include it in their secret backups — see [ADR 0003](decisions/0003-credential-envelope.md). Leave workspace AI disabled until an administrator adds and routes a validated provider connection and explicitly approves external processing. Deployment-wide credentials are a compatibility fallback and should remain disabled.
 
+## Storage
+
+Recordings upload from the browser straight to object storage, so the bucket
+must allow the application origin. Run `pnpm --filter @cap/web storage:verify`
+after any change to the bucket, the origin, or the provider — a missing CORS
+rule is invisible until someone finishes a recording. See
+[STORAGE.md](STORAGE.md).
+
 ## Backup and restore
 
 - Take encrypted PostgreSQL backups at least daily and retain 30 daily copies. Keep a second copy outside the Coolify host.

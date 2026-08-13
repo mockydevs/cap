@@ -1,0 +1,19 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://cap.calari.tech"],
+      "AllowedMethods": ["PUT", "GET", "HEAD"],
+      "AllowedHeaders": [
+        "content-type",
+        "content-length",
+        "x-amz-checksum-sha256",
+        "x-amz-content-sha256",
+        "x-amz-date",
+        "authorization",
+        "x-amz-security-token"
+      ],
+      "ExposeHeaders": ["ETag", "x-amz-checksum-sha256"],
+      "MaxAgeSeconds": 600
+    }
+  ]
+}
