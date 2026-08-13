@@ -1,8 +1,7 @@
 :root {
   color-scheme: dark;
   --font-sans:
-    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-    sans-serif;
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   --color-bg: #0a0e0b;
   --color-bg-glow: #162318;
@@ -332,7 +331,9 @@ select.control {
   border: 1px solid var(--color-border-strong);
   position: relative;
   flex: none;
-  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease);
 }
 
 .switch-thumb {
@@ -343,7 +344,9 @@ select.control {
   height: 15px;
   border-radius: 50%;
   background: var(--color-text-faint);
-  transition: transform 0.16s var(--ease), background 0.16s var(--ease);
+  transition:
+    transform 0.16s var(--ease),
+    background 0.16s var(--ease);
 }
 
 .switch input:checked + .switch-track {
@@ -407,7 +410,11 @@ select.control {
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--color-accent-strong), var(--color-accent));
+  background: linear-gradient(
+    180deg,
+    var(--color-accent-strong),
+    var(--color-accent)
+  );
   border-color: transparent;
   color: var(--color-accent-ink);
   font-weight: 650;
@@ -416,7 +423,11 @@ select.control {
 
 .btn-primary:hover {
   filter: brightness(1.05);
-  background: linear-gradient(180deg, var(--color-accent-strong), var(--color-accent));
+  background: linear-gradient(
+    180deg,
+    var(--color-accent-strong),
+    var(--color-accent)
+  );
 }
 
 .btn-primary:disabled {
@@ -601,7 +612,9 @@ kbd {
   background: var(--color-surface-2);
   font-size: 12.5px;
   cursor: pointer;
-  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
+  transition:
+    border-color 0.14s var(--ease),
+    background 0.14s var(--ease);
   position: relative;
 }
 
@@ -733,7 +746,11 @@ kbd {
 .recording-progress > span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-strong));
+  background: linear-gradient(
+    90deg,
+    var(--color-accent),
+    var(--color-accent-strong)
+  );
   border-radius: inherit;
   transition: width 0.2s var(--ease);
 }

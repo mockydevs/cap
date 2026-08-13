@@ -121,7 +121,10 @@ export async function removeMember(actor: Actor, targetUserId: string) {
     if (!target) throw new WorkspaceServiceError("MEMBER_NOT_FOUND", 404);
     if (target.role === "OWNER" && actor.role !== "OWNER")
       throw new AuthorizationError("Only an owner can remove an owner");
-    if (target.role === "OWNER" && (await ownerCount(actor.workspaceId, tx)) <= 1)
+    if (
+      target.role === "OWNER" &&
+      (await ownerCount(actor.workspaceId, tx)) <= 1
+    )
       throw new WorkspaceServiceError("CANNOT_REMOVE_LAST_OWNER", 409);
     await tx
       .delete(workspaceMembers)
@@ -262,7 +265,8 @@ export async function acceptInvitation(
       .from(workspaceInvitations)
       .where(eq(workspaceInvitations.tokenHash, hashInvitationToken(token)))
       .limit(1);
-    if (!invitation) throw new WorkspaceServiceError("INVITATION_NOT_FOUND", 404);
+    if (!invitation)
+      throw new WorkspaceServiceError("INVITATION_NOT_FOUND", 404);
     if (invitation.acceptedAt || invitation.revokedAt)
       throw new WorkspaceServiceError("INVITATION_NOT_FOUND", 404);
     if (invitation.expiresAt.getTime() < Date.now())

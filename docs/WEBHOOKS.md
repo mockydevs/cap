@@ -17,7 +17,12 @@ Each endpoint subscribes to an explicit subset of these events.
 A delivery is an HTTP `POST` with a JSON body:
 
 ```json
-{ "id": "<delivery id>", "event": "recording.ready", "createdAt": "<ISO 8601>", "data": { "...": "event-specific fields" } }
+{
+  "id": "<delivery id>",
+  "event": "recording.ready",
+  "createdAt": "<ISO 8601>",
+  "data": { "...": "event-specific fields" }
+}
 ```
 
 Request headers:

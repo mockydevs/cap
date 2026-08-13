@@ -8,12 +8,15 @@ import {
 } from "@aws-sdk/client-s3";
 import { CreateKeyCommand, KMSClient } from "@aws-sdk/client-kms";
 
-const ENV_FILE = fileURLToPath(new URL("./.integration-env.json", import.meta.url));
+const ENV_FILE = fileURLToPath(
+  new URL("./.integration-env.json", import.meta.url),
+);
 
 const DATABASE_URL =
   process.env.INTEGRATION_DATABASE_URL ??
   "postgresql://cap:cap@localhost:5433/cap_test";
-const S3_ENDPOINT = process.env.INTEGRATION_S3_ENDPOINT ?? "http://localhost:4566";
+const S3_ENDPOINT =
+  process.env.INTEGRATION_S3_ENDPOINT ?? "http://localhost:4566";
 const BUCKET_NAME = "cap-integration-test";
 const REGION = "us-east-1";
 
@@ -32,11 +35,17 @@ export default async function setup() {
     forcePathStyle: true,
     credentials,
   });
-  const kms = new KMSClient({ region: REGION, endpoint: S3_ENDPOINT, credentials });
-
-  await s3.send(new CreateBucketCommand({ Bucket: BUCKET_NAME })).catch((error) => {
-    if (!String(error).includes("BucketAlreadyOwnedByYou")) throw error;
+  const kms = new KMSClient({
+    region: REGION,
+    endpoint: S3_ENDPOINT,
+    credentials,
   });
+
+  await s3
+    .send(new CreateBucketCommand({ Bucket: BUCKET_NAME }))
+    .catch((error) => {
+      if (!String(error).includes("BucketAlreadyOwnedByYou")) throw error;
+    });
   await s3.send(
     new PutBucketEncryptionCommand({
       Bucket: BUCKET_NAME,

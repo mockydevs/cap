@@ -23,9 +23,9 @@ test("shows an owner their own recording's pre-processing panels", async ({
   await expect(
     page.getByRole("heading", { name: "Preparing playback…" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Edit recording" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Edit recording" })).toHaveCount(
+    0,
+  );
 
   // TranscriptPanel: no transcript exists yet for this recording.
   await expect(page.getByRole("heading", { name: "Transcript" })).toBeVisible();
@@ -53,10 +53,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
   await expect(page.getByRole("button", { name: "Save access" })).toBeVisible();
 });
 
-test("enforces private access across workspaces", async ({
-  page,
-  browser,
-}) => {
+test("enforces private access across workspaces", async ({ page, browser }) => {
   await signUpAndSignIn(page, "Viewer Private Owner");
   const recordingId = await createUploadingRecording(
     page,

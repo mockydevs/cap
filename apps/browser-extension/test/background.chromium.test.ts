@@ -26,7 +26,9 @@ function createChromeMock() {
       create: vi.fn(),
       query: vi.fn(() => Promise.resolve([{ id: 7 }])),
     },
-    tabCapture: { getMediaStreamId: vi.fn(() => Promise.resolve("tab-stream-1")) },
+    tabCapture: {
+      getMediaStreamId: vi.fn(() => Promise.resolve("tab-stream-1")),
+    },
     desktopCapture: { chooseDesktopMedia: vi.fn() },
     offscreen: {
       hasDocument: vi.fn(() => Promise.resolve(false)),
@@ -81,7 +83,9 @@ function onMessageListener() {
 
 describe("resolveStreamId", () => {
   it('resolves a tab stream id via chrome.tabCapture for source "tab"', async () => {
-    await expect(background.resolveStreamId("tab")).resolves.toBe("tab-stream-1");
+    await expect(background.resolveStreamId("tab")).resolves.toBe(
+      "tab-stream-1",
+    );
     expect(chromeMock.tabCapture.getMediaStreamId).toHaveBeenCalledWith({
       targetTabId: 7,
     });
@@ -118,7 +122,9 @@ describe("resolveStreamId", () => {
   });
 
   it('needs no stream id for source "camera-only"', async () => {
-    await expect(background.resolveStreamId("camera-only")).resolves.toBeUndefined();
+    await expect(
+      background.resolveStreamId("camera-only"),
+    ).resolves.toBeUndefined();
     expect(chromeMock.tabs.query).not.toHaveBeenCalled();
   });
 });
@@ -170,7 +176,9 @@ describe("handleStartRecording", () => {
           title: "My recording",
         }),
       );
-      expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: "REC" });
+      expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({
+        text: "REC",
+      });
     },
   );
 
@@ -304,7 +312,11 @@ describe("upload outcome handling", () => {
     chromeMock.action.setBadgeText.mockClear();
 
     const listener = onMessageListener();
-    await listener({ type: "OFFSCREEN_UPLOAD_DONE", recordingId: "rec_1" }, {}, vi.fn());
+    await listener(
+      { type: "OFFSCREEN_UPLOAD_DONE", recordingId: "rec_1" },
+      {},
+      vi.fn(),
+    );
 
     expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: "" });
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
@@ -331,7 +343,9 @@ describe("upload outcome handling", () => {
     listener({ type: "OFFSCREEN_UPLOAD_AUTH_EXPIRED" }, {}, vi.fn());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(chromeMock.__localStore.auth?.["https://cap.example.com"]).toBeUndefined();
+    expect(
+      chromeMock.__localStore.auth?.["https://cap.example.com"],
+    ).toBeUndefined();
     expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: "!" });
     expect(chromeMock.notifications.create).toHaveBeenCalled();
   });
@@ -354,7 +368,11 @@ describe("upload outcome handling", () => {
   it("on OFFSCREEN_ERROR: clears the badge and notifies", async () => {
     const listener = onMessageListener();
 
-    await listener({ type: "OFFSCREEN_ERROR", message: "Could not start capture" }, {}, vi.fn());
+    await listener(
+      { type: "OFFSCREEN_ERROR", message: "Could not start capture" },
+      {},
+      vi.fn(),
+    );
 
     expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: "" });
     expect(chromeMock.notifications.create).toHaveBeenCalledWith(
@@ -366,7 +384,9 @@ describe("upload outcome handling", () => {
 describe("context menu / command wiring (ported from the Firefox launcher)", () => {
   it("registers the context menu and command listeners on import", () => {
     expect(chromeMock.runtime.onInstalled.addListener).toHaveBeenCalledTimes(1);
-    expect(chromeMock.contextMenus.onClicked.addListener).toHaveBeenCalledTimes(1);
+    expect(chromeMock.contextMenus.onClicked.addListener).toHaveBeenCalledTimes(
+      1,
+    );
     expect(chromeMock.commands.onCommand.addListener).toHaveBeenCalledTimes(1);
   });
 

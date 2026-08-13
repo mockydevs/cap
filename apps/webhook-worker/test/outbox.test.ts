@@ -36,7 +36,10 @@ describe("dispatchWebhookOutbox", () => {
         };
       }
       if (sql.includes("FROM webhook_endpoints")) {
-        return { rows: [{ id: "endpoint-1" }, { id: "endpoint-2" }], rowCount: 2 };
+        return {
+          rows: [{ id: "endpoint-1" }, { id: "endpoint-2" }],
+          rowCount: 2,
+        };
       }
       if (sql.includes("INSERT INTO webhook_deliveries")) {
         deliverySeq += 1;
@@ -113,8 +116,10 @@ describe("dispatchWebhookOutbox", () => {
           rowCount: 1,
         };
       }
-      if (sql.includes("FROM webhook_endpoints")) return { rows: [], rowCount: 0 };
-      if (sql.includes("UPDATE webhook_outbox")) return { rows: [], rowCount: 1 };
+      if (sql.includes("FROM webhook_endpoints"))
+        return { rows: [], rowCount: 0 };
+      if (sql.includes("UPDATE webhook_outbox"))
+        return { rows: [], rowCount: 1 };
       throw new Error(`unexpected query: ${sql}`);
     });
     const client: FakeClient = { query, release: vi.fn() };

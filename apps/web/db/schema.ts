@@ -870,11 +870,10 @@ export const transcriptSegments = pgTable(
       table.transcriptId,
       table.ordinal,
     ),
-    index("transcript_segments_visible_text_trgm_idx")
-      .using(
-        "gin",
-        sql`coalesce(${table.correctedText}, ${table.providerText}) gin_trgm_ops`,
-      ),
+    index("transcript_segments_visible_text_trgm_idx").using(
+      "gin",
+      sql`coalesce(${table.correctedText}, ${table.providerText}) gin_trgm_ops`,
+    ),
     check(
       "transcript_segments_timing_check",
       sql`${table.startMs} >= 0 AND ${table.endMs} > ${table.startMs}`,
@@ -1451,10 +1450,7 @@ export const webhookOutbox = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: true }),
   },
   (table) => [
-    index("webhook_outbox_pending_idx").on(
-      table.publishedAt,
-      table.createdAt,
-    ),
+    index("webhook_outbox_pending_idx").on(table.publishedAt, table.createdAt),
   ],
 );
 

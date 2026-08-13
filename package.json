@@ -1,6 +1,7 @@
 {
   "name": "cap",
   "private": true,
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.14.0",
   "engines": {
     "node": ">=22.0.0",

@@ -6,7 +6,12 @@ Password and Google sign-in configuration is documented in [docs/AUTHENTICATION.
 
 Production deployment, recovery, monitoring, security, and compatibility requirements are documented in [docs/OPERATIONS.md](docs/OPERATIONS.md), [docs/SECURITY.md](docs/SECURITY.md), and [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-An independent, browser-first screen recording platform with authenticated workspaces, resumable private AWS S3 uploads, and asynchronous FFmpeg processing.
+An independent, browser-first screen recording platform with authenticated workspaces, resumable uploads to private S3-compatible storage, and asynchronous FFmpeg processing.
+
+Cap is free software under the [GNU AGPL v3](LICENSE): you can run it yourself,
+modify it, and share it, and anyone who offers a modified version as a network
+service must publish their changes. Contributions are welcome — start with
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Prerequisites
 
@@ -34,7 +39,7 @@ pnpm test
 pnpm build
 ```
 
-`pnpm test` is unit-only and needs no external services. Integration tests exercise the real multipart-upload lifecycle and Google-account-linking logic against a live Postgres and an S3/KMS-compatible backend (LocalStack — not MinIO, since `@cap/storage` requires a real KMS key ARN for SSE-KMS on every object):
+`pnpm test` is unit-only and needs no external services. Integration tests exercise the real multipart-upload lifecycle and Google-account-linking logic against a live Postgres and an S3-compatible backend. The suite uses LocalStack so it covers the SSE-KMS path as well; a store without KMS (such as MinIO) works for running the app, but not for these tests:
 
 ```bash
 docker compose -f docker-compose.test.yml up -d --wait
@@ -44,9 +49,25 @@ docker compose -f docker-compose.test.yml down
 
 Real-browser end-to-end tests against the full running stack live in [tests/e2e](tests/e2e/README.md).
 
-## AWS object storage
+## Object storage
 
-Production media belongs in a private AWS S3 bucket. Use `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_KMS_KEY_ARN`, and workload-scoped credentials; do not expose S3 credentials with `NEXT_PUBLIC_` variables. The API generates short-lived multipart presigned requests after workspace authorization. See [infra/README.md](infra/README.md) for the required bucket posture and Coolify variables.
+Media belongs in a private bucket on any S3-compatible store. Set `AWS_REGION`,
+`AWS_S3_BUCKET_NAME`, and workload-scoped credentials; never expose storage
+credentials through `NEXT_PUBLIC_` variables. The API generates short-lived
+multipart presigned requests after workspace authorization, so recordings are
+uploaded and played back directly against the store and never stream through the
+application server.
+
+| Store                 | Additional configuration                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| AWS S3                | `AWS_KMS_KEY_ARN` for SSE-KMS on every object (see [infra/README.md](infra/README.md) for bucket posture and Coolify variables) |
+| Cloudflare R2         | `AWS_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, `AWS_REGION=auto`, no KMS key                                  |
+| MinIO or Backblaze B2 | `AWS_S3_ENDPOINT` pointing at the store, no KMS key                                                                             |
+
+R2 is the cheapest option for a public deployment because it bills no egress,
+which for a video product is otherwise the largest variable cost. The rationale
+and the trade-off against SSE-KMS are recorded in
+[ADR 0002](docs/decisions/0002-provider-neutral-object-storage.md).
 
 ## Local services
 

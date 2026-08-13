@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { requireActor } from "../../../../../lib/auth/authorization";
 import { hasTrustedOrigin } from "../../../../../lib/auth/origin";
-import { switchActiveWorkspace, tokenFromRequest } from "../../../../../lib/auth/session";
+import {
+  switchActiveWorkspace,
+  tokenFromRequest,
+} from "../../../../../lib/auth/session";
 
 export const runtime = "nodejs";
 

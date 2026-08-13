@@ -36,7 +36,10 @@ describe("atempoChain", () => {
 describe("piecewiseLinearExpr", () => {
   it("returns a constant for a single keyframe", () => {
     expect(
-      piecewiseLinearExpr([{ timeMs: 0, scale: 2, x: 0, y: 0 }], (k) => k.scale),
+      piecewiseLinearExpr(
+        [{ timeMs: 0, scale: 2, x: 0, y: 0 }],
+        (k) => k.scale,
+      ),
     ).toBe("2.000000");
   });
   it("builds a boundary-gated linear interpolation for two keyframes", () => {
@@ -48,7 +51,9 @@ describe("piecewiseLinearExpr", () => {
       (k) => k.scale,
     );
     expect(expr).toContain("if(lt(t,2.000000)");
-    expect(expr).toContain("1.000000+(3.000000-1.000000)*(t-0.000000)/2.000000");
+    expect(expr).toContain(
+      "1.000000+(3.000000-1.000000)*(t-0.000000)/2.000000",
+    );
   });
 });
 
@@ -75,7 +80,9 @@ const identityTransform = {
 describe("videoClipFilterChain", () => {
   it("scales and pads to fit the transform box without cropping/rotating", () => {
     const chain = videoClipFilterChain({ transform: identityTransform });
-    expect(chain).toContain("scale=1280:720:force_original_aspect_ratio=decrease");
+    expect(chain).toContain(
+      "scale=1280:720:force_original_aspect_ratio=decrease",
+    );
     expect(chain).toContain("pad=1280:720");
     expect(chain).not.toContain("rotate=");
     expect(chain).not.toContain("colorchannelmixer");
@@ -83,7 +90,10 @@ describe("videoClipFilterChain", () => {
 
   it("adds a static crop stage when crop fractions are set", () => {
     const chain = videoClipFilterChain({
-      transform: { ...identityTransform, crop: { top: 0.1, right: 0, bottom: 0, left: 0.2 } },
+      transform: {
+        ...identityTransform,
+        crop: { top: 0.1, right: 0, bottom: 0, left: 0.2 },
+      },
     });
     expect(chain).toContain("iw*(1-0.2-0)");
     expect(chain).toContain("ih*(1-0.1-0)");
@@ -109,7 +119,9 @@ const audioSettings = {
 
 describe("audioClipFilterChain", () => {
   it("returns undefined for a muted clip", () => {
-    expect(audioClipFilterChain({ ...audioSettings, muted: true }, 5, 1)).toBeUndefined();
+    expect(
+      audioClipFilterChain({ ...audioSettings, muted: true }, 5, 1),
+    ).toBeUndefined();
   });
   it("returns anull when there is nothing to apply", () => {
     expect(audioClipFilterChain(audioSettings, 5, 1)).toBe("anull");
@@ -175,7 +187,9 @@ describe("generatedOverlayFilterChain", () => {
       } as never,
     });
     expect(chain).toContain("geq=r='r(X,Y)'");
-    expect(chain).toContain("lte(pow((X-50.000)/50.000,2)+pow((Y-25.000)/25.000,2),1)");
+    expect(chain).toContain(
+      "lte(pow((X-50.000)/50.000,2)+pow((Y-25.000)/25.000,2),1)",
+    );
   });
 });
 
@@ -232,7 +246,9 @@ describe("imageOverlayFilterChain", () => {
       mask: "CIRCLE",
     });
     expect(chain).toContain("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)'");
-    expect(chain).toContain("lte(pow((X-100.000)/100.000,2)+pow((Y-100.000)/100.000,2),1)");
+    expect(chain).toContain(
+      "lte(pow((X-100.000)/100.000,2)+pow((Y-100.000)/100.000,2),1)",
+    );
     expect(chain).toContain("a(X,Y)");
   });
   it("masks to rounded corners with a balanced expression", () => {

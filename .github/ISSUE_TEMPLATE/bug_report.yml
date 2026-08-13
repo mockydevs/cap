@@ -1,0 +1,61 @@
+name: Bug report
+description: Something behaves differently from how it is documented or intended.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here — follow
+        [docs/SECURITY.md](../../blob/main/docs/SECURITY.md) instead.
+
+        Share links, presigned URLs, and session cookies are credentials. Redact
+        them before pasting logs.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in and open /record
+        2. Record a 10-second tab capture
+        3. Open the recording from /library
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did this happen
+      multiple: true
+      options:
+        - Web app
+        - Desktop app (Tauri)
+        - Browser extension
+        - Worker (media, render, transcription, AI, or webhook)
+        - Public API
+        - Self-hosted deployment
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag, or `git rev-parse --short HEAD` for a source checkout.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 141 on Windows 11
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Console or worker output. Redact credentials.
+      render: shell

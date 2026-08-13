@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Queue } from "bullmq";
 import type { Pool } from "pg";
-import {
-  mediaProcessingJobOptions,
-  type MediaProcessingJob,
-} from "@cap/queue";
+import { mediaProcessingJobOptions, type MediaProcessingJob } from "@cap/queue";
 import { dispatchProcessingOutbox } from "../src/outbox";
 
 interface FakeClient {

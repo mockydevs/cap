@@ -30,9 +30,18 @@ const features = [
 ];
 
 const useCases = [
-  ["Engineering", "Reproduce bugs with the screen, voice, and timeline in one place."],
-  ["Product", "Walk through decisions and keep roadmap context available on demand."],
-  ["Design", "Present work, gather precise feedback, and reduce review meetings."],
+  [
+    "Engineering",
+    "Reproduce bugs with the screen, voice, and timeline in one place.",
+  ],
+  [
+    "Product",
+    "Walk through decisions and keep roadmap context available on demand.",
+  ],
+  [
+    "Design",
+    "Present work, gather precise feedback, and reduce review meetings.",
+  ],
   ["Support", "Show the fix clearly and build a reusable answer library."],
 ];
 
@@ -65,7 +74,8 @@ export default function HomePage() {
     <main className="marketing-shell">
       <header className="marketing-header">
         <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />cap
+          <span className="brand-mark" aria-hidden="true" />
+          cap
         </Link>
         <nav className="marketing-nav" aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
@@ -99,9 +109,15 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="product-demo" aria-label="Preview of the Cap recording workspace">
+        <div
+          className="product-demo"
+          aria-label="Preview of the Cap recording workspace"
+        >
           <div className="product-demo-bar">
-            <span className="product-demo-brand"><span className="brand-mark" />cap</span>
+            <span className="product-demo-brand">
+              <span className="brand-mark" />
+              cap
+            </span>
             <span>Q3 roadmap walkthrough</span>
             <span className="product-demo-live">REC 04:12</span>
           </div>
@@ -110,18 +126,39 @@ export default function HomePage() {
               <div className="demo-window">
                 <span>Product roadmap</span>
                 <strong>Three bets for the next quarter.</strong>
-                <div className="demo-bars"><i /><i /><i /></div>
+                <div className="demo-bars">
+                  <i />
+                  <i />
+                  <i />
+                </div>
               </div>
-              <div className="demo-presenter"><span>JL</span></div>
+              <div className="demo-presenter">
+                <span>JL</span>
+              </div>
               <div className="demo-controls">
-                <span>▶</span><i /><span>04:12</span><span>CC</span>
+                <span>▶</span>
+                <i />
+                <span>04:12</span>
+                <span>CC</span>
               </div>
             </div>
             <aside className="product-demo-transcript">
-              <div><strong>Transcript</strong><span>EN</span></div>
-              <p><time>00:04</time> The three bets for next quarter are onboarding, the editor, and webhooks.</p>
-              <p className="active"><time>00:18</time> I&apos;ll walk through what changes for customers and why.</p>
-              <p><time>00:31</time> First, we are making the new workspace flow much faster.</p>
+              <div>
+                <strong>Transcript</strong>
+                <span>EN</span>
+              </div>
+              <p>
+                <time>00:04</time> The three bets for next quarter are
+                onboarding, the editor, and webhooks.
+              </p>
+              <p className="active">
+                <time>00:18</time> I&apos;ll walk through what changes for
+                customers and why.
+              </p>
+              <p>
+                <time>00:31</time> First, we are making the new workspace flow
+                much faster.
+              </p>
             </aside>
           </div>
         </div>
@@ -175,17 +212,25 @@ export default function HomePage() {
           <article>
             <span>01 / Understand</span>
             <h3>Transcripts and captions</h3>
-            <p>Read, search, edit, export, or jump directly to the right moment.</p>
+            <p>
+              Read, search, edit, export, or jump directly to the right moment.
+            </p>
           </article>
           <article>
             <span>02 / Refine</span>
             <h3>Non-destructive editing</h3>
-            <p>Trim, split, reorder, and publish without touching the source recording.</p>
+            <p>
+              Trim, split, reorder, and publish without touching the source
+              recording.
+            </p>
           </article>
           <article>
             <span>03 / Collaborate</span>
             <h3>Comments and AI assistance</h3>
-            <p>Collect timestamped feedback and generate useful summaries and answers.</p>
+            <p>
+              Collect timestamped feedback and generate useful summaries and
+              answers.
+            </p>
           </article>
         </div>
       </section>
@@ -229,9 +274,15 @@ export default function HomePage() {
       </section>
 
       <footer className="marketing-footer">
-        <Link className="brand" href="/"><span className="brand-mark" />cap</Link>
+        <Link className="brand" href="/">
+          <span className="brand-mark" />
+          cap
+        </Link>
         <p>Browser-first screen recording for clear, asynchronous work.</p>
-        <div><Link href="/login">Sign in</Link><Link href="/signup">Create account</Link></div>
+        <div>
+          <Link href="/login">Sign in</Link>
+          <Link href="/signup">Create account</Link>
+        </div>
       </footer>
     </main>
   );

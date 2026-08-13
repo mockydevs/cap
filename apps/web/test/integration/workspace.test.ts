@@ -4,7 +4,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client";
 import { users, workspaceMembers, workspaces } from "../../db/schema";
 import { hashPassword } from "../../lib/auth/credentials";
-import { findOrCreateGoogleUser, GoogleAccountConflictError } from "../../lib/auth/google";
+import {
+  findOrCreateGoogleUser,
+  GoogleAccountConflictError,
+} from "../../lib/auth/google";
 import type { Actor } from "../../lib/auth/session";
 import {
   inviteMember,
@@ -17,14 +20,20 @@ import {
 describe("Google account linking against a real database", () => {
   it("refuses to auto-link a Google identity to an existing password account", async () => {
     const email = `conflict-${randomUUID()}@example.com`;
-    await db().insert(users).values({
-      id: randomUUID(),
-      email,
-      passwordHash: await hashPassword("a genuinely random password value"),
-      displayName: "Existing Password User",
-    });
+    await db()
+      .insert(users)
+      .values({
+        id: randomUUID(),
+        email,
+        passwordHash: await hashPassword("a genuinely random password value"),
+        displayName: "Existing Password User",
+      });
     await expect(
-      findOrCreateGoogleUser({ subject: randomUUID(), email, displayName: "Attacker" }),
+      findOrCreateGoogleUser({
+        subject: randomUUID(),
+        email,
+        displayName: "Attacker",
+      }),
     ).rejects.toThrow(GoogleAccountConflictError);
   });
 
@@ -51,17 +60,27 @@ describe("workspace membership management against a real database", () => {
   beforeAll(async () => {
     workspaceId = randomUUID();
     const ownerId = randomUUID();
-    await db().insert(workspaces).values({ id: workspaceId, name: "Membership Test" });
-    await db().insert(users).values({
-      id: ownerId,
-      email: `owner-${randomUUID()}@example.com`,
-      passwordHash: "not-a-real-hash",
-      displayName: "Owner",
-    });
+    await db()
+      .insert(workspaces)
+      .values({ id: workspaceId, name: "Membership Test" });
+    await db()
+      .insert(users)
+      .values({
+        id: ownerId,
+        email: `owner-${randomUUID()}@example.com`,
+        passwordHash: "not-a-real-hash",
+        displayName: "Owner",
+      });
     await db()
       .insert(workspaceMembers)
       .values({ workspaceId, userId: ownerId, role: "OWNER" });
-    owner = { userId: ownerId, workspaceId, email: "owner@example.com", displayName: "Owner", role: "OWNER" };
+    owner = {
+      userId: ownerId,
+      workspaceId,
+      email: "owner@example.com",
+      displayName: "Owner",
+      role: "OWNER",
+    };
   });
 
   it("adds an existing user directly and allows role changes and removal", async () => {
@@ -74,7 +93,10 @@ describe("workspace membership management against a real database", () => {
       displayName: "Member",
     });
 
-    const invited = await inviteMember(owner, { email: memberEmail, role: "MEMBER" });
+    const invited = await inviteMember(owner, {
+      email: memberEmail,
+      role: "MEMBER",
+    });
     expect(invited).toEqual({ status: "ADDED", userId: memberId });
 
     const members = await listMembers(workspaceId);
@@ -82,7 +104,9 @@ describe("workspace membership management against a real database", () => {
 
     await updateMemberRole(owner, memberId, "ADMIN");
     const afterPromotion = await listMembers(workspaceId);
-    expect(afterPromotion.find((m) => m.userId === memberId)?.role).toBe("ADMIN");
+    expect(afterPromotion.find((m) => m.userId === memberId)?.role).toBe(
+      "ADMIN",
+    );
 
     await removeMember(owner, memberId);
     const afterRemoval = await listMembers(workspaceId);

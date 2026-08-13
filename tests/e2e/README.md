@@ -28,7 +28,7 @@ None of this has been run against a live stack in this environment (no
 Docker here) — every spec below was written by reading the real component
 and API route source under `apps/web` for its selectors and behavior, then
 re-checked side-by-side against that source, not run. See the note at the
-bottom of this section for the subset that *has* actually been executed.
+bottom of this section for the subset that _has_ actually been executed.
 
 ### Covered
 
@@ -63,7 +63,7 @@ one is `apps/web/components/capture-studio.tsx`, which calls
 permission dialog with no fake-device flag equivalent to
 `--use-fake-device-for-media-stream`, and headless Chromium has no screen to
 share regardless. So `createUploadingRecording()` in `helpers.ts` drives the
-*first* real step of that same flow directly: an in-page `fetch` to
+_first_ real step of that same flow directly: an in-page `fetch` to
 `POST /api/upload-sessions` (the exact endpoint and payload shape
 `beginResumableUpload` in `lib/uploads/resumable-client.ts` uses), executed
 with the real signed-in session cookie and same-origin `Origin` header. That
@@ -91,11 +91,11 @@ workspace," not "recording and uploading a sample" end-to-end.
   no way to fabricate it short of a direct database write, which this suite
   avoids.
 - **Open an unlisted link**, **Validate password protection** — `share-
-  controls.tsx` can set `LINK`/`PASSWORD` visibility on any recording
+controls.tsx` can set `LINK`/`PASSWORD` visibility on any recording
   regardless of status, so a real share token can be minted. But
   `authorizeSharePlayback` (`lib/sharing/service.ts`) calls
   `playableRecording()`, which requires `status === "READY"` and a joined
-  `MP4` asset row *before* it ever checks the password — so with no way to
+  `MP4` asset row _before_ it ever checks the password — so with no way to
   reach `READY`, every share-page visit fails with the same generic
   "unavailable" message regardless of whether the password was right,
   wrong, or absent. A spec here could only assert that generic message,

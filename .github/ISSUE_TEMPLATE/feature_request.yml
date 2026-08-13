@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a capability Cap does not have yet.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that Cap makes hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to see
+      description: Describe the behaviour, not the implementation, unless the implementation is the point.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Workarounds, other tools, or existing features that came close.
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Does this matter most for
+      options:
+        - Self-hosted deployments
+        - Hosted Cap
+        - Both
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to work on this myself

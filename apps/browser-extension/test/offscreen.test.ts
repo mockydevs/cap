@@ -73,7 +73,12 @@ class FakeMediaRecorder {
 
 let offscreen: typeof import("../src/offscreen.js");
 let getUserMedia: ReturnType<typeof vi.fn>;
-let chromeMock: { runtime: { sendMessage: ReturnType<typeof vi.fn>; onMessage: { addListener: ReturnType<typeof vi.fn> } } };
+let chromeMock: {
+  runtime: {
+    sendMessage: ReturnType<typeof vi.fn>;
+    onMessage: { addListener: ReturnType<typeof vi.fn> };
+  };
+};
 
 beforeEach(async () => {
   vi.resetModules();
@@ -117,8 +122,18 @@ describe("redeemDisplayStream", () => {
     await offscreen.redeemDisplayStream("tab", "tab-stream-1");
 
     expect(getUserMedia).toHaveBeenCalledWith({
-      video: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: "tab-stream-1" } },
-      audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: "tab-stream-1" } },
+      video: {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: "tab-stream-1",
+        },
+      },
+      audio: {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: "tab-stream-1",
+        },
+      },
     });
   });
 
@@ -129,8 +144,18 @@ describe("redeemDisplayStream", () => {
     await offscreen.redeemDisplayStream("screen", "desktop-stream-1");
 
     expect(getUserMedia).toHaveBeenCalledWith({
-      video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: "desktop-stream-1" } },
-      audio: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: "desktop-stream-1" } },
+      video: {
+        mandatory: {
+          chromeMediaSource: "desktop",
+          chromeMediaSourceId: "desktop-stream-1",
+        },
+      },
+      audio: {
+        mandatory: {
+          chromeMediaSource: "desktop",
+          chromeMediaSourceId: "desktop-stream-1",
+        },
+      },
     });
   });
 });
@@ -145,7 +170,11 @@ describe("combineStreams", () => {
 
     const combined = offscreen.combineStreams(display, mic);
 
-    expect(combined.getTracks()).toEqual([displayVideo, displayAudio, micAudio]);
+    expect(combined.getTracks()).toEqual([
+      displayVideo,
+      displayAudio,
+      micAudio,
+    ]);
   });
 
   it("works with no mic stream", () => {
@@ -173,7 +202,7 @@ describe("acquireStream", () => {
     expect(result).toBe(fakeStream);
   });
 
-  it('for a display source with includeMic:true, redeems the display then combines with a separate mic getUserMedia call', async () => {
+  it("for a display source with includeMic:true, redeems the display then combines with a separate mic getUserMedia call", async () => {
     const displayVideo = new FakeTrack("video");
     const display = new FakeMediaStream([displayVideo]);
     const micAudio = new FakeTrack("audio");
@@ -212,10 +241,14 @@ describe("pickMimeType", () => {
 
     expect(result).toBe("video/webm;codecs=vp9,opus");
     expect(selectRecorderMimeType).toHaveBeenCalledWith(expect.any(Function));
-    const supported = selectRecorderMimeType.mock.calls[0][0] as (value: string) => boolean;
+    const supported = selectRecorderMimeType.mock.calls[0][0] as (
+      value: string,
+    ) => boolean;
     FakeMediaRecorder.isTypeSupported.mockClear();
     supported("video/webm");
-    expect(FakeMediaRecorder.isTypeSupported).toHaveBeenCalledWith("video/webm");
+    expect(FakeMediaRecorder.isTypeSupported).toHaveBeenCalledWith(
+      "video/webm",
+    );
   });
 });
 
@@ -223,18 +256,28 @@ describe("startRecording", () => {
   it("starts a MediaRecorder at a 2000ms timeslice", () => {
     const stream = new FakeMediaStream([new FakeTrack("video")]);
 
-    const recorder = offscreen.startRecording(stream) as unknown as FakeMediaRecorder;
+    const recorder = offscreen.startRecording(
+      stream,
+    ) as unknown as FakeMediaRecorder;
 
     expect(recorder.state).toBe("recording");
-    expect((recorder as unknown as Record<string, unknown>).timeslice).toBe(2000);
+    expect((recorder as unknown as Record<string, unknown>).timeslice).toBe(
+      2000,
+    );
   });
 });
 
 describe("beginCapture / pauseCapture / resumeCapture", () => {
   it("acquires the stream, starts recording, and replies OFFSCREEN_CAPTURE_STARTED", async () => {
-    getUserMedia.mockResolvedValue(new FakeMediaStream([new FakeTrack("video")]));
+    getUserMedia.mockResolvedValue(
+      new FakeMediaStream([new FakeTrack("video")]),
+    );
 
-    await offscreen.beginCapture({ source: "camera-only", includeMic: false, title: "t" });
+    await offscreen.beginCapture({
+      source: "camera-only",
+      includeMic: false,
+      title: "t",
+    });
 
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
       type: "OFFSCREEN_CAPTURE_STARTED",
@@ -244,7 +287,11 @@ describe("beginCapture / pauseCapture / resumeCapture", () => {
   it("replies OFFSCREEN_ERROR when stream acquisition fails", async () => {
     getUserMedia.mockRejectedValue(new Error("Permission denied"));
 
-    await offscreen.beginCapture({ source: "camera-only", includeMic: false, title: "t" });
+    await offscreen.beginCapture({
+      source: "camera-only",
+      includeMic: false,
+      title: "t",
+    });
 
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
       type: "OFFSCREEN_ERROR",
@@ -253,8 +300,14 @@ describe("beginCapture / pauseCapture / resumeCapture", () => {
   });
 
   it("pause/resume control the active recorder", async () => {
-    getUserMedia.mockResolvedValue(new FakeMediaStream([new FakeTrack("video")]));
-    await offscreen.beginCapture({ source: "camera-only", includeMic: false, title: "t" });
+    getUserMedia.mockResolvedValue(
+      new FakeMediaStream([new FakeTrack("video")]),
+    );
+    await offscreen.beginCapture({
+      source: "camera-only",
+      includeMic: false,
+      title: "t",
+    });
 
     offscreen.pauseCapture();
     offscreen.resumeCapture();
@@ -311,7 +364,9 @@ describe("stopCapture", () => {
 
   it("replies OFFSCREEN_UPLOAD_FAILED with the message for any other upload failure", async () => {
     await begin();
-    beginResumableUpload.mockRejectedValue(new Error("Could not create upload session"));
+    beginResumableUpload.mockRejectedValue(
+      new Error("Could not create upload session"),
+    );
 
     await offscreen.stopCapture();
 

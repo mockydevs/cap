@@ -1,20 +1,14 @@
 import type { Actor } from "../auth/session";
 
 export type PersistedRecordingStatus =
-  | "UPLOADING"
-  | "PROCESSING"
-  | "READY"
-  | "FAILED"
-  | "DELETED";
+  "UPLOADING" | "PROCESSING" | "READY" | "FAILED" | "DELETED";
 
 export function canManageRecording(
   actor: Pick<Actor, "role" | "userId">,
   ownerId: string,
 ) {
   return (
-    actor.role === "OWNER" ||
-    actor.role === "ADMIN" ||
-    ownerId === actor.userId
+    actor.role === "OWNER" || actor.role === "ADMIN" || ownerId === actor.userId
   );
 }
 

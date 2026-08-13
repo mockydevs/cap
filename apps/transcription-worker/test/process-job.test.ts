@@ -44,7 +44,9 @@ function jobFor(data: TranscriptionJob): Job<TranscriptionJob> {
   return { id: "job-1", data } as unknown as Job<TranscriptionJob>;
 }
 
-function baseJobData(overrides: Partial<TranscriptionJob> = {}): TranscriptionJob {
+function baseJobData(
+  overrides: Partial<TranscriptionJob> = {},
+): TranscriptionJob {
   return {
     recordingId: "33333333-3333-3333-3333-333333333333",
     workspaceId: "22222222-2222-2222-2222-222222222222",

@@ -36,7 +36,10 @@ export async function listAuditEvents(
       .select({ id: auditEvents.id, createdAt: auditEvents.createdAt })
       .from(auditEvents)
       .where(
-        and(eq(auditEvents.id, cursorId), eq(auditEvents.workspaceId, workspaceId)),
+        and(
+          eq(auditEvents.id, cursorId),
+          eq(auditEvents.workspaceId, workspaceId),
+        ),
       )
       .limit(1);
   const rows = await db()

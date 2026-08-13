@@ -51,7 +51,10 @@ export async function switchActiveWorkspace(
     .update(sessions)
     .set({ activeWorkspaceId: workspaceId })
     .where(
-      and(eq(sessions.tokenHash, hashSessionToken(token)), eq(sessions.userId, userId)),
+      and(
+        eq(sessions.tokenHash, hashSessionToken(token)),
+        eq(sessions.userId, userId),
+      ),
     );
   return true;
 }

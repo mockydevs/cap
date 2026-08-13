@@ -36,7 +36,12 @@ export async function dispatchWebhookOutbox(
       for (const endpoint of endpoints.rows) {
         const delivery = await client.query<{ id: string }>(
           "INSERT INTO webhook_deliveries (webhook_endpoint_id, workspace_id, event, payload) VALUES ($1,$2,$3,$4::jsonb) RETURNING id",
-          [endpoint.id, row.workspace_id, row.event, JSON.stringify(row.payload)],
+          [
+            endpoint.id,
+            row.workspace_id,
+            row.event,
+            JSON.stringify(row.payload),
+          ],
         );
         const deliveryId = delivery.rows[0]!.id;
         await queue.add(

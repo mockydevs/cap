@@ -8,7 +8,10 @@
 // `new MediaStream([...tracks])`.
 
 import { selectRecorderMimeType } from "./vendor/recording.js";
-import { beginResumableUpload, resumeUpload } from "./vendor/resumable-client.js";
+import {
+  beginResumableUpload,
+  resumeUpload,
+} from "./vendor/resumable-client.js";
 
 /** @type {MediaRecorder | undefined} */
 let recorder;
@@ -84,7 +87,9 @@ export async function acquireStream({ source, streamId, includeMic }) {
 
 /** Picks the best supported recorder codec, mirroring capture-studio.tsx. */
 export function pickMimeType() {
-  return selectRecorderMimeType((value) => MediaRecorder.isTypeSupported(value));
+  return selectRecorderMimeType((value) =>
+    MediaRecorder.isTypeSupported(value),
+  );
 }
 
 /**
@@ -95,7 +100,10 @@ export function pickMimeType() {
 export function startRecording(stream) {
   chunks = [];
   const mimeType = pickMimeType();
-  const nextRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const nextRecorder = new MediaRecorder(
+    stream,
+    mimeType ? { mimeType } : undefined,
+  );
   nextRecorder.ondataavailable = (event) => {
     if (event.data.size) chunks.push(event.data);
   };
@@ -126,7 +134,8 @@ export async function beginCapture(request) {
   } catch (error) {
     chrome.runtime.sendMessage({
       type: "OFFSCREEN_ERROR",
-      message: error instanceof Error ? error.message : "Could not start capture",
+      message:
+        error instanceof Error ? error.message : "Could not start capture",
     });
   }
 }
@@ -160,7 +169,9 @@ export async function stopCapture(overrides = {}) {
   recorder = undefined;
   activeStream = undefined;
 
-  const blob = new Blob(chunks, { type: finishedRecorder.mimeType || "video/webm" });
+  const blob = new Blob(chunks, {
+    type: finishedRecorder.mimeType || "video/webm",
+  });
   chunks = [];
   const config = { baseUrl, authorization };
   try {

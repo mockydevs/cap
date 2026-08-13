@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { recordingId, workspaceId } from "@cap/domain";
-import { assertManagedMediaObjectKey, buildTranscriptCaptionObjectKey } from "@cap/storage";
+import {
+  assertManagedMediaObjectKey,
+  buildTranscriptCaptionObjectKey,
+} from "@cap/storage";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { aiArtifacts, aiJobs, captionTracks } from "../../db/schema";

@@ -103,7 +103,9 @@ export function TranscriptPanel({
         <div className="panel-empty">
           <span aria-hidden="true">TXT</span>
           <strong>Transcript is processing.</strong>
-          <p>A searchable, editable transcript will appear here when it is ready.</p>
+          <p>
+            A searchable, editable transcript will appear here when it is ready.
+          </p>
         </div>
       </section>
     );

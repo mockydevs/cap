@@ -171,7 +171,8 @@ export async function renderArguments(
     args.push("-i", input);
   }
   args.push("-filter_complex", filters.join(";"), "-map", `[${composite}]`);
-  if (audioOutputLabel) args.push("-map", `[${audioOutputLabel}]`, "-c:a", "aac");
+  if (audioOutputLabel)
+    args.push("-map", `[${audioOutputLabel}]`, "-c:a", "aac");
   else args.push("-an");
   args.push(
     "-t",
@@ -200,29 +201,26 @@ export function executeRender(
   workDir: string,
 ) {
   return new Promise<void>((resolve, reject) => {
-    void renderArguments(manifest, inputs, output, workDir).then(
-      (args) => {
-        const child = spawn(process.env.FFMPEG_PATH ?? "ffmpeg", args, {
-          stdio: ["ignore", "ignore", "pipe"],
-        });
-        let stderr = "";
-        child.stderr.on(
-          "data",
-          (chunk) => (stderr = `${stderr}${String(chunk)}`.slice(-4000)),
-        );
-        const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-        child.on("error", (error) => {
-          clearTimeout(timer);
-          reject(error);
-        });
-        child.on("close", (code) => {
-          clearTimeout(timer);
-          code === 0
-            ? resolve()
-            : reject(new Error(`FFmpeg render failed (${code}): ${stderr}`));
-        });
-      },
-      reject,
-    );
+    void renderArguments(manifest, inputs, output, workDir).then((args) => {
+      const child = spawn(process.env.FFMPEG_PATH ?? "ffmpeg", args, {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      let stderr = "";
+      child.stderr.on(
+        "data",
+        (chunk) => (stderr = `${stderr}${String(chunk)}`.slice(-4000)),
+      );
+      const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        code === 0
+          ? resolve()
+          : reject(new Error(`FFmpeg render failed (${code}): ${stderr}`));
+      });
+    }, reject);
   });
 }

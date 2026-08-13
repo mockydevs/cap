@@ -77,16 +77,26 @@ export async function inspectMedia(
   return { durationSeconds, width: width as number, height: height as number };
 }
 
-export async function createPlaybackAssets(
+/** Segment length for the HLS rendition, in seconds. */
+const HLS_SEGMENT_SECONDS = 6;
+
+const BASE_ARGUMENTS = ["-hide_banner", "-loglevel", "error", "-y"] as const;
+
+/**
+ * The one and only re-encode: source (usually VP9/Opus from MediaRecorder) to
+ * H.264/AAC. Keyframes are forced on the HLS segment boundary so the playlist
+ * can be cut straight out of this file without touching the video again.
+ *
+ * `veryfast` rather than a slower preset because this runs per upload on shared
+ * worker hardware; for screen content the size difference is small next to the
+ * several-fold difference in CPU time.
+ */
+export function playbackEncodeArguments(
   inputPath: string,
-  outputDirectory: string,
-): Promise<void> {
-  await mkdir(outputDirectory, { recursive: true });
-  await execute("ffmpeg", [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-y",
+  outputPath: string,
+): string[] {
+  return [
+    ...BASE_ARGUMENTS,
     "-i",
     inputPath,
     "-map",
@@ -96,61 +106,90 @@ export async function createPlaybackAssets(
     "-c:v",
     "libx264",
     "-preset",
-    "medium",
+    "veryfast",
     "-crf",
     "23",
     "-pix_fmt",
     "yuv420p",
+    "-force_key_frames",
+    `expr:gte(t,n_forced*${HLS_SEGMENT_SECONDS})`,
     "-movflags",
     "+faststart",
     "-c:a",
     "aac",
     "-b:a",
     "128k",
-    `${outputDirectory}/playback.mp4`,
-  ]);
-  await execute("ffmpeg", [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-y",
+    outputPath,
+  ];
+}
+
+/**
+ * Packages the encoded MP4 as HLS by copying the streams. No `-c:v` here on
+ * purpose: re-encoding for a second rendition of the same quality would double
+ * the cost of every upload for no gain.
+ */
+export function hlsPackageArguments(
+  mp4Path: string,
+  outputDirectory: string,
+): string[] {
+  return [
+    ...BASE_ARGUMENTS,
     "-i",
-    inputPath,
-    "-map",
-    "0:v:0",
-    "-map",
-    "0:a?",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "medium",
-    "-crf",
-    "23",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "128k",
+    mp4Path,
+    "-c",
+    "copy",
+    "-f",
+    "hls",
     "-hls_time",
-    "6",
+    String(HLS_SEGMENT_SECONDS),
     "-hls_playlist_type",
     "vod",
+    "-hls_segment_type",
+    "mpegts",
+    "-hls_flags",
+    "independent_segments",
     "-hls_segment_filename",
     `${outputDirectory}/segment-%03d.ts`,
     `${outputDirectory}/master.m3u8`,
-  ]);
-  await execute("ffmpeg", [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-y",
+  ];
+}
+
+/**
+ * A frame one second in usually beats frame zero, which is often a blank
+ * window still mid-paint — but clips shorter than that need an earlier seek or
+ * ffmpeg writes no frame at all.
+ */
+export function posterArguments(
+  mp4Path: string,
+  outputPath: string,
+  durationSeconds: number,
+): string[] {
+  const seekSeconds = durationSeconds > 1 ? 1 : durationSeconds / 2;
+  return [
+    ...BASE_ARGUMENTS,
     "-ss",
-    "00:00:01",
+    seekSeconds.toFixed(3),
     "-i",
-    inputPath,
+    mp4Path,
     "-frames:v",
     "1",
     "-vf",
     "scale=1280:-2:force_original_aspect_ratio=decrease",
-    `${outputDirectory}/poster.jpg`,
-  ]);
+    outputPath,
+  ];
+}
+
+export async function createPlaybackAssets(
+  inputPath: string,
+  outputDirectory: string,
+  durationSeconds: number,
+): Promise<void> {
+  await mkdir(outputDirectory, { recursive: true });
+  const mp4Path = `${outputDirectory}/playback.mp4`;
+  await execute("ffmpeg", playbackEncodeArguments(inputPath, mp4Path));
+  await execute("ffmpeg", hlsPackageArguments(mp4Path, outputDirectory));
+  await execute(
+    "ffmpeg",
+    posterArguments(mp4Path, `${outputDirectory}/poster.jpg`, durationSeconds),
+  );
 }

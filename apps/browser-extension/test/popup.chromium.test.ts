@@ -14,7 +14,10 @@ function createChromeMock() {
     storage: {
       sync: {
         get: vi.fn((defaults: Record<string, unknown>) =>
-          Promise.resolve({ ...defaults, serverUrl: "https://cap.example.com" }),
+          Promise.resolve({
+            ...defaults,
+            serverUrl: "https://cap.example.com",
+          }),
         ),
         set: vi.fn(() => Promise.resolve()),
       },
@@ -101,19 +104,30 @@ describe("render: auth-state-driven conditional sections", () => {
   it("shows the login section and hides recording when signed out", async () => {
     await popup.render();
 
-    expect((document.querySelector("#login-section") as HTMLElement).hidden).toBe(false);
-    expect((document.querySelector("#recording-section") as HTMLElement).hidden).toBe(true);
+    expect(
+      (document.querySelector("#login-section") as HTMLElement).hidden,
+    ).toBe(false);
+    expect(
+      (document.querySelector("#recording-section") as HTMLElement).hidden,
+    ).toBe(true);
   });
 
   it("shows the recording section and hides login when signed in", async () => {
     chromeMock.__localStore.auth = {
-      "https://cap.example.com": { token: "tok_123", email: "person@example.com" },
+      "https://cap.example.com": {
+        token: "tok_123",
+        email: "person@example.com",
+      },
     };
 
     await popup.render();
 
-    expect((document.querySelector("#login-section") as HTMLElement).hidden).toBe(true);
-    expect((document.querySelector("#recording-section") as HTMLElement).hidden).toBe(false);
+    expect(
+      (document.querySelector("#login-section") as HTMLElement).hidden,
+    ).toBe(true);
+    expect(
+      (document.querySelector("#recording-section") as HTMLElement).hidden,
+    ).toBe(false);
     expect(document.querySelector("#signed-in-as")?.textContent).toContain(
       "person@example.com",
     );
@@ -121,15 +135,18 @@ describe("render: auth-state-driven conditional sections", () => {
 
   it("shows the pending-upload banner only when there are pending uploads and a token", async () => {
     chromeMock.__localStore.auth = {
-      "https://cap.example.com": { token: "tok_123", email: "person@example.com" },
+      "https://cap.example.com": {
+        token: "tok_123",
+        email: "person@example.com",
+      },
     };
     listPendingUploads.mockResolvedValue([{ sessionId: "s1" }]);
 
     await popup.render();
 
-    expect((document.querySelector("#pending-upload-banner") as HTMLElement).hidden).toBe(
-      false,
-    );
+    expect(
+      (document.querySelector("#pending-upload-banner") as HTMLElement).hidden,
+    ).toBe(false);
   });
 
   it("hides the pending-upload banner when there is no token even if uploads exist", async () => {
@@ -137,9 +154,9 @@ describe("render: auth-state-driven conditional sections", () => {
 
     await popup.render();
 
-    expect((document.querySelector("#pending-upload-banner") as HTMLElement).hidden).toBe(
-      true,
-    );
+    expect(
+      (document.querySelector("#pending-upload-banner") as HTMLElement).hidden,
+    ).toBe(true);
   });
 });
 
@@ -147,11 +164,16 @@ describe("start-recording payload construction", () => {
   it("sends POPUP_START_RECORDING with the source/checkbox/title inputs and closes the popup", async () => {
     const closeSpy = vi.spyOn(window, "close").mockImplementation(() => {});
     (document.querySelector("#source") as HTMLSelectElement).value = "screen";
-    (document.querySelector("#include-mic") as HTMLInputElement).checked = false;
-    (document.querySelector("#include-camera") as HTMLInputElement).checked = true;
-    (document.querySelector("#title") as HTMLInputElement).value = "My recording";
+    (document.querySelector("#include-mic") as HTMLInputElement).checked =
+      false;
+    (document.querySelector("#include-camera") as HTMLInputElement).checked =
+      true;
+    (document.querySelector("#title") as HTMLInputElement).value =
+      "My recording";
 
-    document.querySelector("#start-recording")?.dispatchEvent(new Event("click"));
+    document
+      .querySelector("#start-recording")
+      ?.dispatchEvent(new Event("click"));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({

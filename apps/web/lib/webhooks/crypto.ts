@@ -20,7 +20,10 @@ export function generateWebhookSecret(): string {
   return `whsec_${randomBytes(32).toString("base64url")}`;
 }
 
-export async function encryptWebhookSecret(workspaceId: string, secret: string) {
+export async function encryptWebhookSecret(
+  workspaceId: string,
+  secret: string,
+) {
   const KeyId = keyArn();
   const result = await kms().send(
     new EncryptCommand({

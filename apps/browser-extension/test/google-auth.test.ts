@@ -15,7 +15,9 @@ function createChromeMock() {
       },
     },
     identity: {
-      getRedirectURL: vi.fn(() => "https://abcdefabcdefabcdefabcdefabcdefab.chromiumapp.org/"),
+      getRedirectURL: vi.fn(
+        () => "https://abcdefabcdefabcdefabcdefabcdefab.chromiumapp.org/",
+      ),
       launchWebAuthFlow: vi.fn(),
     },
   };
@@ -49,7 +51,10 @@ describe("generateNonce", () => {
 describe("buildAuthUrl", () => {
   it("builds the Google OAuth URL with the expected query params", () => {
     const url = new URL(
-      googleAuth.buildAuthUrl("client-123.apps.googleusercontent.com", "a".repeat(43)),
+      googleAuth.buildAuthUrl(
+        "client-123.apps.googleusercontent.com",
+        "a".repeat(43),
+      ),
     );
 
     expect(url.origin + url.pathname).toBe(
@@ -90,7 +95,9 @@ describe("signInWithGoogle", () => {
       ok: false,
       status: 503,
       json: () =>
-        Promise.resolve({ error: { code: "GOOGLE_DESKTOP_OAUTH_NOT_CONFIGURED" } }),
+        Promise.resolve({
+          error: { code: "GOOGLE_DESKTOP_OAUTH_NOT_CONFIGURED" },
+        }),
     });
 
     await expect(
@@ -110,7 +117,8 @@ describe("signInWithGoogle", () => {
       if (url.endsWith("/api/desktop/auth/google")) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ token: "tok_google", displayName: "Person" }),
+          json: () =>
+            Promise.resolve({ token: "tok_google", displayName: "Person" }),
         });
       }
       throw new Error(`unexpected fetch: ${url}`);

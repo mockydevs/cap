@@ -157,7 +157,9 @@ describe("applyTemplate", () => {
       (clip) => clip.assetId === "asset_main",
     );
     expect(shiftedMainClip?.timelineStartMs).toBe(2_000);
-    const introClip = result.clips.find((clip) => clip.assetId === "asset_intro");
+    const introClip = result.clips.find(
+      (clip) => clip.assetId === "asset_intro",
+    );
     expect(introClip?.timelineStartMs).toBe(0);
     const introTitle = result.overlays.find((o) => o.kind === "TEXT");
     expect(introTitle).toMatchObject({ startMs: 0, endMs: 2_000 });
@@ -173,7 +175,9 @@ describe("applyTemplate", () => {
     expect(result.timelineDurationMs).toBe(12_000);
     const mainClip = result.clips.find((clip) => clip.assetId === "asset_main");
     expect(mainClip?.timelineStartMs).toBe(0);
-    const outroClip = result.clips.find((clip) => clip.assetId === "asset_intro");
+    const outroClip = result.clips.find(
+      (clip) => clip.assetId === "asset_intro",
+    );
     expect(outroClip?.timelineStartMs).toBe(10_000);
 
     editorDocumentV2Schema.parse(result);

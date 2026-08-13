@@ -8,7 +8,8 @@ export default async function LibraryPage({
   searchParams: Promise<{ view?: string }>;
 }) {
   const requestedView = (await searchParams).view;
-  const view = views.find((candidate) => candidate === requestedView) ?? "library";
+  const view =
+    views.find((candidate) => candidate === requestedView) ?? "library";
   return (
     <main className="library-page">
       <RecordingLibrary key={view} initialView={view} />

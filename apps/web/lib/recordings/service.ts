@@ -39,7 +39,9 @@ export async function deleteRecording(actor: Actor, targetRecordingId: string) {
     .limit(1);
   if (!recording) throw new RecordingServiceError("RECORDING_NOT_FOUND", 404);
   if (!canManageRecording(actor, recording.ownerId))
-    throw new AuthorizationError("Only an owner, admin, or the recording's creator can delete it");
+    throw new AuthorizationError(
+      "Only an owner, admin, or the recording's creator can delete it",
+    );
   await db().transaction(async (tx) => {
     await tx
       .update(recordings)
@@ -105,7 +107,10 @@ export async function setRecordingStar(
   }
 }
 
-export async function restoreRecording(actor: Actor, targetRecordingId: string) {
+export async function restoreRecording(
+  actor: Actor,
+  targetRecordingId: string,
+) {
   const [recording] = await db()
     .select({
       id: recordings.id,

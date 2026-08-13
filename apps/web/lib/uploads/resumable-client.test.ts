@@ -11,11 +11,16 @@ describe("resumable-client cross-origin config", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ sessionId: "s1", recordingId: "r1", partSizeBytes: 5_000_000 }),
-        { status: 201 },
-      ),
+    fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            sessionId: "s1",
+            recordingId: "r1",
+            partSizeBytes: 5_000_000,
+          }),
+          { status: 201 },
+        ),
     );
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -41,11 +46,16 @@ describe("resumable-client cross-origin config", () => {
   });
 
   it("defaults to a relative URL with no authorization header when config is omitted", async () => {
-    await beginResumableUpload("title", new Blob(["x"], { type: "video/webm" }));
+    await beginResumableUpload(
+      "title",
+      new Blob(["x"], { type: "video/webm" }),
+    );
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/upload-sessions");
-    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+    expect(
+      (init.headers as Record<string, string>).authorization,
+    ).toBeUndefined();
   });
 
   it("applies config to the abort call's DELETE request", async () => {

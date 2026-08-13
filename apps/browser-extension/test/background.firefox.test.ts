@@ -39,9 +39,7 @@ describe("server", () => {
       serverUrl: "https://cap.example.com/",
     });
 
-    await expect(background.server()).resolves.toBe(
-      "https://cap.example.com",
-    );
+    await expect(background.server()).resolves.toBe("https://cap.example.com");
   });
 
   it("leaves a URL without a trailing slash untouched", async () => {
@@ -49,9 +47,7 @@ describe("server", () => {
       serverUrl: "https://cap.example.com",
     });
 
-    await expect(background.server()).resolves.toBe(
-      "https://cap.example.com",
-    );
+    await expect(background.server()).resolves.toBe("https://cap.example.com");
   });
 });
 
@@ -83,9 +79,7 @@ describe("open", () => {
 
 describe("event wiring", () => {
   it("registers the context menu and command listeners on import", () => {
-    expect(chromeMock.runtime.onInstalled.addListener).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(chromeMock.runtime.onInstalled.addListener).toHaveBeenCalledTimes(1);
     expect(chromeMock.contextMenus.onClicked.addListener).toHaveBeenCalledTimes(
       1,
     );

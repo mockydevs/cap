@@ -41,8 +41,12 @@ describe("buildForceStyle", () => {
       burnIn: true,
     };
     expect(buildForceStyle(style)).toContain("Alignment=2");
-    expect(buildForceStyle({ ...style, position: "TOP" })).toContain("Alignment=8");
-    expect(buildForceStyle({ ...style, position: "CENTER" })).toContain("Alignment=5");
+    expect(buildForceStyle({ ...style, position: "TOP" })).toContain(
+      "Alignment=8",
+    );
+    expect(buildForceStyle({ ...style, position: "CENTER" })).toContain(
+      "Alignment=5",
+    );
     expect(buildForceStyle(style)).toContain("FontName=Arial");
     expect(buildForceStyle(style)).toContain("FontSize=32");
   });

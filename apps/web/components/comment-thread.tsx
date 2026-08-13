@@ -170,10 +170,14 @@ export function CommentThread({
                 );
               })}
               {comment.canEdit && (
-                <button type="button" onClick={() => void edit(comment)}>Edit</button>
+                <button type="button" onClick={() => void edit(comment)}>
+                  Edit
+                </button>
               )}
               {comment.canEdit && (
-                <button type="button" onClick={() => void remove(comment.id)}>Delete</button>
+                <button type="button" onClick={() => void remove(comment.id)}>
+                  Delete
+                </button>
               )}
             </footer>
           </article>

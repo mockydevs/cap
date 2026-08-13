@@ -90,7 +90,12 @@ export async function deliverWebhook(
          response_excerpt = $4,
          delivered_at = CASE WHEN $2 = 'SUCCEEDED' THEN now() ELSE delivered_at END
      WHERE id = $1`,
-    [delivery.id, succeeded ? "SUCCEEDED" : "FAILED", responseStatus, responseExcerpt],
+    [
+      delivery.id,
+      succeeded ? "SUCCEEDED" : "FAILED",
+      responseStatus,
+      responseExcerpt,
+    ],
   );
   await pool.query(
     "UPDATE webhook_endpoints SET last_delivery_at = now(), last_delivery_status = $2 WHERE id = $1",

@@ -3,7 +3,10 @@ import { db } from "../../db/client";
 import { retentionPolicies } from "../../db/schema";
 import { recordAuditEvent } from "../audit/service";
 import type { Actor } from "../auth/session";
-import { deleteRecordingSystem, purgeDeletedRecording } from "../recordings/service";
+import {
+  deleteRecordingSystem,
+  purgeDeletedRecording,
+} from "../recordings/service";
 
 const DEFAULT_PURGE_GRACE_DAYS = 30;
 
@@ -74,7 +77,10 @@ async function findRecordingsPastRetention(): Promise<AgedOutRecording[]> {
       and r.status <> 'DELETED'
       and r.created_at < now() - (p.recording_retention_days || ' days')::interval
   `);
-  return rows.rows.map((row) => ({ id: row.id, workspaceId: row.workspace_id }));
+  return rows.rows.map((row) => ({
+    id: row.id,
+    workspaceId: row.workspace_id,
+  }));
 }
 
 async function findRecordingsPastPurgeGrace(): Promise<string[]> {

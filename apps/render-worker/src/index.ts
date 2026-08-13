@@ -4,11 +4,8 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import {
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { createStorageClient } from "@cap/storage";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
 import {
@@ -31,12 +28,7 @@ const req = (n: string) => {
 };
 const pool = new Pool({ connectionString: req("DATABASE_URL") });
 const redis = createRedisConnection(req("REDIS_URL"));
-const s3 = new S3Client({
-  region: process.env.AWS_REGION ?? "us-east-1",
-  ...(process.env.AWS_S3_ENDPOINT
-    ? { endpoint: process.env.AWS_S3_ENDPOINT, forcePathStyle: true }
-    : {}),
-});
+const s3 = createStorageClient();
 const bucket = req("AWS_S3_BUCKET_NAME");
 async function run(job: Job<RenderJob>) {
   const d = renderJobSchema.parse(job.data);

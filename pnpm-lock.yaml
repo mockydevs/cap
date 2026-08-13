@@ -121,6 +121,9 @@ importers:
       '@cap/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@cap/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       bullmq:
         specifier: ^5.58.5
         version: 5.81.3
@@ -155,6 +158,9 @@ importers:
       '@cap/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@cap/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@cap/transcription':
         specifier: workspace:*
         version: link:../../packages/transcription
@@ -186,6 +192,9 @@ importers:
       '@cap/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@cap/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@cap/transcription':
         specifier: workspace:*
         version: link:../../packages/transcription

@@ -84,31 +84,36 @@ export async function listLinkedRecordingAssets(
       ? [eq(recordings.id, primary.linkedRecordingId)]
       : []),
   ];
-  return db()
-    .select({
-      recordingId: recordings.id,
-      title: recordings.title,
-      sourceAssetId: recordingAssets.id,
-      durationMs: recordings.durationMs,
-      width: recordings.width,
-      height: recordings.height,
-    })
-    .from(recordings)
-    .innerJoin(recordingAssets, eq(recordingAssets.recordingId, recordings.id))
-    .where(
-      and(
-        eq(recordings.workspaceId, actor.workspaceId),
-        ne(recordings.id, recordingId),
-        eq(recordings.status, "READY"),
-        eq(recordingAssets.kind, "MP4"),
-        or(...candidates),
-      ),
-    )
-    // A linked recording that's been reprocessed more than once returns one
-    // row per processing version, newest first — fine for the tiny result
-    // set this produces (there are rarely more than one or two linked
-    // recordings), but callers should take the first match per recordingId.
-    .orderBy(desc(recordingAssets.processingVersion));
+  return (
+    db()
+      .select({
+        recordingId: recordings.id,
+        title: recordings.title,
+        sourceAssetId: recordingAssets.id,
+        durationMs: recordings.durationMs,
+        width: recordings.width,
+        height: recordings.height,
+      })
+      .from(recordings)
+      .innerJoin(
+        recordingAssets,
+        eq(recordingAssets.recordingId, recordings.id),
+      )
+      .where(
+        and(
+          eq(recordings.workspaceId, actor.workspaceId),
+          ne(recordings.id, recordingId),
+          eq(recordings.status, "READY"),
+          eq(recordingAssets.kind, "MP4"),
+          or(...candidates),
+        ),
+      )
+      // A linked recording that's been reprocessed more than once returns one
+      // row per processing version, newest first — fine for the tiny result
+      // set this produces (there are rarely more than one or two linked
+      // recordings), but callers should take the first match per recordingId.
+      .orderBy(desc(recordingAssets.processingVersion))
+  );
 }
 
 export async function loadEditor(

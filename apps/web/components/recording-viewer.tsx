@@ -90,13 +90,16 @@ export function RecordingViewer({
     return (
       <section className="viewer-shell viewer-state-page">
         <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />Cap
+          <span className="brand-mark" aria-hidden="true" />
+          Cap
         </Link>
         <div className="viewer-state-card">
           <span className="state-code">Playback unavailable</span>
           <h1>We couldn&apos;t open this recording.</h1>
           <p className="form-error">{error}</p>
-          <Link className="editor-launch" href="/library">Return to library</Link>
+          <Link className="editor-launch" href="/library">
+            Return to library
+          </Link>
         </div>
       </section>
     );
@@ -104,7 +107,8 @@ export function RecordingViewer({
     return (
       <section className="viewer-shell viewer-state-page" aria-live="polite">
         <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />Cap
+          <span className="brand-mark" aria-hidden="true" />
+          Cap
         </Link>
         <div className="viewer-state-card viewer-loading-card">
           <span className="processing-pulse" />
@@ -117,12 +121,18 @@ export function RecordingViewer({
     <section className="viewer-shell">
       <header className="viewer-topbar">
         <Link className="sidebar-brand" href="/library">
-          <span className="brand-mark" aria-hidden="true" />Cap
+          <span className="brand-mark" aria-hidden="true" />
+          Cap
         </Link>
-        <Link className="viewer-back" href="/library">← All recordings</Link>
+        <Link className="viewer-back" href="/library">
+          ← All recordings
+        </Link>
         <div className="viewer-actions">
           {recording.status === "READY" && (
-            <Link className="editor-launch" href={`/library/${recording.id}/edit`}>
+            <Link
+              className="editor-launch"
+              href={`/library/${recording.id}/edit`}
+            >
               Edit recording
             </Link>
           )}
@@ -136,9 +146,22 @@ export function RecordingViewer({
               <h1>{recording.title}</h1>
             </div>
             <dl className="viewer-meta">
-              <div><dt>Created</dt><dd>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(recording.createdAt))}</dd></div>
-              <div><dt>Size</dt><dd>{formatSize(recording.sizeBytes)}</dd></div>
-              <div><dt>Access</dt><dd>{recording.canManageSharing ? "Owner" : "Workspace"}</dd></div>
+              <div>
+                <dt>Created</dt>
+                <dd>
+                  {new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "medium",
+                  }).format(new Date(recording.createdAt))}
+                </dd>
+              </div>
+              <div>
+                <dt>Size</dt>
+                <dd>{formatSize(recording.sizeBytes)}</dd>
+              </div>
+              <div>
+                <dt>Access</dt>
+                <dd>{recording.canManageSharing ? "Owner" : "Workspace"}</dd>
+              </div>
             </dl>
           </div>
           {playback ? (
@@ -181,7 +204,11 @@ export function RecordingViewer({
           )}
         </div>
         <aside className="viewer-inspector">
-          <div className="viewer-tabs" role="tablist" aria-label="Recording details">
+          <div
+            className="viewer-tabs"
+            role="tablist"
+            aria-label="Recording details"
+          >
             {(["transcript", "comments", "ai"] as const).map((tab) => (
               <button
                 key={tab}
@@ -191,7 +218,9 @@ export function RecordingViewer({
                 className={activeTab === tab ? "active" : ""}
                 onClick={() => setActiveTab(tab)}
               >
-                {tab === "ai" ? "AI" : `${tab[0]!.toUpperCase()}${tab.slice(1)}`}
+                {tab === "ai"
+                  ? "AI"
+                  : `${tab[0]!.toUpperCase()}${tab.slice(1)}`}
               </button>
             ))}
           </div>
@@ -207,7 +236,10 @@ export function RecordingViewer({
               />
             )}
             {activeTab === "comments" && (
-              <CommentThread recordingId={recording.id} timestampMs={timestampMs} />
+              <CommentThread
+                recordingId={recording.id}
+                timestampMs={timestampMs}
+              />
             )}
             {activeTab === "ai" && (
               <AiPanel

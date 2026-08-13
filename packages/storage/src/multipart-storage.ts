@@ -95,8 +95,13 @@ export interface StoredSourceObject {
   readonly contentType: string;
   readonly etag: S3EntityTag;
   readonly versionId?: string;
-  readonly encryption: "aws:kms";
-  readonly kmsKeyId: string;
+  /**
+   * Present only where the bucket is configured with a KMS key. Stores without
+   * KMS (Cloudflare R2, MinIO, Backblaze B2) encrypt at rest under their own
+   * provider-managed keys and report no per-object key.
+   */
+  readonly encryption?: "aws:kms";
+  readonly kmsKeyId?: string;
 }
 
 /**

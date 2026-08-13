@@ -78,7 +78,9 @@ describe("AI provider models lookup validation", () => {
 
 describe("AI provider connection rotation validation", () => {
   it("rejects an empty API key", () => {
-    expect(() => rotateProviderConnectionSchema.parse({ apiKey: "" })).toThrow();
+    expect(() =>
+      rotateProviderConnectionSchema.parse({ apiKey: "" }),
+    ).toThrow();
   });
 
   it("accepts a plausible API key", () => {

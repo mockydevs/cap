@@ -4,11 +4,8 @@ import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import {
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { createStorageClient } from "@cap/storage";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
 import {
@@ -37,14 +34,10 @@ function required(name: string): string {
   if (!value) throw new Error(`${name} must be configured`);
   return value;
 }
-function s3(): { bucket: string; client: S3Client } {
-  const endpoint = process.env.AWS_S3_ENDPOINT;
+function s3() {
   return {
     bucket: required("AWS_S3_BUCKET_NAME"),
-    client: new S3Client({
-      region: process.env.AWS_REGION ?? "us-east-1",
-      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-    }),
+    client: createStorageClient(),
   };
 }
 function assetType(filename: string): { kind: AssetKind; contentType: string } {
@@ -111,7 +104,11 @@ async function processMedia(
     );
     const metadata = await inspectMedia(sourcePath);
     const outputDirectory = join(workdir, "output");
-    await createPlaybackAssets(sourcePath, outputDirectory);
+    await createPlaybackAssets(
+      sourcePath,
+      outputDirectory,
+      metadata.durationSeconds,
+    );
     const files = await readdir(outputDirectory);
     const prefix = `workspaces/${data.workspaceId}/recordings/${data.recordingId}`;
     const assets: Asset[] = files.map((filename) => {

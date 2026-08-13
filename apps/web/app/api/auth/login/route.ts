@@ -55,9 +55,6 @@ export async function POST(request: Request) {
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {
-    return NextResponse.redirect(
-      publicAppUrl("/login?error=credentials"),
-      303,
-    );
+    return NextResponse.redirect(publicAppUrl("/login?error=credentials"), 303);
   }
 }

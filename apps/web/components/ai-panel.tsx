@@ -139,10 +139,16 @@ export function AiPanel({
             )}
             {item.artifactStatus === "SUGGESTED" && (
               <div>
-                <button type="button" onClick={() => void decide(item, "ACCEPTED")}>
+                <button
+                  type="button"
+                  onClick={() => void decide(item, "ACCEPTED")}
+                >
                   Accept
                 </button>
-                <button type="button" onClick={() => void decide(item, "REJECTED")}>
+                <button
+                  type="button"
+                  onClick={() => void decide(item, "REJECTED")}
+                >
                   Reject
                 </button>
               </div>
@@ -153,7 +159,9 @@ export function AiPanel({
           <div className="panel-empty ai-empty">
             <span aria-hidden="true">AI</span>
             <strong>No generated insights yet.</strong>
-            <p>Choose an action above to turn the transcript into useful output.</p>
+            <p>
+              Choose an action above to turn the transcript into useful output.
+            </p>
           </div>
         )}
       </div>
@@ -213,7 +221,11 @@ function Artifact({
         {Array.isArray(content.citations) &&
           (content.citations as Array<{ startMs: number }>).map(
             (citation, index) => (
-              <button type="button" key={index} onClick={() => onSeek(citation.startMs)}>
+              <button
+                type="button"
+                key={index}
+                onClick={() => onSeek(citation.startMs)}
+              >
                 Evidence {index + 1}
               </button>
             ),

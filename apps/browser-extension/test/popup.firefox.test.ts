@@ -33,9 +33,7 @@ beforeAll(async () => {
 
 describe("normalize", () => {
   it("accepts an https URL", () => {
-    expect(popup.normalize("https://example.com")).toBe(
-      "https://example.com",
-    );
+    expect(popup.normalize("https://example.com")).toBe("https://example.com");
   });
 
   it("accepts http on localhost", () => {
@@ -75,9 +73,9 @@ describe("normalize", () => {
   });
 
   it("rejects a URL with embedded credentials", () => {
-    expect(() =>
-      popup.normalize("https://user:pass@example.com"),
-    ).toThrow("Enter only the server origin, without a path or credentials");
+    expect(() => popup.normalize("https://user:pass@example.com")).toThrow(
+      "Enter only the server origin, without a path or credentials",
+    );
   });
 
   it("throws for a value that isn't a URL at all", () => {
@@ -101,8 +99,6 @@ describe("currentServer", () => {
       (defaults: Record<string, unknown>) => Promise.resolve(defaults),
     );
 
-    await expect(popup.currentServer()).resolves.toBe(
-      "http://localhost:3000",
-    );
+    await expect(popup.currentServer()).resolves.toBe("http://localhost:3000");
   });
 });

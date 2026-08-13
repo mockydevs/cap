@@ -13,6 +13,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",
     "@cap/queue": "workspace:*",
+    "@cap/storage": "workspace:*",
     "@cap/transcription": "workspace:*",
     "bullmq": "^5.58.5",
     "pg": "^8.15.6",

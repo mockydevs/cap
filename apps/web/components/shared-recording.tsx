@@ -47,11 +47,14 @@ export function SharedRecording({
     <main className="shared-shell">
       <header className="shared-header">
         <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />cap
+          <span className="brand-mark" aria-hidden="true" />
+          cap
         </Link>
         <div className="shared-header-actions">
           <span>Shared with Cap</span>
-          <Link className="nav-cta" href="/signup">Create your workspace</Link>
+          <Link className="nav-cta" href="/signup">
+            Create your workspace
+          </Link>
         </div>
       </header>
       {playback ? (
@@ -62,7 +65,9 @@ export function SharedRecording({
                 <p className="eyebrow">Shared recording</p>
                 <h1>{playback.title}</h1>
               </div>
-              <span className="shared-ready"><i /> Ready to watch</span>
+              <span className="shared-ready">
+                <i /> Ready to watch
+              </span>
             </div>
             <div className="shared-video-frame">
               <video
@@ -112,16 +117,28 @@ export function SharedRecording({
                   onChange={(event) => setPassword(event.target.value)}
                 />
               </label>
-              <button type="submit">Open recording <span aria-hidden="true">→</span></button>
+              <button type="submit">
+                Open recording <span aria-hidden="true">→</span>
+              </button>
             </form>
-            {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="share-skip" type="button" onClick={() => void open()}>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="share-skip"
+              type="button"
+              onClick={() => void open()}
+            >
               Continue without a password
             </button>
           </section>
           <aside className="share-assurance" aria-label="About secure sharing">
             <div className="share-assurance-graphic" aria-hidden="true">
-              <span /><span /><span />
+              <span />
+              <span />
+              <span />
             </div>
             <div>
               <p className="eyebrow">Context, not another meeting</p>

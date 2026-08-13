@@ -43,7 +43,11 @@ describe("login", () => {
         Promise.resolve({
           token: "tok_123",
           expiresInSeconds: 3600,
-          user: { id: "u1", email: "person@example.com", displayName: "Person" },
+          user: {
+            id: "u1",
+            email: "person@example.com",
+            displayName: "Person",
+          },
           workspace: { id: "w1", role: "owner" },
         }),
     });

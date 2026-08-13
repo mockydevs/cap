@@ -51,9 +51,6 @@ export async function POST(request: Request) {
     response.cookies.set(sessionCookieName, token, sessionCookieOptions);
     return response;
   } catch {
-    return NextResponse.redirect(
-      publicAppUrl("/signup?error=account"),
-      303,
-    );
+    return NextResponse.redirect(publicAppUrl("/signup?error=account"), 303);
   }
 }

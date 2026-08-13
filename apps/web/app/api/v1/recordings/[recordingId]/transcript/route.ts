@@ -20,7 +20,11 @@ export async function GET(
     });
     const result = await listTranscript(
       recordingId,
-      { userId: actor.apiKeyId, workspaceId: actor.workspaceId, role: "VIEWER" },
+      {
+        userId: actor.apiKeyId,
+        workspaceId: actor.workspaceId,
+        role: "VIEWER",
+      },
       input.cursor,
       input.limit,
     );

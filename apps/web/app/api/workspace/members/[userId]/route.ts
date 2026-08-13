@@ -1,7 +1,10 @@
 import { requireActor } from "../../../../../lib/auth/authorization";
 import { hasTrustedOrigin } from "../../../../../lib/auth/origin";
 import { workspaceError } from "../../../../../lib/workspace/http";
-import { removeMember, updateMemberRole } from "../../../../../lib/workspace/service";
+import {
+  removeMember,
+  updateMemberRole,
+} from "../../../../../lib/workspace/service";
 import {
   memberParamsSchema,
   updateMemberRoleSchema,

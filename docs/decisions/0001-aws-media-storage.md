@@ -1,6 +1,6 @@
 # ADR 0001: AWS media storage and delivery
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR 0002](0002-provider-neutral-object-storage.md)
 - Date: 2026-08-09
 
 ## Context
@@ -16,7 +16,7 @@ Cap requires direct resumable uploads, private media storage, asynchronous worke
 - Give web, media, render, transcription, and retention services separate least-privilege IAM identities. The AI worker receives approved text and has no bucket credentials.
 - Start MP4 playback with short-lived presigned GET requests. Deliver production HLS through CloudFront Origin Access Control and recording-path-scoped signed cookies.
 - Use lifecycle rules to abort stale multipart uploads and expire temporary artifacts. Application retention rules control user media deletion and recovery windows.
-- Use S3-compatible local infrastructure only for contract tests; production configuration does not set a custom endpoint or path-style addressing.
+- Use S3-compatible local infrastructure only for contract tests; production configuration does not set a custom endpoint or path-style addressing. (Superseded by ADR 0002: any S3-compatible store is a supported production target, and `AWS_KMS_KEY_ARN` is optional.)
 
 ## Consequences
 

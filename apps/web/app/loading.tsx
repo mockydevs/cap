@@ -5,7 +5,8 @@ export default function Loading() {
     <main className="system-page" aria-live="polite">
       <header className="system-header">
         <Link className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true" />cap
+          <span className="brand-mark" aria-hidden="true" />
+          cap
         </Link>
         <span>Loading</span>
       </header>

@@ -246,6 +246,7 @@ export function imageOverlayFilterChain(overlay: {
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(${inside},a(X,Y),0)'`,
     );
   }
-  if (overlay.opacity !== 1) stages.push(`colorchannelmixer=aa=${overlay.opacity}`);
+  if (overlay.opacity !== 1)
+    stages.push(`colorchannelmixer=aa=${overlay.opacity}`);
   return stages.join(",");
 }

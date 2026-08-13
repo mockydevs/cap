@@ -103,7 +103,9 @@ describe("Google ID token verification", () => {
   });
 
   it("propagates signature/issuer/audience failures from jose", async () => {
-    mockedJwtVerify.mockRejectedValueOnce(new Error("signature verification failed"));
+    mockedJwtVerify.mockRejectedValueOnce(
+      new Error("signature verification failed"),
+    );
     await expect(verifyGoogleIdToken("token", "client-id")).rejects.toThrow(
       "signature verification failed",
     );
@@ -119,7 +121,10 @@ describe("Google authorization code exchange", () => {
   });
 
   function stubEnv() {
-    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "web-client.apps.googleusercontent.com");
+    vi.stubEnv(
+      "GOOGLE_OAUTH_CLIENT_ID",
+      "web-client.apps.googleusercontent.com",
+    );
     vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "server-only-secret");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://cap.test");
   }
@@ -169,7 +174,9 @@ describe("Google authorization code exchange", () => {
     expect(mockedJwtVerify).toHaveBeenCalledWith(
       "returned-token",
       expect.anything(),
-      expect.objectContaining({ audience: "web-client.apps.googleusercontent.com" }),
+      expect.objectContaining({
+        audience: "web-client.apps.googleusercontent.com",
+      }),
     );
   });
 });

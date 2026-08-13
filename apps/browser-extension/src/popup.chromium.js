@@ -85,10 +85,9 @@ export async function renderPendingUploadBanner(serverOrigin) {
   pendingBanner.hidden = pending.length === 0;
 }
 
-document.querySelector("#library").addEventListener(
-  "click",
-  () => void open("/library"),
-);
+document
+  .querySelector("#library")
+  .addEventListener("click", () => void open("/library"));
 
 document.querySelector("#save").addEventListener("click", async () => {
   try {
@@ -155,17 +154,20 @@ document
     window.close();
   });
 
-document
-  .querySelector("#resume-upload")
-  .addEventListener("click", async () => {
-    const serverOrigin = await currentServer();
-    const auth = await getToken(serverOrigin);
-    if (!auth) return;
-    const config = { baseUrl: serverOrigin, authorization: `Bearer ${auth.token}` };
-    const pending = await listPendingUploads();
-    await Promise.all(pending.map((upload) => resumeUpload(upload, undefined, config)));
-    await renderPendingUploadBanner(serverOrigin);
-  });
+document.querySelector("#resume-upload").addEventListener("click", async () => {
+  const serverOrigin = await currentServer();
+  const auth = await getToken(serverOrigin);
+  if (!auth) return;
+  const config = {
+    baseUrl: serverOrigin,
+    authorization: `Bearer ${auth.token}`,
+  };
+  const pending = await listPendingUploads();
+  await Promise.all(
+    pending.map((upload) => resumeUpload(upload, undefined, config)),
+  );
+  await renderPendingUploadBanner(serverOrigin);
+});
 
 void currentServer().then((value) => {
   serverInput.value = value;

@@ -5,7 +5,10 @@
 // "always on top" guarantee in MV3 — a known, documented limitation, not a
 // bug to chase here.
 
-import { beginResumableUpload, resumeUpload } from "./vendor/resumable-client.js";
+import {
+  beginResumableUpload,
+  resumeUpload,
+} from "./vendor/resumable-client.js";
 
 const preview = document.querySelector("#camera-preview");
 const statusEl = document.querySelector("#controls-status");

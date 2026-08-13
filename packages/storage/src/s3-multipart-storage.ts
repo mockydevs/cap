@@ -49,7 +49,12 @@ import {
 export interface S3MultipartStorageOptions {
   readonly client: S3Client;
   readonly bucketName: string;
-  readonly kmsKeyArn: string;
+  /**
+   * Omit for object stores without KMS (Cloudflare R2, MinIO, Backblaze B2).
+   * When set, every object Cap writes is encrypted under this key and reads
+   * assert that the stored object really carries it.
+   */
+  readonly kmsKeyArn?: string;
   readonly now?: () => Date;
 }
 
@@ -60,7 +65,10 @@ function assertOptions(options: S3MultipartStorageOptions): void {
   ) {
     throw new StorageContractError("INVALID_CONFIG", "Invalid S3 bucket name");
   }
-  if (!options.kmsKeyArn.startsWith("arn:aws:kms:")) {
+  if (
+    options.kmsKeyArn !== undefined &&
+    !options.kmsKeyArn.startsWith("arn:aws:kms:")
+  ) {
     throw new StorageContractError(
       "INVALID_CONFIG",
       "AWS_KMS_KEY_ARN must be a KMS ARN",
@@ -68,7 +76,11 @@ function assertOptions(options: S3MultipartStorageOptions): void {
   }
 }
 
-/** AWS S3 production implementation. It deliberately has no endpoint/path-style options. */
+/**
+ * Implementation for AWS S3 and any S3-compatible store. Endpoint and
+ * addressing style belong to the client (see `createStorageClient`); this class
+ * only decides what Cap asks the store to do.
+ */
 export class S3MultipartStorage
   implements
     MultipartObjectStorage,
@@ -78,7 +90,7 @@ export class S3MultipartStorage
 {
   readonly #client: S3Client;
   readonly #bucketName: string;
-  readonly #kmsKeyArn: string;
+  readonly #kmsKeyArn: string | undefined;
   readonly #now: () => Date;
 
   constructor(options: S3MultipartStorageOptions) {
@@ -87,6 +99,17 @@ export class S3MultipartStorage
     this.#bucketName = options.bucketName;
     this.#kmsKeyArn = options.kmsKeyArn;
     this.#now = options.now ?? (() => new Date());
+  }
+
+  /** SSE-KMS request fields, empty on stores that manage their own keys. */
+  get #encryption() {
+    return this.#kmsKeyArn
+      ? {
+          ServerSideEncryption: "aws:kms" as const,
+          SSEKMSKeyId: this.#kmsKeyArn,
+          BucketKeyEnabled: true,
+        }
+      : {};
   }
 
   async createSourceMultipartUpload(
@@ -99,9 +122,7 @@ export class S3MultipartStorage
         Key: objectKey,
         ContentType: input.mediaType,
         ChecksumAlgorithm: "SHA256",
-        ServerSideEncryption: "aws:kms",
-        SSEKMSKeyId: this.#kmsKeyArn,
-        BucketKeyEnabled: true,
+        ...this.#encryption,
         Metadata: {
           "workspace-id": input.workspaceId,
           "recording-id": input.recordingId,
@@ -299,13 +320,22 @@ export class S3MultipartStorage
     if (
       response.ContentLength === undefined ||
       !response.ContentType ||
-      !response.ETag ||
-      response.ServerSideEncryption !== "aws:kms" ||
-      !response.SSEKMSKeyId
+      !response.ETag
     ) {
       throw new StorageContractError(
         "INVALID_S3_RESPONSE",
-        "Stored source object is missing required size, type, ETag, or SSE-KMS metadata",
+        "Stored source object is missing required size, type, or ETag",
+      );
+    }
+    // Where Cap asked for SSE-KMS, an object that came back without it was not
+    // written the way we authorized and must not be treated as ours.
+    if (
+      this.#kmsKeyArn &&
+      (response.ServerSideEncryption !== "aws:kms" || !response.SSEKMSKeyId)
+    ) {
+      throw new StorageContractError(
+        "INVALID_S3_RESPONSE",
+        "Stored source object is missing required SSE-KMS metadata",
       );
     }
     return {
@@ -313,8 +343,9 @@ export class S3MultipartStorage
       contentLength: response.ContentLength,
       contentType: response.ContentType,
       etag: s3EntityTag(response.ETag),
-      encryption: "aws:kms",
-      kmsKeyId: response.SSEKMSKeyId,
+      ...(this.#kmsKeyArn && response.SSEKMSKeyId
+        ? { encryption: "aws:kms" as const, kmsKeyId: response.SSEKMSKeyId }
+        : {}),
       ...(response.VersionId ? { versionId: response.VersionId } : {}),
     };
   }
@@ -394,9 +425,7 @@ export class S3MultipartStorage
         Key: input.objectKey,
         Body: input.content,
         ContentType: input.contentType,
-        ServerSideEncryption: "aws:kms",
-        SSEKMSKeyId: this.#kmsKeyArn,
-        BucketKeyEnabled: true,
+        ...this.#encryption,
       }),
     );
   }

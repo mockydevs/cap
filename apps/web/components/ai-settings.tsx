@@ -26,9 +26,11 @@ export function AiSettings() {
     [usage, setUsage] = useState<Usage>(),
     [message, setMessage] = useState<string>(),
     [providers, setProviders] = useState<ProviderConnection[]>([]),
-    [routesByPurpose, setRoutesByPurpose] = useState<Record<Purpose, string>>(
-      { ANALYSIS: "", EMBEDDINGS: "", TRANSCRIPTION: "" },
-    ),
+    [routesByPurpose, setRoutesByPurpose] = useState<Record<Purpose, string>>({
+      ANALYSIS: "",
+      EMBEDDINGS: "",
+      TRANSCRIPTION: "",
+    }),
     [routeSelection, setRouteSelection] = useState<Record<Purpose, string>>({
       ANALYSIS: "",
       EMBEDDINGS: "",
@@ -60,8 +62,8 @@ export function AiSettings() {
         EMBEDDINGS: "",
         TRANSCRIPTION: "",
       };
-      for (const route of payload.routes) byPurpose[route.purpose] =
-        route.connectionId;
+      for (const route of payload.routes)
+        byPurpose[route.purpose] = route.connectionId;
       setRoutesByPurpose(byPurpose);
       setRouteSelection(byPurpose);
     }
@@ -364,8 +366,8 @@ export function AiSettings() {
         </fieldset>
       )}
       <label>
-        Additional models, comma separated (used if the list above is empty
-        or incomplete)
+        Additional models, comma separated (used if the list above is empty or
+        incomplete)
         <input
           value={manualModels}
           onChange={(event) => setManualModels(event.target.value)}

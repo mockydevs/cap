@@ -8,11 +8,7 @@ import { TranscriptSearch } from "./transcript-search";
 
 type LibraryView = "library" | "shared" | "starred" | "trash";
 type RecordingStatus =
-  | "UPLOADING"
-  | "PROCESSING"
-  | "READY"
-  | "FAILED"
-  | "DELETED";
+  "UPLOADING" | "PROCESSING" | "READY" | "FAILED" | "DELETED";
 type StatusFilter = "ALL" | "READY" | "PROCESSING" | "FAILED";
 type RecordingSummary = {
   id: string;
@@ -33,39 +29,55 @@ type Page = { items: RecordingSummary[]; nextCursor: string | null };
 
 const viewContent: Record<
   LibraryView,
-  { eyebrow: string; title: string; description: string; emptyTitle: string; emptyBody: string }
+  {
+    eyebrow: string;
+    title: string;
+    description: string;
+    emptyTitle: string;
+    emptyBody: string;
+  }
 > = {
   library: {
     eyebrow: "Browser-first screen recording",
     title: "Recordings",
-    description: "Capture, organize, and share everything your team needs to see.",
+    description:
+      "Capture, organize, and share everything your team needs to see.",
     emptyTitle: "Make your first recording.",
-    emptyBody: "Record a product walkthrough, a quick update, or anything that is easier to show than explain.",
+    emptyBody:
+      "Record a product walkthrough, a quick update, or anything that is easier to show than explain.",
   },
   shared: {
     eyebrow: "Workspace collaboration",
     title: "Shared with me",
     description: "Recordings created by other people in your active workspace.",
     emptyTitle: "Nothing shared yet.",
-    emptyBody: "When a teammate creates a recording in this workspace, it will appear here automatically.",
+    emptyBody:
+      "When a teammate creates a recording in this workspace, it will appear here automatically.",
   },
   starred: {
     eyebrow: "Quick access",
     title: "Starred",
-    description: "Keep important recordings close without moving or duplicating them.",
+    description:
+      "Keep important recordings close without moving or duplicating them.",
     emptyTitle: "No starred recordings.",
     emptyBody: "Use the star on any recording to add it to this focused view.",
   },
   trash: {
     eyebrow: "Recoverable deletion",
     title: "Trash",
-    description: "Restore deleted recordings or permanently remove them from storage.",
+    description:
+      "Restore deleted recordings or permanently remove them from storage.",
     emptyTitle: "Trash is empty.",
-    emptyBody: "Deleted recordings remain recoverable here until your workspace retention policy removes them.",
+    emptyBody:
+      "Deleted recordings remain recoverable here until your workspace retention policy removes them.",
   },
 };
 
-export function RecordingLibrary({ initialView }: { initialView: LibraryView }) {
+export function RecordingLibrary({
+  initialView,
+}: {
+  initialView: LibraryView;
+}) {
   const router = useRouter();
   const [items, setItems] = useState<RecordingSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>();
@@ -92,7 +104,9 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
         return;
       }
       const page = (await response.json()) as Page;
-      setItems((current) => (cursor ? [...current, ...page.items] : page.items));
+      setItems((current) =>
+        cursor ? [...current, ...page.items] : page.items,
+      );
       setNextCursor(page.nextCursor);
       setLoading(false);
     },
@@ -180,14 +194,26 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
           New recording
         </Link>
         <nav className="sidebar-nav" aria-label="Library navigation">
-          <LibraryNavLink view="library" activeView={initialView} label="Library">
+          <LibraryNavLink
+            view="library"
+            activeView={initialView}
+            label="Library"
+          >
             <rect x="3" y="5" width="18" height="14" />
             <path d="m10 9 5 3-5 3Z" />
           </LibraryNavLink>
-          <LibraryNavLink view="shared" activeView={initialView} label="Shared with me">
+          <LibraryNavLink
+            view="shared"
+            activeView={initialView}
+            label="Shared with me"
+          >
             <path d="M4 12v8h16v-8M12 3v13m-5-5 5 5 5-5" />
           </LibraryNavLink>
-          <LibraryNavLink view="starred" activeView={initialView} label="Starred">
+          <LibraryNavLink
+            view="starred"
+            activeView={initialView}
+            label="Starred"
+          >
             <path d="m12 3 2.5 5.5 6 .5-4.5 4 1.4 6L12 16l-5.4 3L8 13 3.5 9l6-.5Z" />
           </LibraryNavLink>
           <LibraryNavLink view="trash" activeView={initialView} label="Trash">
@@ -228,17 +254,27 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
           </div>
           <span className="library-privacy">
             <span aria-hidden="true" />
-            {initialView === "trash" ? "Retention protected" : "Private workspace"}
+            {initialView === "trash"
+              ? "Retention protected"
+              : "Private workspace"}
           </span>
         </div>
         {initialView !== "trash" && (
           <nav className="library-filters" aria-label="Recording filters">
-            {([
-              ["ALL", `All · ${items.length}`],
-              ["READY", `Ready · ${items.filter((item) => effectiveStatus(item) === "READY").length}`],
-              ["PROCESSING", `Processing · ${processingCount}`],
-              ["FAILED", `Failed · ${items.filter((item) => effectiveStatus(item) === "FAILED").length}`],
-            ] as const).map(([filter, label]) => (
+            {(
+              [
+                ["ALL", `All · ${items.length}`],
+                [
+                  "READY",
+                  `Ready · ${items.filter((item) => effectiveStatus(item) === "READY").length}`,
+                ],
+                ["PROCESSING", `Processing · ${processingCount}`],
+                [
+                  "FAILED",
+                  `Failed · ${items.filter((item) => effectiveStatus(item) === "FAILED").length}`,
+                ],
+              ] as const
+            ).map(([filter, label]) => (
               <button
                 key={filter}
                 type="button"
@@ -250,13 +286,25 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
             ))}
           </nav>
         )}
-        {error && <p className="form-error" role="alert">{error}</p>}
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
         {!loading && items.length === 0 && (
           <div className={`empty-state empty-state-${initialView}`}>
             <div className="empty-state-visual" aria-hidden="true">
-              <div className="empty-window-bar"><span /><span /><span /></div>
-              <div className="empty-window-play"><span /></div>
-              <div className="empty-window-track"><span /></div>
+              <div className="empty-window-bar">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="empty-window-play">
+                <span />
+              </div>
+              <div className="empty-window-track">
+                <span />
+              </div>
             </div>
             <div className="empty-state-copy">
               <p className="eyebrow">{content.eyebrow}</p>
@@ -264,7 +312,8 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
               <p>{content.emptyBody}</p>
               {initialView === "library" && (
                 <Link className="nav-cta" href="/record">
-                  <span className="record-dot" aria-hidden="true" /> Start recording
+                  <span className="record-dot" aria-hidden="true" /> Start
+                  recording
                 </Link>
               )}
               {initialView !== "library" && (
@@ -278,7 +327,9 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
         {!loading && items.length > 0 && filteredItems.length === 0 && (
           <div className="library-filter-empty">
             <strong>No recordings match this filter.</strong>
-            <button type="button" onClick={() => setStatusFilter("ALL")}>Show all</button>
+            <button type="button" onClick={() => setStatusFilter("ALL")}>
+              Show all
+            </button>
           </div>
         )}
         <div className="recording-grid">
@@ -287,18 +338,26 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
             const cardContent = (
               <>
                 <div className="recording-art">
-                  <span className={`recording-status status-${status.toLowerCase()}`}>
+                  <span
+                    className={`recording-status status-${status.toLowerCase()}`}
+                  >
                     {recording.status === "DELETED" ? "TRASHED" : status}
                   </span>
-                  <span className="recording-play" aria-hidden="true">▶</span>
+                  <span className="recording-play" aria-hidden="true">
+                    ▶
+                  </span>
                 </div>
                 <div className="recording-card-copy">
                   <h2>{recording.title}</h2>
                   <p>
-                    {initialView === "shared" && `Shared by ${recording.ownerName} · `}
+                    {initialView === "shared" &&
+                      `Shared by ${recording.ownerName} · `}
                     {recording.status === "DELETED" && recording.deletedAt
                       ? `Deleted ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(recording.deletedAt))}`
-                      : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(recording.createdAt))}
+                      : new Intl.DateTimeFormat(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }).format(new Date(recording.createdAt))}
                   </p>
                 </div>
               </>
@@ -308,21 +367,41 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
                 {initialView === "trash" ? (
                   <div className="recording-card-content">{cardContent}</div>
                 ) : (
-                  <Link className="recording-card-content" href={`/library/${recording.id}`}>
+                  <Link
+                    className="recording-card-content"
+                    href={`/library/${recording.id}`}
+                  >
                     {cardContent}
                   </Link>
                 )}
-                <div className={`recording-card-actions recording-card-actions-${initialView}`}>
+                <div
+                  className={`recording-card-actions recording-card-actions-${initialView}`}
+                >
                   {initialView !== "trash" && (
                     <button
                       type="button"
                       className={recording.isStarred ? "is-starred" : ""}
                       disabled={Boolean(activeAction)}
-                      aria-label={recording.isStarred ? `Remove star from ${recording.title}` : `Star ${recording.title}`}
-                      title={recording.isStarred ? "Remove from starred" : "Add to starred"}
-                      onClick={() => void performAction(recording, recording.isStarred ? "unstar" : "star")}
+                      aria-label={
+                        recording.isStarred
+                          ? `Remove star from ${recording.title}`
+                          : `Star ${recording.title}`
+                      }
+                      title={
+                        recording.isStarred
+                          ? "Remove from starred"
+                          : "Add to starred"
+                      }
+                      onClick={() =>
+                        void performAction(
+                          recording,
+                          recording.isStarred ? "unstar" : "star",
+                        )
+                      }
                     >
-                      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 2.5 5.5 6 .5-4.5 4 1.4 6L12 16l-5.4 3L8 13 3.5 9l6-.5Z" /></svg>
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="m12 3 2.5 5.5 6 .5-4.5 4 1.4 6L12 16l-5.4 3L8 13 3.5 9l6-.5Z" />
+                      </svg>
                     </button>
                   )}
                   {initialView !== "trash" && recording.canDelete && (
@@ -333,7 +412,9 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
                       title="Move to trash"
                       onClick={() => void performAction(recording, "trash")}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" /></svg>
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" />
+                      </svg>
                     </button>
                   )}
                   {initialView === "trash" && recording.canDelete && (
@@ -342,13 +423,17 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
                         type="button"
                         disabled={Boolean(activeAction)}
                         onClick={() => void performAction(recording, "restore")}
-                      >Restore</button>
+                      >
+                        Restore
+                      </button>
                       <button
                         className="recording-purge"
                         type="button"
                         disabled={Boolean(activeAction)}
                         onClick={() => void performAction(recording, "purge")}
-                      >Delete forever</button>
+                      >
+                        Delete forever
+                      </button>
                     </>
                   )}
                 </div>
@@ -357,7 +442,11 @@ export function RecordingLibrary({ initialView }: { initialView: LibraryView }) 
           })}
         </div>
         {nextCursor && (
-          <button className="load-more" disabled={loading} onClick={() => void load(nextCursor)}>
+          <button
+            className="load-more"
+            disabled={loading}
+            onClick={() => void load(nextCursor)}
+          >
             {loading ? "Loading…" : "Load more"}
           </button>
         )}
@@ -384,7 +473,9 @@ function LibraryNavLink({
       href={view === "library" ? "/library" : `/library?view=${view}`}
       aria-current={active ? "page" : undefined}
     >
-      <svg aria-hidden="true" viewBox="0 0 24 24">{children}</svg>
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        {children}
+      </svg>
       {label}
     </Link>
   );

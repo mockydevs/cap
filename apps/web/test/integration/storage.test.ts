@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { recordingId, workspaceId } from "@cap/domain";
-import { assertManagedMediaObjectKey, buildTranscriptCaptionObjectKey } from "@cap/storage";
+import {
+  assertManagedMediaObjectKey,
+  buildTranscriptCaptionObjectKey,
+} from "@cap/storage";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client";
 import { users, workspaceMembers, workspaces } from "../../db/schema";
@@ -48,7 +51,10 @@ describe("resumable multipart upload against LocalStack", () => {
   let actor: { userId: string; workspaceId: string };
 
   beforeAll(async () => {
-    const workspaceRow = { id: randomUUID(), name: "Integration Test Workspace" };
+    const workspaceRow = {
+      id: randomUUID(),
+      name: "Integration Test Workspace",
+    };
     const userRow = {
       id: randomUUID(),
       email: `integration-${randomUUID()}@example.com`,
@@ -57,9 +63,11 @@ describe("resumable multipart upload against LocalStack", () => {
     };
     await db().insert(workspaces).values(workspaceRow);
     await db().insert(users).values(userRow);
-    await db()
-      .insert(workspaceMembers)
-      .values({ workspaceId: workspaceRow.id, userId: userRow.id, role: "OWNER" });
+    await db().insert(workspaceMembers).values({
+      workspaceId: workspaceRow.id,
+      userId: userRow.id,
+      role: "OWNER",
+    });
     actor = { userId: userRow.id, workspaceId: workspaceRow.id };
   });
 
@@ -72,7 +80,9 @@ describe("resumable multipart upload against LocalStack", () => {
     });
     expect(initiated.maxPartCount).toBe(1);
 
-    const checksumSha256 = createHash("sha256").update(partBody).digest("base64");
+    const checksumSha256 = createHash("sha256")
+      .update(partBody)
+      .digest("base64");
     const signed = await signSourceUploadPart(actor, initiated.sessionId, 1, {
       contentLength: partBody.byteLength,
       checksumSha256,

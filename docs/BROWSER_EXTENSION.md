@@ -33,7 +33,7 @@ This feature was implemented without access to a real Chrome/Edge GUI (no browse
 
 ## Store publication and the desktop app's "Get it for..." buttons
 
-Browsers deliberately block installing an extension from anywhere but their own store outside of developer mode — there's no supported way to make a downloaded zip "just install" with one click, and building a workaround (e.g. a desktop app silently writing OS-level browser policy to force-install) risks the *desktop app* itself being flagged as unwanted software by Microsoft Defender or losing Apple notarization, since that's a known adware/PUP technique both platforms actively scan for. The only safe one-click path is real store publication:
+Browsers deliberately block installing an extension from anywhere but their own store outside of developer mode — there's no supported way to make a downloaded zip "just install" with one click, and building a workaround (e.g. a desktop app silently writing OS-level browser policy to force-install) risks the _desktop app_ itself being flagged as unwanted software by Microsoft Defender or losing Apple notarization, since that's a known adware/PUP technique both platforms actively scan for. The only safe one-click path is real store publication:
 
 - Submit the Chromium build to the [Chrome Web Store](https://chromewebstore.google.com/) and [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons) (same zip, two listings, two developer accounts, Chrome has a one-time $5 fee).
 - Submit the Firefox build to [addons.mozilla.org](https://addons.mozilla.org/).

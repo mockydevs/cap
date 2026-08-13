@@ -72,13 +72,17 @@ export class UnsupportedRenderFeatureError extends Error {
  */
 export function assertExecutableRenderManifest(manifest: FfmpegRenderManifest) {
   if (manifest.canvas.background.kind !== "COLOR")
-    throw new UnsupportedRenderFeatureError("canvas background:gradient-or-image");
+    throw new UnsupportedRenderFeatureError(
+      "canvas background:gradient-or-image",
+    );
   if (
     manifest.canvas.padding !== 0 ||
     manifest.canvas.borderRadius !== 0 ||
     manifest.canvas.shadow.enabled
   )
-    throw new UnsupportedRenderFeatureError("canvas styling:padding/shadow/radius");
+    throw new UnsupportedRenderFeatureError(
+      "canvas styling:padding/shadow/radius",
+    );
   for (const clip of manifest.audio)
     if (clip.settings.gainAutomation.length || clip.settings.noiseReduction)
       throw new UnsupportedRenderFeatureError(

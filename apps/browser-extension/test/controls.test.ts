@@ -44,7 +44,8 @@ class FakeMediaRecorder {
   }
   stop() {
     this.state = "inactive";
-    for (const callback of this.listeners.stop ?? []) callback({ type: "stop" });
+    for (const callback of this.listeners.stop ?? [])
+      callback({ type: "stop" });
   }
   addEventListener(type: string, callback: (event: unknown) => void) {
     (this.listeners[type] ??= []).push(callback);
@@ -54,8 +55,14 @@ class FakeMediaRecorder {
 let controls: typeof import("../src/controls.js");
 let getUserMedia: ReturnType<typeof vi.fn>;
 let chromeMock: {
-  runtime: { sendMessage: ReturnType<typeof vi.fn>; onMessage: { addListener: ReturnType<typeof vi.fn> } };
-  windows: { getCurrent: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
+  runtime: {
+    sendMessage: ReturnType<typeof vi.fn>;
+    onMessage: { addListener: ReturnType<typeof vi.fn> };
+  };
+  windows: {
+    getCurrent: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+  };
 };
 
 beforeEach(async () => {
@@ -98,7 +105,9 @@ describe("init", () => {
     await controls.init({ includeCamera: true, title: "t" });
 
     expect(getUserMedia).toHaveBeenCalledWith({ video: true });
-    const preview = document.querySelector("#camera-preview") as HTMLVideoElement;
+    const preview = document.querySelector(
+      "#camera-preview",
+    ) as HTMLVideoElement;
     expect(preview.hidden).toBe(false);
     expect(preview.srcObject).toBe(stream);
   });
@@ -112,18 +121,24 @@ describe("init", () => {
 
 describe("pause / resume", () => {
   it("relays CONTROLS_PAUSE and pauses the camera recorder if present", async () => {
-    getUserMedia.mockResolvedValue(new FakeMediaStream([new FakeTrack("video")]));
+    getUserMedia.mockResolvedValue(
+      new FakeMediaStream([new FakeTrack("video")]),
+    );
     await controls.init({ includeCamera: true, title: "t" });
 
     controls.pause();
 
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: "CONTROLS_PAUSE" });
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: "CONTROLS_PAUSE",
+    });
   });
 
   it("relays CONTROLS_RESUME", async () => {
     controls.resume();
 
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: "CONTROLS_RESUME" });
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: "CONTROLS_RESUME",
+    });
   });
 });
 
@@ -131,7 +146,9 @@ describe("requestStop", () => {
   it("relays CONTROLS_STOP to background", () => {
     controls.requestStop();
 
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: "CONTROLS_STOP" });
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: "CONTROLS_STOP",
+    });
   });
 });
 
@@ -172,10 +189,11 @@ describe("onRecordingLinked", () => {
 
 describe("message dispatch", () => {
   it("routes CONTROLS_INIT and CONTROLS_RECORDING_LINKED from chrome.runtime.onMessage", async () => {
-    const listener = chromeMock.runtime.onMessage.addListener.mock.calls[0][0] as (
-      message: unknown,
-    ) => void;
-    getUserMedia.mockResolvedValue(new FakeMediaStream([new FakeTrack("video")]));
+    const listener = chromeMock.runtime.onMessage.addListener.mock
+      .calls[0][0] as (message: unknown) => void;
+    getUserMedia.mockResolvedValue(
+      new FakeMediaStream([new FakeTrack("video")]),
+    );
 
     listener({ type: "CONTROLS_INIT", includeCamera: false, title: "t" });
     await new Promise((resolve) => setTimeout(resolve, 0));

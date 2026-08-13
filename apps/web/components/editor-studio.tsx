@@ -344,12 +344,16 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
     return (
       <section className="editor-state-page">
         <div className="editor-state-card">
-          <span className="state-mark" aria-hidden="true">!</span>
+          <span className="state-mark" aria-hidden="true">
+            !
+          </span>
           <p className="eyebrow">Editor unavailable</p>
           <h1>We could not open this cut.</h1>
           <p>{error}</p>
           <div className="state-actions">
-            <button type="button" onClick={() => void load()}>Try again</button>
+            <button type="button" onClick={() => void load()}>
+              Try again
+            </button>
             <Link href={`/library/${recordingId}`}>Back to recording</Link>
           </div>
         </div>
@@ -455,7 +459,11 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
                 <button type="button" onClick={split}>
                   Split at playhead
                 </button>
-                <button className="editor-danger" type="button" onClick={remove}>
+                <button
+                  className="editor-danger"
+                  type="button"
+                  onClick={remove}
+                >
                   Delete clip
                 </button>
                 <button type="button" onClick={() => move(-1)}>
@@ -492,7 +500,9 @@ export function EditorStudio({ recordingId }: { recordingId: string }) {
             <h2>Timeline</h2>
           </div>
           <div className="editor-timeline-meta">
-            <span>{clips.length} {clips.length === 1 ? "clip" : "clips"}</span>
+            <span>
+              {clips.length} {clips.length === 1 ? "clip" : "clips"}
+            </span>
             <strong>{ms(history.document.timelineDurationMs)}</strong>
           </div>
         </div>

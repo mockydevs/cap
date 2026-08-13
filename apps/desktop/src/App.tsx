@@ -377,7 +377,10 @@ export function App() {
               <ChevronDownIcon className="icon" />
             </button>
             {accountMenuOpen && (
-              <div className="account-menu" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="account-menu"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="account-menu-label">
                   Signed in to {serverUrl || "your workspace"}
                 </div>
@@ -392,7 +395,11 @@ export function App() {
             )}
           </div>
         ) : (
-          <span className="account-chip" aria-hidden style={{ cursor: "default" }}>
+          <span
+            className="account-chip"
+            aria-hidden
+            style={{ cursor: "default" }}
+          >
             <span className="status-dot" />
             Not connected
           </span>
@@ -525,7 +532,9 @@ export function App() {
               icon={<CursorIcon className="icon" />}
               checked={options.cursor}
               disabled={recording}
-              onChange={(checked) => setOptions({ ...options, cursor: checked })}
+              onChange={(checked) =>
+                setOptions({ ...options, cursor: checked })
+              }
             />
           </div>
 
@@ -713,7 +722,9 @@ export function App() {
                           className="btn btn-icon btn-ghost"
                           title="Upload"
                           aria-label="Upload"
-                          onClick={() => void desktop.upload(project.id).then(refresh)}
+                          onClick={() =>
+                            void desktop.upload(project.id).then(refresh)
+                          }
                         >
                           <UploadIcon className="icon" />
                         </button>
@@ -723,7 +734,9 @@ export function App() {
                         className="btn btn-icon btn-danger"
                         title="Delete"
                         aria-label="Delete"
-                        onClick={() => void desktop.remove(project.id).then(refresh)}
+                        onClick={() =>
+                          void desktop.remove(project.id).then(refresh)
+                        }
                       >
                         <TrashIcon className="icon" />
                       </button>

@@ -4,7 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { createStorageClient } from "@cap/storage";
 import type { Job } from "bullmq";
 import type { Pool } from "pg";
 import { transcriptionJobSchema, type TranscriptionJob } from "@cap/queue";
@@ -52,11 +53,7 @@ export async function processJob(
   try {
     const sourcePath = join(workdir, "source");
     const audioPath = join(workdir, "audio.wav");
-    const endpoint = process.env.AWS_S3_ENDPOINT;
-    const client = new S3Client({
-      region: process.env.AWS_REGION ?? "us-east-1",
-      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-    });
+    const client = createStorageClient();
     const source = await client.send(
       new GetObjectCommand({
         Bucket: required("AWS_S3_BUCKET_NAME"),

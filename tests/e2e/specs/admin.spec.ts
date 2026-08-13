@@ -7,9 +7,7 @@ import { signUpAndSignIn } from "./helpers";
 // route this panel calls (all require at least the ADMIN role), so the full
 // panel renders without any additional setup.
 
-test("shows a fresh workspace owner the full admin panel", async ({
-  page,
-}) => {
+test("shows a fresh workspace owner the full admin panel", async ({ page }) => {
   const user = await signUpAndSignIn(page, "Admin Owner");
   await page.goto("/admin");
 
@@ -50,9 +48,7 @@ test("invites a new member and saves the retention policy", async ({
   ).toBeVisible();
 
   await page
-    .getByLabel(
-      "Auto-delete recordings after (days, blank = keep forever)",
-    )
+    .getByLabel("Auto-delete recordings after (days, blank = keep forever)")
     .fill("90");
   await page.getByRole("button", { name: "Save retention policy" }).click();
   await expect(page.getByText("Retention policy saved.")).toBeVisible();

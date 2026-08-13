@@ -100,6 +100,9 @@ export async function signInWithGoogle(serverOrigin) {
   const json = await response.json();
   // The Google endpoint returns only a displayName, no email — store what's
   // actually available rather than inventing an email address.
-  await storeToken(serverOrigin, { token: json.token, email: json.displayName });
+  await storeToken(serverOrigin, {
+    token: json.token,
+    email: json.displayName,
+  });
   return json;
 }

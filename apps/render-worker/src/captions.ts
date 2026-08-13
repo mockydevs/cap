@@ -20,11 +20,9 @@ export function toAssColor(hex: string): string {
   const rr = hex.slice(1, 3);
   const gg = hex.slice(3, 5);
   const bb = hex.slice(5, 7);
-  const webAlpha = hex.length === 9 ? Number.parseInt(hex.slice(7, 9), 16) : 255;
-  const assAlpha = (255 - webAlpha)
-    .toString(16)
-    .padStart(2, "0")
-    .toUpperCase();
+  const webAlpha =
+    hex.length === 9 ? Number.parseInt(hex.slice(7, 9), 16) : 255;
+  const assAlpha = (255 - webAlpha).toString(16).padStart(2, "0").toUpperCase();
   return `&H${assAlpha}${bb.toUpperCase()}${gg.toUpperCase()}${rr.toUpperCase()}&`;
 }
 

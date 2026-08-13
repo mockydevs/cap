@@ -38,7 +38,8 @@ export const editorTemplateFragmentSchema = z
           message: "Clip asset is not declared in the template",
           path: ["clips", index, "assetId"],
         });
-      const duration = (clip.sourceEndMs - clip.sourceStartMs) / clip.playbackRate;
+      const duration =
+        (clip.sourceEndMs - clip.sourceStartMs) / clip.playbackRate;
       if (clip.timelineStartMs + duration > fragment.durationMs)
         context.addIssue({
           code: "custom",
@@ -61,7 +62,9 @@ export const editorTemplateFragmentSchema = z
         });
     }
   });
-export type EditorTemplateFragment = z.infer<typeof editorTemplateFragmentSchema>;
+export type EditorTemplateFragment = z.infer<
+  typeof editorTemplateFragmentSchema
+>;
 
 export interface TemplateIdFactory {
   clipId(): Clip["id"];

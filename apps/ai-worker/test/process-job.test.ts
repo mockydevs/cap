@@ -33,7 +33,9 @@ describe("providerForJob", () => {
   afterEach(() => {
     if (originalAllowDeploymentCredential === undefined)
       delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-    else process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = originalAllowDeploymentCredential;
+    else
+      process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL =
+        originalAllowDeploymentCredential;
     if (originalApiKey === undefined) delete process.env.AI_API_KEY;
     else process.env.AI_API_KEY = originalApiKey;
   });
@@ -41,9 +43,9 @@ describe("providerForJob", () => {
   it("throws when no matching job/connection row exists", async () => {
     const pool = fakePool(() => ({ rows: [], rowCount: 0 }));
     const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(
-      providerForJob(pool, kms, baseJobData()),
-    ).rejects.toThrow("AI job is not available");
+    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
+      "AI job is not available",
+    );
   });
 
   it("throws when connection is missing and deployment credential fallback is disallowed", async () => {
@@ -62,9 +64,9 @@ describe("providerForJob", () => {
       rowCount: 1,
     }));
     const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(
-      providerForJob(pool, kms, baseJobData()),
-    ).rejects.toThrow("AI provider connection is required");
+    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
+      "AI provider connection is required",
+    );
   });
 
   it("falls back to providerFromEnvironment when AI_ALLOW_DEPLOYMENT_CREDENTIAL is 'true'", async () => {
@@ -104,9 +106,9 @@ describe("providerForJob", () => {
       rowCount: 1,
     }));
     const kms = { send: vi.fn() } as unknown as KMSClient;
-    await expect(
-      providerForJob(pool, kms, baseJobData()),
-    ).rejects.toThrow("AI provider connection is unavailable");
+    await expect(providerForJob(pool, kms, baseJobData())).rejects.toThrow(
+      "AI provider connection is unavailable",
+    );
   });
 
   it("decrypts the credential via KMS and builds the provider from the connection on the happy path", async () => {
@@ -164,7 +166,9 @@ describe("processJob", () => {
   afterEach(() => {
     if (originalAllowDeploymentCredential === undefined)
       delete process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL;
-    else process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL = originalAllowDeploymentCredential;
+    else
+      process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL =
+        originalAllowDeploymentCredential;
     if (originalApiKey === undefined) delete process.env.AI_API_KEY;
     else process.env.AI_API_KEY = originalApiKey;
   });
@@ -190,7 +194,13 @@ describe("processJob", () => {
       if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
       if (call === 2)
         return {
-          rows: [{ enabled: false, allowed_provider: "OPENAI", allow_external_processing: false }],
+          rows: [
+            {
+              enabled: false,
+              allowed_provider: "OPENAI",
+              allow_external_processing: false,
+            },
+          ],
           rowCount: 1,
         };
       return { rows: [], rowCount: 1 };
@@ -203,7 +213,7 @@ describe("processJob", () => {
     expect(String(thirdSql)).toContain("status='FAILED'");
     expect(String(thirdSql)).toContain("error_category='PolicyDenied'");
     expect(thirdParams).toEqual([data.jobId, data.workspaceId]);
-    expect((pool.connect as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(pool.connect as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
   it("fails the job when the transcript changed after the job was authorized", async () => {
@@ -214,7 +224,13 @@ describe("processJob", () => {
       if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
       if (call === 2)
         return {
-          rows: [{ enabled: true, allowed_provider: "OPENAI", allow_external_processing: true }],
+          rows: [
+            {
+              enabled: true,
+              allowed_provider: "OPENAI",
+              allow_external_processing: true,
+            },
+          ],
           rowCount: 1,
         };
       if (call === 3)
@@ -245,7 +261,13 @@ describe("processJob", () => {
       if (call === 1) return { rows: [deploymentFallbackRow], rowCount: 1 };
       if (call === 2)
         return {
-          rows: [{ enabled: true, allowed_provider: "OPENAI", allow_external_processing: true }],
+          rows: [
+            {
+              enabled: true,
+              allowed_provider: "OPENAI",
+              allow_external_processing: true,
+            },
+          ],
           rowCount: 1,
         };
       return { rows: [], rowCount: 0 };

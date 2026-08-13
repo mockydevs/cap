@@ -342,10 +342,13 @@ function assertStoredObject(
   object: Awaited<ReturnType<MultipartObjectStorage["headSourceObject"]>>,
   session: { expectedSizeBytes: number; contentType: string },
 ): void {
+  // On AWS the object must carry the key we authorized the upload under; on a
+  // store without KMS there is no per-object key to compare and both are unset.
   if (
     object.contentLength !== session.expectedSizeBytes ||
     object.contentType !== session.contentType ||
-    object.kmsKeyId !== process.env.AWS_KMS_KEY_ARN
+    (object.kmsKeyId ?? undefined) !==
+      (process.env.AWS_KMS_KEY_ARN ?? undefined)
   ) {
     throw new UploadServiceError(
       "UPLOAD_INTEGRITY_ERROR",

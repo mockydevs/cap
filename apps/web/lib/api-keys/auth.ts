@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db/client";
 import { apiKeys } from "../../db/schema";
 import { AuthenticationError } from "../auth/authorization";
-import { enforceFixedWindowRateLimit, ShareRateLimitError } from "../sharing/rate-limit";
+import {
+  enforceFixedWindowRateLimit,
+  ShareRateLimitError,
+} from "../sharing/rate-limit";
 import { hashApiKey } from "./service";
 
 export interface ApiKeyActor {
@@ -17,7 +20,9 @@ export class ApiRateLimitError extends Error {}
  * `requireActor` used by the app's own internal routes — this is for
  * external integrations authenticating with a long-lived bearer key.
  */
-export async function requireApiKeyActor(request: Request): Promise<ApiKeyActor> {
+export async function requireApiKeyActor(
+  request: Request,
+): Promise<ApiKeyActor> {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer cap_live_"))
     throw new AuthenticationError("A valid API key bearer token is required");

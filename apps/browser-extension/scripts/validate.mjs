@@ -9,7 +9,8 @@ for (const name of ["manifest.chromium.json", "manifest.firefox.json"]) {
   manifests[name] = manifest;
 }
 
-const chromiumPermissions = manifests["manifest.chromium.json"].permissions ?? [];
+const chromiumPermissions =
+  manifests["manifest.chromium.json"].permissions ?? [];
 for (const required of [
   "offscreen",
   "tabCapture",

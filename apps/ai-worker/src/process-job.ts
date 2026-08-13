@@ -6,11 +6,7 @@ import { aiJobSchema, type AiJob } from "@cap/queue";
 import { aiCredentialEncryptionContext, transcriptInputHash } from "@cap/ai";
 import { providerFromConnection, providerFromEnvironment } from "./provider";
 
-export async function providerForJob(
-  pool: Pool,
-  kms: KMSClient,
-  data: AiJob,
-) {
+export async function providerForJob(pool: Pool, kms: KMSClient, data: AiJob) {
   const selected = await pool.query<{
     provider_connection_id: string | null;
     model: string | null;
@@ -53,11 +49,7 @@ export async function providerForJob(
   });
 }
 
-export async function processJob(
-  pool: Pool,
-  kms: KMSClient,
-  job: Job<AiJob>,
-) {
+export async function processJob(pool: Pool, kms: KMSClient, job: Job<AiJob>) {
   const data = aiJobSchema.parse(job.data);
   const provider = await providerForJob(pool, kms, data);
   const policy = await pool.query<{
