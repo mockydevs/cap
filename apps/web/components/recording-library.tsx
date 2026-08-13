@@ -318,7 +318,7 @@ export function RecordingLibrary({
                         </strong>
                         <span>
                           {uploadStalled
-                            ? "Open New recording to resume"
+                            ? "Check New recording for recovery"
                             : status === "UPLOADING"
                               ? "Keep the recording tab open"
                               : "This updates automatically"}
