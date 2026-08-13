@@ -325,28 +325,10 @@ button:disabled {
 .ai-panel h2 {
   margin: 6px 0;
 }
-.ai-actions,
-.ai-panel form,
 .ai-results article > div {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-}
-.ai-actions {
-  margin: 18px 0;
-}
-.ai-actions button,
-.ai-panel button {
-  padding: 8px 11px;
-  font-size: var(--text-body-sm);
-}
-.ai-panel form input {
-  flex: 1;
-  min-width: 240px;
-  border: 1px solid #4d4841;
-  padding: 11px;
-  background: #201f1d;
-  color: var(--ink);
 }
 .ai-results {
   display: grid;
@@ -649,31 +631,54 @@ button:disabled {
 .transcript-heading h2 {
   margin: 0;
 }
+/* Exports are a quiet row of formats, not three shouting links. */
 .transcript-exports {
   display: flex;
-  gap: 10px;
+  gap: 6px;
 }
 .transcript-exports a {
-  color: var(--ink);
-  font-size: var(--text-body-sm);
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
 }
+.transcript-exports a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Label, field, and action on one line at one height. */
 .transcript-language {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
+  margin-top: 12px;
 }
 .transcript-language label {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
-  font-size: var(--text-body-sm);
+  font-size: var(--text-sm);
 }
 .transcript-language input {
   width: 92px;
-  border: 1px solid var(--line);
-  padding: 5px 7px;
+  min-height: 34px;
+  padding: 6px 9px;
+}
+.transcript-language button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-color: var(--line-strong);
+  background: transparent;
   color: var(--ink);
-  background: #201f1d;
+}
+.transcript-language button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .transcript-segments {
   display: grid;
@@ -1676,9 +1681,13 @@ h6 {
   border-bottom: 1px solid var(--line);
 }
 
+/* Same shape as the comments and AI headings, so moving between tabs does
+   not move the furniture. */
 .viewer-inspector .transcript-heading {
   display: grid;
   gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .viewer-inspector .transcript-segments > li {
@@ -2682,10 +2691,30 @@ h6 {
   margin-left: auto;
 }
 
+/* A quiet way back, not a hyperlink: the arrow leads, the label follows, and
+   the whole thing lines up with the page gutter beneath it. */
 .viewer-back {
-  padding-left: 20px;
-  border-left: 1px solid var(--line);
-  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.viewer-back span {
+  transition: transform 160ms ease;
+}
+
+.viewer-back:hover {
+  color: var(--ink);
+}
+
+.viewer-back:hover span {
+  transform: translateX(-2px);
 }
 
 .viewer-layout {
@@ -2879,21 +2908,46 @@ h6 {
   font-size: var(--text-xs);
 }
 
+/* One rhythm for every inspector tab: heading, lede, then the controls. */
+.panel-lede {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.panel-notice {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.panel-notice a {
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
+
 .panel-empty {
   display: grid;
   justify-items: start;
   padding: 28px 4px;
 }
 
+/* Kept neutral: the accent in this panel belongs to the actions you can take,
+   not to the marker on a state where nothing has happened yet. */
 .panel-empty > span:not(.state-loader) {
   display: inline-flex;
   min-width: 42px;
   min-height: 28px;
   align-items: center;
   justify-content: center;
-  margin-bottom: 15px;
-  border: 1px solid #7b2415;
-  color: var(--accent);
+  margin-bottom: 14px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
   font-size: var(--text-xs);
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -2948,31 +3002,53 @@ h6 {
   padding: 4px 7px;
 }
 
-.ai-panel > p:not(.eyebrow) {
-  color: var(--muted);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
+/* Chips grow to fill their row, so the block has clean edges on both sides
+   instead of a ragged right margin. */
 .ai-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin: 16px 0 0;
 }
 
 .ai-actions button {
-  min-height: 32px;
-  padding: 6px 9px;
+  flex: 1 1 auto;
+  min-height: 34px;
+  padding: 6px 10px;
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--ink);
   font-size: var(--text-xs);
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .ai-actions button:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* Field and its action are one control: same height, one gap between them.
+   The shared button width lines both rows up on the same right edge. */
+.ai-panel form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-actions + form {
+  margin-top: 14px;
+}
+
+.ai-panel form input {
+  min-width: 0;
+}
+
+.ai-panel form button {
+  min-width: 92px;
+  min-height: 40px;
+  padding-inline: 14px;
 }
 
 .ai-results article {

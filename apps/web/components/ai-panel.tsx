@@ -94,11 +94,19 @@ export function AiPanel({
   };
   return (
     <section className="ai-panel">
-      <p className="eyebrow">AI ASSISTANT</p>
-      <h2>Recording intelligence</h2>
-      <p>Generated output is a suggestion. Review it before accepting.</p>
+      <header className="panel-heading">
+        <div>
+          <p className="eyebrow">AI assistant</p>
+          <h2>Recording intelligence</h2>
+        </div>
+      </header>
+      <p className="panel-lede">
+        Generated output is a suggestion. Review it before accepting.
+      </p>
+      {/* Switched-off AI is a workspace setting, not a failure, so it reads as
+          a note rather than wearing the error treatment. */}
       {blocked && (
-        <p className="form-error">
+        <p className="panel-notice">
           {aiErrorMessage(blocked)}{" "}
           <Link href="/admin#ai">Open AI settings</Link>
         </p>

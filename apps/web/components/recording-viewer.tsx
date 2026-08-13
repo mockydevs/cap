@@ -108,7 +108,8 @@ export function RecordingViewer({
     <section className="viewer-shell">
       <div className="viewer-context">
         <Link className="viewer-back" href="/library">
-          ← All recordings
+          <span aria-hidden="true">←</span>
+          All recordings
         </Link>
         <div className="viewer-actions">
           {recording.status === "READY" && (
