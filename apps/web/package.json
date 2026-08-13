@@ -14,7 +14,8 @@
     "test:integration": "vitest run -c vitest.integration.config.ts",
     "retention:sweep": "tsx scripts/retention-sweep.ts",
     "storage:verify": "tsx scripts/verify-storage.ts",
-    "storage:apply-cors": "tsx scripts/apply-storage-cors.ts"
+    "storage:apply-cors": "tsx scripts/apply-storage-cors.ts",
+    "storage:check-objects": "tsx scripts/check-storage-objects.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.758.0",

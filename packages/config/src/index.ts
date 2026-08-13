@@ -7,8 +7,6 @@ export const serverEnvironmentSchema = z.object({
   AWS_S3_BUCKET_NAME: z.string().min(3),
   AWS_KMS_KEY_ARN: z.string().min(1).optional(),
   AWS_S3_ENDPOINT: optionalUrl,
-  AWS_CLOUDFRONT_DOMAIN: z.string().min(1).optional(),
-  AWS_CLOUDFRONT_DISTRIBUTION_ID: z.string().min(1).optional(),
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
 });

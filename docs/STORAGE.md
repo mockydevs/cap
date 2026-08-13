@@ -63,6 +63,43 @@ R2, MinIO and Backblaze B2 reject. Nothing above the adapter changes.
 **Recommended default: Cap-managed storage on R2.** It removes the egress bill
 and keeps one bucket to configure correctly.
 
+### Migrating to R2
+
+Nothing in the application changes: playback signs `GET` requests against the
+bucket directly (`presignPlayback`), so it behaves the same on either
+provider. There is no CDN to reconfigure — the `AWS_CLOUDFRONT_*` settings
+that used to be declared were never read by any code and have been removed.
+
+1. Create the bucket in the Cloudflare dashboard, then an S3-compatible API
+   token with object read/write on it.
+2. Copy existing objects. Use `rclone`, which handles resume and parallelism:
+
+   ```sh
+   rclone copy s3-old:cap-recordings r2-new:cap-recordings --progress
+   ```
+
+3. Point the deployment at R2:
+
+   ```sh
+   AWS_REGION=auto
+   AWS_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+   AWS_S3_BUCKET_NAME=<bucket>
+   AWS_ACCESS_KEY_ID=<r2 access key id>
+   AWS_SECRET_ACCESS_KEY=<r2 secret>
+   AWS_KMS_KEY_ARN=            # R2 has no KMS; must be empty
+   ```
+
+   `AWS_S3_ENDPOINT` also switches the client to path-style addressing and
+   relaxes the CRC32 checksum behaviour R2 rejects.
+
+4. Allow browser uploads: `pnpm --filter @cap/web storage:apply-cors`.
+5. Prove nothing was left behind:
+   `pnpm --filter @cap/web storage:check-objects`. It reads every object key
+   the database references — sources, playback assets, caption tracks — and
+   confirms each one exists in the new bucket. A copy tool can only report
+   what it found; this reports what this deployment still needs.
+6. Record something and watch it back before decommissioning the old bucket.
+
 ## Customer-owned buckets
 
 Letting each workspace supply its own bucket is supported in principle by the
