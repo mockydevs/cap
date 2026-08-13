@@ -36,6 +36,19 @@ fails the billing endpoints with a 503 and leaves the rest of the app working.
 it is drawn from credit. It defaults to `0`, so a deployment that forgets to set
 it resells at cost rather than silently overcharging.
 
+## Trial credit
+
+`AI_TRIAL_CREDIT_MICROUNITS` gives a workspace a lifetime allowance before it
+has connected a key or bought anything, so a new signup can try transcription
+and analysis instead of hitting a refusal on its first recording. It defaults
+to `0` — the deployment pays for it out of `AI_API_KEY`, so it is opt-in.
+
+Trial spend rides the managed lane and is recorded with plan code `trial`, so
+it appears in the ledger like any other charge and is measured over the
+workspace's lifetime rather than a billing period. A routed key or a real
+subscription always takes precedence, and a spent trial reports
+`AI_CREDIT_EXHAUSTED` so the UI prompts for a key or a plan.
+
 ## How credit is consumed
 
 Nothing is deducted up front. Each completed unit of AI work writes an

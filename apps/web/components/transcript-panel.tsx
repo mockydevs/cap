@@ -2,7 +2,9 @@
 
 import { formatDuration } from "@cap/recording";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { fetchFresh, sendJson } from "../lib/http/json";
+import { aiErrorMessage, isEntitlementDenial } from "../lib/ai/messages";
 
 type Segment = {
   id: string;
@@ -15,6 +17,7 @@ type TranscriptPage = {
   transcript: {
     id: string;
     language: string | null;
+    status: string;
     correctionRevision: number;
   } | null;
   items: Segment[];
@@ -31,6 +34,8 @@ export function TranscriptPanel({
   const [page, setPage] = useState<TranscriptPage>();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState<string>();
+  const [requesting, setRequesting] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [language, setLanguage] = useState("");
   const load = useCallback(async () => {
     const response = await fetchFresh(
@@ -49,6 +54,64 @@ export function TranscriptPanel({
     setLanguage(next.transcript?.language ?? "");
   }, [recordingId]);
   useEffect(() => void load(), [load]);
+
+  async function requestTranscription() {
+    setRequesting(true);
+    setError(undefined);
+    const response = await sendJson(
+      `/api/recordings/${recordingId}/transcript`,
+      "POST",
+    );
+    setRequesting(false);
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: { code?: string };
+      };
+      const code = body.error?.code;
+      setError(
+        code === "RECORDING_NOT_READY"
+          ? "This recording is still processing. Try again once it is ready."
+          : aiErrorMessage(code),
+      );
+      setBlocked(isEntitlementDenial(code));
+      return;
+    }
+    setBlocked(false);
+    await load();
+  }
+
+  /** Offered whenever there is nothing to show and nothing on its way: no
+   * transcript at all, or one disabled because the workspace could not pay
+   * for AI when the recording was made. */
+  function transcribeAction(title: string, detail: string) {
+    return (
+      <section className="transcript-panel">
+        <div className="panel-empty">
+          <span aria-hidden="true">TXT</span>
+          <strong>{title}</strong>
+          <p>{detail}</p>
+          <button
+            type="button"
+            disabled={requesting}
+            onClick={() => void requestTranscription()}
+          >
+            {requesting ? "Requesting…" : "Transcribe this recording"}
+          </button>
+          {error ? (
+            <p className="form-error">
+              {error}
+              {blocked ? (
+                <>
+                  {" "}
+                  <Link href="/admin#ai">Open AI settings</Link>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
 
   async function saveLanguage() {
     const response = await sendJson(
@@ -98,6 +161,21 @@ export function TranscriptPanel({
       </section>
     );
   if (!page.transcript)
+    return transcribeAction(
+      "No transcript yet.",
+      "Transcribe this recording to get a searchable, editable transcript and unlock AI features.",
+    );
+  if (page.transcript.status === "DISABLED")
+    return transcribeAction(
+      "Transcription is not switched on.",
+      "This recording was made while the workspace had no AI provider connected. Connect one, then transcribe.",
+    );
+  if (page.transcript.status === "FAILED")
+    return transcribeAction(
+      "Transcription failed.",
+      "The provider did not return a transcript for this recording. You can try again.",
+    );
+  if (page.transcript.status !== "READY")
     return (
       <section className="transcript-panel">
         <div className="panel-empty">

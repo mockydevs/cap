@@ -3,6 +3,7 @@ import {
   AI_DENIAL_STATUS,
   applyManagedMarkup,
   resolveAiEntitlement,
+  trialCreditFromEnvironment,
   unknownTokenRateFromEnvironment,
   type AiEntitlement,
   type AiPurpose,
@@ -64,6 +65,25 @@ export async function monthlyUsage(workspaceId: string) {
   };
 }
 
+/**
+ * Lifetime managed spend, which is what a trial allowance is measured against.
+ * Only queried when the deployment offers one.
+ */
+async function lifetimeManagedSpend(workspaceId: string) {
+  const [row] = await db()
+    .select({
+      charged: sql<number>`coalesce(sum(${aiUsageEvents.chargedMicrounits}),0)::bigint`,
+    })
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.workspaceId, workspaceId),
+        eq(aiUsageEvents.lane, "MANAGED"),
+      ),
+    );
+  return Number(row?.charged ?? 0);
+}
+
 async function activeRoute(workspaceId: string, purpose: AiPurpose) {
   const [route] = await db()
     .select({
@@ -95,16 +115,24 @@ export async function loadEntitlement(
     .from(aiWorkspacePolicies)
     .where(eq(aiWorkspacePolicies.workspaceId, workspaceId))
     .limit(1);
-  const [route, subscription, usage] = await Promise.all([
+  const trialCredit = trialCreditFromEnvironment(process.env);
+  const [route, subscription, usage, trialSpend] = await Promise.all([
     activeRoute(workspaceId, purpose),
     loadSubscriptionFacts(workspaceId),
     monthlyUsage(workspaceId),
+    trialCredit ? lifetimeManagedSpend(workspaceId) : Promise.resolve(0),
   ]);
   return resolveAiEntitlement({
     purpose,
     policy: policy ?? null,
     route,
     subscription,
+    trial: trialCredit
+      ? {
+          includedCreditMicrounits: trialCredit,
+          consumedCreditMicrounits: trialSpend,
+        }
+      : null,
     usage,
     deploymentCredentialAllowed:
       process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL === "true",

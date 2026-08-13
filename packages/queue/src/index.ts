@@ -8,6 +8,13 @@ export const TRANSCRIPTION_QUEUE = "transcription";
 export const RENDER_QUEUE = "render";
 export const AI_QUEUE = "ai";
 export const WEBHOOK_DELIVERY_QUEUE = "webhook-delivery";
+
+/**
+ * Version of the media pipeline a job was produced for. Lives with the job
+ * contract because the media worker refuses any other value, and the web app
+ * and workers must agree on it to address the same job.
+ */
+export const PROCESSING_VERSION = 1;
 export { aiJobSchema, type AiJob };
 export const renderJobSchema = z.object({
   renderJobId: z.string().uuid(),
@@ -68,9 +75,19 @@ export function renderJobOptions(renderJobId: string): JobsOptions {
 export function transcriptionJobOptions(
   recordingId: string,
   processingVersion: number,
+  /**
+   * Set for a deliberate re-request. Completed job ids are retained for a
+   * week, so without a distinct id BullMQ would treat a retry as a duplicate
+   * and drop it silently — which is exactly what a member clicking
+   * "transcribe" after connecting a key would experience as nothing
+   * happening.
+   */
+  requestId?: string,
 ): JobsOptions {
   return {
-    jobId: `transcription:${recordingId}:v${processingVersion}`,
+    jobId: requestId
+      ? `transcription:${recordingId}:v${processingVersion}:${requestId}`
+      : `transcription:${recordingId}:v${processingVersion}`,
     attempts: 5,
     backoff: { type: "exponential", delay: 10_000 },
     removeOnComplete: { age: 604_800 },

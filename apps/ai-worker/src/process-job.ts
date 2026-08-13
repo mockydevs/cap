@@ -7,6 +7,7 @@ import {
   loadAiEntitlement,
   managedMarkupPercentFromEnvironment,
   recordAiUsage,
+  trialCreditFromEnvironment,
   transcriptInputHash,
   type AiDenialReason,
   type AiUsageLane,
@@ -56,6 +57,7 @@ export async function providerForJob(
     purpose: "ANALYSIS",
     deploymentCredentialAllowed:
       process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL === "true",
+    trialCreditMicrounits: trialCreditFromEnvironment(process.env),
   });
   if (entitlement.lane === "NONE")
     throw new AiEntitlementDenied(entitlement.reason);

@@ -14,6 +14,7 @@ import {
   loadAiEntitlement,
   managedMarkupPercentFromEnvironment,
   recordAiUsage,
+  trialCreditFromEnvironment,
   type AiUsageLane,
 } from "@cap/ai";
 import { decryptCredential } from "@cap/crypto";
@@ -57,6 +58,7 @@ export async function providerForJob(
     purpose: "TRANSCRIPTION",
     deploymentCredentialAllowed:
       process.env.AI_ALLOW_DEPLOYMENT_CREDENTIAL === "true",
+    trialCreditMicrounits: trialCreditFromEnvironment(process.env),
   });
   if (entitlement.lane === "NONE") return null;
   if (entitlement.lane !== "BYOK")

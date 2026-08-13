@@ -37,6 +37,8 @@ export async function loadAiEntitlement(
     readonly workspaceId: string;
     readonly purpose: AiPurpose;
     readonly deploymentCredentialAllowed: boolean;
+    /** Lifetime allowance before the workspace pays for anything; 0 disables. */
+    readonly trialCreditMicrounits?: number;
     readonly now?: Date;
   },
 ): Promise<AiEntitlement> {
@@ -68,6 +70,15 @@ export async function loadAiEntitlement(
     "SELECT s.status,s.plan_code,s.current_period_end,s.included_credit_microunits,(SELECT coalesce(sum(e.charged_microunits),0) FROM ai_usage_events e WHERE e.workspace_id=s.workspace_id AND e.lane='MANAGED' AND e.occurred_at >= s.current_period_start) consumed FROM workspace_subscriptions s WHERE s.workspace_id=$1",
     [input.workspaceId],
   );
+  // Trial spend is lifetime, so it is summed over every managed event rather
+  // than a billing period. Only queried when a trial is actually offered.
+  const trialCredit = Math.max(0, input.trialCreditMicrounits ?? 0);
+  const trialSpend = trialCredit
+    ? await executor.query<{ consumed: string }>(
+        "SELECT coalesce(sum(charged_microunits),0) consumed FROM ai_usage_events WHERE workspace_id=$1 AND lane='MANAGED'",
+        [input.workspaceId],
+      )
+    : undefined;
   const policyRow = policy.rows[0];
   const subscriptionRow = subscription.rows[0];
   return resolveAiEntitlement({
@@ -98,6 +109,12 @@ export async function loadAiEntitlement(
             subscriptionRow.included_credit_microunits,
           ),
           consumedCreditMicrounits: count(subscriptionRow.consumed),
+        }
+      : null,
+    trial: trialCredit
+      ? {
+          includedCreditMicrounits: trialCredit,
+          consumedCreditMicrounits: count(trialSpend?.rows[0]?.consumed),
         }
       : null,
     usage: {
@@ -158,6 +175,15 @@ export async function recordAiUsage(
       input.currency ?? "USD",
     ],
   );
+}
+
+/** Lifetime AI allowance a new workspace gets, shared by web and workers. */
+export function trialCreditFromEnvironment(
+  environment: Record<string, string | undefined>,
+): number {
+  const configured = Number(environment.AI_TRIAL_CREDIT_MICROUNITS ?? "0");
+  if (!Number.isFinite(configured) || configured <= 0) return 0;
+  return Math.trunc(configured);
 }
 
 /** Reads the deployment's resale margin, shared by both workers. */

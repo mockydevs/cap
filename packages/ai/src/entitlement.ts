@@ -59,6 +59,19 @@ export interface AiRouteFacts {
   readonly model: string;
 }
 
+/**
+ * A deployment-funded allowance a workspace gets before it has connected a key
+ * or bought anything, so AI can be tried before it has to be paid for. Unlike
+ * a subscription this is a lifetime amount, not per period.
+ */
+export interface AiTrialFacts {
+  readonly includedCreditMicrounits: number;
+  readonly consumedCreditMicrounits: number;
+}
+
+/** Plan code recorded for trial spend, so it is legible in the ledger. */
+export const TRIAL_PLAN_CODE = "trial";
+
 export interface AiSubscriptionFacts {
   readonly status: string;
   readonly planCode: string;
@@ -78,6 +91,8 @@ export interface AiEntitlementFacts {
   readonly policy: AiPolicyFacts | null;
   readonly route: AiRouteFacts | null;
   readonly subscription: AiSubscriptionFacts | null;
+  /** Null when the deployment offers no trial. */
+  readonly trial: AiTrialFacts | null;
   readonly usage: AiUsageFacts;
   /** `AI_ALLOW_DEPLOYMENT_CREDENTIAL`, resolved by the caller. */
   readonly deploymentCredentialAllowed: boolean;
@@ -142,8 +157,28 @@ export function resolveAiEntitlement(facts: AiEntitlementFacts): AiEntitlement {
     };
   }
 
+  const trialRemaining = facts.trial
+    ? Math.max(
+        0,
+        facts.trial.includedCreditMicrounits -
+          facts.trial.consumedCreditMicrounits,
+      )
+    : 0;
+  if (trialRemaining > 0)
+    return {
+      lane: "MANAGED",
+      planCode: TRIAL_PLAN_CODE,
+      remainingCreditMicrounits: trialRemaining,
+    };
+
+  // The self-hosting escape hatch outranks a spent trial: an operator who has
+  // opted into paying should not be stopped by an allowance meant to protect
+  // them from that same spend.
   if (facts.deploymentCredentialAllowed) return { lane: "DEPLOYMENT" };
-  return { lane: "NONE", reason: "AI_PROVIDER_NOT_CONFIGURED" };
+  return {
+    lane: "NONE",
+    reason: facts.trial ? "AI_CREDIT_EXHAUSTED" : "AI_PROVIDER_NOT_CONFIGURED",
+  };
 }
 
 /**

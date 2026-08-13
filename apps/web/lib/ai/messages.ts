@@ -65,7 +65,11 @@ export function laneLabel(entitlement: PurposeEntitlement): string {
     case "BYOK":
       return "Your provider key";
     case "MANAGED":
-      return "Your Cap plan";
+      // Trial spend rides the same lane as a plan, but calling it a plan would
+      // misrepresent what the workspace has.
+      return entitlement.planCode === "trial"
+        ? "Free trial credit"
+        : "Your Cap plan";
     case "DEPLOYMENT":
       return "This deployment";
     default:

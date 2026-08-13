@@ -53,3 +53,36 @@ test("invites a new member and saves the retention policy", async ({
   await page.getByRole("button", { name: "Save retention policy" }).click();
   await expect(page.getByText("Retention policy saved.")).toBeVisible();
 });
+
+// apps/web/components/ai-settings.tsx and billing-settings.tsx. A fresh
+// workspace has no provider connection and no plan, which is exactly the state
+// that used to surface as a raw error code the first time a member clicked an
+// AI action. These assertions pin the panel that now explains it up front.
+test("tells a fresh workspace who pays for each AI feature", async ({
+  page,
+}) => {
+  await signUpAndSignIn(page, "AI Entitlements");
+  await page.goto("/admin");
+
+  // The panel is a <details>; its contents are collapsed until opened.
+  await page.getByText("Workspace AI policy").click();
+
+  await expect(
+    page.getByRole("heading", { name: "Who pays for AI" }),
+  ).toBeVisible();
+  for (const feature of ["Transcripts", "Analysis", "Semantic search"])
+    await expect(page.getByText(feature, { exact: true })).toBeVisible();
+  // Nothing can pay yet, and the panel must say so rather than look ready.
+  await expect(
+    page.getByText("Unavailable", { exact: false }).first(),
+  ).toBeVisible();
+
+  await expect(
+    page.getByRole("heading", { name: "Cap AI plan" }),
+  ).toBeVisible();
+  // With AI_PLANS unset the deployment sells nothing, and the card says so
+  // instead of rendering an empty plan list.
+  await expect(
+    page.getByText("does not sell AI plans", { exact: false }),
+  ).toBeVisible();
+});

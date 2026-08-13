@@ -14,13 +14,13 @@ import {
   createTranscriptionQueue,
   MEDIA_PROCESSING_QUEUE,
   mediaProcessingJobSchema,
+  PROCESSING_VERSION,
   transcriptionJobOptions,
   type MediaProcessingJob,
 } from "@cap/queue";
 import { createPlaybackAssets, inspectMedia } from "./ffmpeg";
 import { dispatchProcessingOutbox } from "./outbox";
 
-const PROCESSING_VERSION = 1;
 type AssetKind = "MP4" | "HLS_MANIFEST" | "HLS_SEGMENT" | "POSTER";
 type Asset = {
   kind: AssetKind;

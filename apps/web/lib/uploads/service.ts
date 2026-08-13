@@ -15,6 +15,7 @@ import {
   multipartUploadId,
   type MultipartObjectStorage,
 } from "@cap/storage";
+import { PROCESSING_VERSION } from "@cap/queue";
 import { db } from "../../db/client";
 import {
   processingOutbox,
@@ -566,7 +567,7 @@ export async function completeSourceUpload(
         recordingId: initial.recordingId,
         workspaceId: initial.workspaceId,
         sourceObjectKey: initial.objectKey,
-        processingVersion: 1,
+        processingVersion: PROCESSING_VERSION,
       },
     });
   });

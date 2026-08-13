@@ -23,6 +23,7 @@ function facts(
     policy: permissivePolicy,
     route: null,
     subscription: null,
+    trial: null,
     usage: { tokens: 0, costMicrounits: 0 },
     deploymentCredentialAllowed: false,
     now: NOW,
@@ -147,4 +148,62 @@ describe("resolveAiEntitlement", () => {
       resolveAiEntitlement(facts({ deploymentCredentialAllowed: true })),
     ).toEqual({ lane: "DEPLOYMENT" });
   });
+
+  it("grants a trial allowance when the deployment offers one and nothing else pays", () =>
+    expect(
+      resolveAiEntitlement(
+        facts({
+          trial: {
+            includedCreditMicrounits: 2_000_000,
+            consumedCreditMicrounits: 500_000,
+          },
+        }),
+      ),
+    ).toEqual({
+      lane: "MANAGED",
+      planCode: "trial",
+      remainingCreditMicrounits: 1_500_000,
+    }));
+
+  it("prefers a real subscription over the trial allowance", () =>
+    expect(
+      resolveAiEntitlement(
+        facts({
+          subscription: activePlan,
+          trial: {
+            includedCreditMicrounits: 2_000_000,
+            consumedCreditMicrounits: 0,
+          },
+        }),
+      ),
+    ).toEqual({
+      lane: "MANAGED",
+      planCode: "starter",
+      remainingCreditMicrounits: 5_000_000,
+    }));
+
+  it("reports a spent trial as exhausted credit rather than missing configuration", () =>
+    expect(
+      resolveAiEntitlement(
+        facts({
+          trial: {
+            includedCreditMicrounits: 2_000_000,
+            consumedCreditMicrounits: 2_000_000,
+          },
+        }),
+      ),
+    ).toEqual({ lane: "NONE", reason: "AI_CREDIT_EXHAUSTED" }));
+
+  it("lets a self-hosting operator keep working once the trial is spent", () =>
+    expect(
+      resolveAiEntitlement(
+        facts({
+          deploymentCredentialAllowed: true,
+          trial: {
+            includedCreditMicrounits: 2_000_000,
+            consumedCreditMicrounits: 2_000_000,
+          },
+        }),
+      ),
+    ).toEqual({ lane: "DEPLOYMENT" }));
 });

@@ -1,7 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gt, ilike, ne, sql } from "drizzle-orm";
+import {
+  createRedisConnection,
+  createTranscriptionQueue,
+  PROCESSING_VERSION,
+  transcriptionJobOptions,
+} from "@cap/queue";
 import { db } from "../../db/client";
 import { recordings, transcriptSegments, transcripts } from "../../db/schema";
 import type { Actor } from "../auth/session";
+import { requireEntitlement } from "../ai/entitlement";
 import { toSrt, toWebVtt } from "./format";
 import { translatedCaptions } from "./translations";
 
@@ -13,7 +21,9 @@ export class TranscriptServiceError extends Error {
       | "SEGMENT_NOT_FOUND"
       | "TRANSCRIPT_EDIT_FORBIDDEN"
       | "TRANSCRIPT_CONFLICT"
-      | "TRANSLATION_NOT_AVAILABLE",
+      | "TRANSLATION_NOT_AVAILABLE"
+      | "RECORDING_NOT_READY"
+      | "TRANSCRIPT_QUEUE_NOT_CONFIGURED",
     readonly status: number,
   ) {
     super(code);
@@ -283,4 +293,81 @@ export async function searchWorkspaceTranscripts(
     items,
     nextCursor: rows.length > limit ? (items.at(-1)?.id ?? null) : null,
   };
+}
+
+/**
+ * Re-requests transcription for a recording.
+ *
+ * Transcription is normally enqueued once, by the media worker, when a
+ * recording finishes processing. That leaves nothing to recover a recording
+ * made while the workspace had no way to pay for AI: its transcript is marked
+ * DISABLED and the automatic path never runs again. This is the manual path
+ * out of that state, and it checks entitlement first so a member who still has
+ * no credential is told why rather than watching a job fail.
+ */
+export async function requestTranscription(
+  recordingId: string,
+  actor: TranscriptActor,
+) {
+  const [recording] = await db()
+    .select({
+      id: recordings.id,
+      status: recordings.status,
+      sourceObjectKey: recordings.sourceObjectKey,
+    })
+    .from(recordings)
+    .where(
+      and(
+        eq(recordings.id, recordingId),
+        eq(recordings.workspaceId, actor.workspaceId),
+        ne(recordings.status, "DELETED"),
+      ),
+    )
+    .limit(1);
+  if (!recording) throw new TranscriptServiceError("TRANSCRIPT_NOT_FOUND", 404);
+  // Transcription reads the processed playback asset, which only exists once
+  // the media pipeline has finished.
+  if (recording.status !== "READY")
+    throw new TranscriptServiceError("RECORDING_NOT_READY", 409);
+  await requireEntitlement(actor.workspaceId, "TRANSCRIPTION");
+
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl)
+    throw new TranscriptServiceError("TRANSCRIPT_QUEUE_NOT_CONFIGURED", 503);
+  const connection = createRedisConnection(redisUrl);
+  const queue = createTranscriptionQueue(connection);
+  try {
+    await queue.add(
+      "transcribe",
+      {
+        recordingId: recording.id,
+        workspaceId: actor.workspaceId,
+        processingVersion: PROCESSING_VERSION,
+        sourceObjectKey: recording.sourceObjectKey,
+      },
+      transcriptionJobOptions(
+        recording.id,
+        PROCESSING_VERSION,
+        // A distinct id per request, so a retry is never mistaken for the
+        // original job and dropped.
+        randomUUID(),
+      ),
+    );
+  } finally {
+    await queue.close();
+    connection.disconnect();
+  }
+  // Moves the transcript out of DISABLED so the UI stops offering the action
+  // and starts polling; the worker takes it to PROCESSING from here.
+  await db()
+    .update(transcripts)
+    .set({ status: "REQUESTED", updatedAt: new Date() })
+    .where(
+      and(
+        eq(transcripts.recordingId, recording.id),
+        eq(transcripts.workspaceId, actor.workspaceId),
+        ne(transcripts.status, "PROCESSING"),
+      ),
+    );
+  return { status: "REQUESTED" as const };
 }
