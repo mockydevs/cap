@@ -192,6 +192,15 @@ async function expireIfNecessary(
     )
     .returning();
   if (expired) {
+    await db()
+      .update(recordings)
+      .set({ status: "FAILED", updatedAt: now })
+      .where(
+        and(
+          eq(recordings.id, expired.recordingId),
+          eq(recordings.status, "UPLOADING"),
+        ),
+      );
     await storage.abortMultipartUpload(uploadReference(expired));
     throw new UploadServiceError(
       "UPLOAD_SESSION_EXPIRED",
@@ -579,6 +588,7 @@ export async function abortSourceUpload(
   sessionIdValue: string,
   storage: MultipartObjectStorage = uploadStorage(),
 ): Promise<void> {
+  const now = new Date();
   const [session] = await db().transaction(async (transaction) => {
     const [current] = await transaction
       .select()
@@ -602,9 +612,18 @@ export async function abortSourceUpload(
     if (current.status !== "ABORTED" && current.status !== "EXPIRED") {
       await transaction
         .update(uploadSessions)
-        .set({ status: "ABORTED", updatedAt: new Date() })
+        .set({ status: "ABORTED", updatedAt: now })
         .where(eq(uploadSessions.id, current.id));
     }
+    await transaction
+      .update(recordings)
+      .set({ status: "FAILED", updatedAt: now })
+      .where(
+        and(
+          eq(recordings.id, current.recordingId),
+          eq(recordings.status, "UPLOADING"),
+        ),
+      );
     return [current];
   });
   if (!session) {

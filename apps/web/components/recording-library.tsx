@@ -27,6 +27,18 @@ type RecordingSummary = {
 };
 type Page = { items: RecordingSummary[]; nextCursor: string | null };
 
+const STALLED_UPLOAD_AFTER_MS = 15 * 60 * 1_000;
+
+export function isUploadStalled(
+  recording: Pick<RecordingSummary, "status" | "updatedAt">,
+  now = Date.now(),
+): boolean {
+  return (
+    recording.status === "UPLOADING" &&
+    now - new Date(recording.updatedAt).getTime() >= STALLED_UPLOAD_AFTER_MS
+  );
+}
+
 const viewContent: Record<
   LibraryView,
   {
@@ -278,17 +290,58 @@ export function RecordingLibrary({
         <div className="recording-grid">
           {filteredItems.map((recording) => {
             const status = effectiveStatus(recording);
+            const uploadStalled = isUploadStalled(recording);
             const cardContent = (
               <>
-                <div className="recording-art">
+                <div
+                  className={`recording-art${uploadStalled ? " recording-art-stalled" : ""}`}
+                >
                   <span
                     className={`recording-status status-${status.toLowerCase()}`}
                   >
                     {recording.status === "DELETED" ? "TRASHED" : status}
                   </span>
-                  <span className="recording-play" aria-hidden="true">
-                    ▶
-                  </span>
+                  {status === "READY" && (
+                    <span className="recording-play" aria-hidden="true">
+                      ▶
+                    </span>
+                  )}
+                  {(status === "UPLOADING" || status === "PROCESSING") && (
+                    <div className="recording-progress">
+                      <div className="recording-progress-copy">
+                        <strong>
+                          {uploadStalled
+                            ? "Upload interrupted"
+                            : status === "UPLOADING"
+                              ? "Uploading"
+                              : "Processing media"}
+                        </strong>
+                        <span>
+                          {uploadStalled
+                            ? "Open New recording to resume"
+                            : status === "UPLOADING"
+                              ? "Keep the recording tab open"
+                              : "This updates automatically"}
+                        </span>
+                      </div>
+                      <div
+                        className={`recording-progress-track${uploadStalled ? " is-stalled" : ""}`}
+                        role="progressbar"
+                        aria-label={
+                          uploadStalled
+                            ? "Upload interrupted"
+                            : `${status === "UPLOADING" ? "Upload" : "Processing"} in progress`
+                        }
+                      >
+                        <span />
+                      </div>
+                    </div>
+                  )}
+                  {status === "FAILED" && (
+                    <span className="recording-failed-mark" aria-hidden="true">
+                      !
+                    </span>
+                  )}
                 </div>
                 <div className="recording-card-copy">
                   <h2>{recording.title}</h2>

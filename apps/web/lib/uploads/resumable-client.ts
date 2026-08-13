@@ -20,6 +20,26 @@ export type PendingUpload = {
   uploadedParts: UploadedPart[];
 };
 
+export function pendingUploadProgress(upload: PendingUpload): {
+  completedBytes: number;
+  totalBytes: number;
+  percent: number;
+} {
+  const completedBytes = upload.uploadedParts.reduce(
+    (total, part) => total + (part.contentLength || 0),
+    0,
+  );
+  const totalBytes = upload.blob.size;
+  return {
+    completedBytes,
+    totalBytes,
+    percent:
+      totalBytes === 0
+        ? 0
+        : Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
+  };
+}
+
 /**
  * Lets a non-same-origin caller (e.g. the browser extension's background/
  * offscreen contexts, which have no same-origin Cap page to inherit a base
@@ -146,7 +166,7 @@ export async function beginResumableUpload(
 
 export async function resumeUpload(
   initialUpload: PendingUpload,
-  onProgress?: (completed: number, total: number) => void,
+  onProgress?: (completedBytes: number, totalBytes: number) => void,
   config?: UploadClientConfig,
 ) {
   let upload = initialUpload;
@@ -159,7 +179,9 @@ export async function resumeUpload(
   if (!upload.completionIdempotencyKey) {
     upload = { ...upload, completionIdempotencyKey: crypto.randomUUID() };
   }
+  upload = { ...upload, uploadedParts: [...completed.values()] };
   const totalParts = Math.ceil(upload.blob.size / upload.partSizeBytes);
+  onProgress?.(pendingUploadProgress(upload).completedBytes, upload.blob.size);
 
   for (let partNumber = 1; partNumber <= totalParts; partNumber += 1) {
     if (completed.has(partNumber)) continue;
@@ -211,7 +233,10 @@ export async function resumeUpload(
     });
     upload = { ...upload, uploadedParts: [...completed.values()] };
     await write(upload);
-    onProgress?.(completed.size, totalParts);
+    onProgress?.(
+      pendingUploadProgress(upload).completedBytes,
+      upload.blob.size,
+    );
   }
 
   const finished = await fetch(

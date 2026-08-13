@@ -7,7 +7,11 @@ import {
 } from "@cap/recording";
 import { useEffect, useRef, useState } from "react";
 import {
+  abortResumableUpload,
   beginResumableUpload,
+  listPendingUploads,
+  pendingUploadProgress,
+  type PendingUpload,
   resumeUpload,
 } from "../lib/uploads/resumable-client";
 
@@ -42,6 +46,11 @@ export function uploadFailureMessage(error: unknown): string {
   return `Upload failed: ${error.message}. ${kept}`;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
+  return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
+}
+
 export function CaptureStudio() {
   const [state, setState] = useState<CaptureState>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -53,6 +62,8 @@ export function CaptureStudio() {
   const [cameraBlob, setCameraBlob] = useState<Blob>();
   const [uploadProgress, setUploadProgress] = useState<number>();
   const [recordingId, setRecordingId] = useState<string>();
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [activePendingId, setActivePendingId] = useState<string>();
   const recorder = useRef<MediaRecorder | undefined>(undefined);
   const cameraRecorder = useRef<MediaRecorder | undefined>(undefined);
   const displayStream = useRef<MediaStream | undefined>(undefined);
@@ -76,6 +87,16 @@ export function CaptureStudio() {
     );
     return () => window.clearInterval(interval);
   }, [state]);
+
+  useEffect(() => {
+    void listPendingUploads()
+      .then(setPendingUploads)
+      .catch(() => undefined);
+  }, []);
+
+  async function refreshPendingUploads() {
+    setPendingUploads(await listPendingUploads());
+  }
 
   function stopTracks() {
     displayStream.current?.getTracks().forEach((track) => track.stop());
@@ -204,24 +225,92 @@ export function CaptureStudio() {
     try {
       const title = `Recording ${new Date().toLocaleString()}`;
       const pending = await beginResumableUpload(title, recordingBlob);
-      const result = await resumeUpload(pending, (completed, total) => {
-        setUploadProgress(Math.round((completed / total) * 100));
-      });
+      await refreshPendingUploads();
+      const result = await resumeUpload(
+        pending,
+        (completedBytes, totalBytes) => {
+          setUploadProgress(
+            totalBytes === 0
+              ? 0
+              : Math.round((completedBytes / totalBytes) * 100),
+          );
+        },
+      );
+      setUploadProgress(100);
+      await refreshPendingUploads();
       setRecordingId(result.recordingId);
       if (cameraBlob) {
         setMessage("Uploading camera recording…");
+        setUploadProgress(0);
         const pendingCamera = await beginResumableUpload(
           `${title} (camera)`,
           cameraBlob,
           result.recordingId,
         );
-        await resumeUpload(pendingCamera, () => {});
+        await refreshPendingUploads();
+        await resumeUpload(pendingCamera, (completedBytes, totalBytes) => {
+          setUploadProgress(
+            totalBytes === 0
+              ? 0
+              : Math.round((completedBytes / totalBytes) * 100),
+          );
+        });
+        setUploadProgress(100);
+        await refreshPendingUploads();
       }
       setState("ready");
       setMessage("Upload complete. Media processing has started.");
     } catch (error) {
+      await refreshPendingUploads().catch(() => undefined);
       setState("error");
       setMessage(uploadFailureMessage(error));
+    }
+  }
+
+  async function resumePending(pending: PendingUpload) {
+    setActivePendingId(pending.sessionId);
+    setState("uploading");
+    setMessage("Resuming your interrupted upload…");
+    setUploadProgress(pendingUploadProgress(pending).percent);
+    try {
+      const result = await resumeUpload(
+        pending,
+        (completedBytes, totalBytes) => {
+          setUploadProgress(
+            totalBytes === 0
+              ? 0
+              : Math.round((completedBytes / totalBytes) * 100),
+          );
+        },
+      );
+      setUploadProgress(100);
+      setRecordingId(result.recordingId);
+      setState("ready");
+      setMessage("Upload complete. Media processing has started.");
+      await refreshPendingUploads();
+    } catch (error) {
+      setState("error");
+      setMessage(uploadFailureMessage(error));
+      await refreshPendingUploads().catch(() => undefined);
+    } finally {
+      setActivePendingId(undefined);
+    }
+  }
+
+  async function cancelPending(pending: PendingUpload) {
+    setActivePendingId(pending.sessionId);
+    setMessage("Canceling the interrupted upload…");
+    try {
+      await abortResumableUpload(pending);
+      await refreshPendingUploads();
+      setState("idle");
+      setUploadProgress(undefined);
+      setMessage("Interrupted upload canceled.");
+    } catch (error) {
+      setState("error");
+      setMessage(uploadFailureMessage(error));
+    } finally {
+      setActivePendingId(undefined);
     }
   }
 
@@ -282,6 +371,25 @@ export function CaptureStudio() {
           {message}
         </p>
       )}
+      {state === "uploading" && (
+        <div className="studio-upload-progress">
+          <div className="upload-progress-copy">
+            <strong>Uploading recording</strong>
+            <span>{uploadProgress ?? 0}%</span>
+          </div>
+          <div
+            className="upload-progress-track"
+            role="progressbar"
+            aria-label="Recording upload progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={uploadProgress ?? 0}
+          >
+            <span style={{ width: `${uploadProgress ?? 0}%` }} />
+          </div>
+          <small>Keep this tab open until the upload reaches 100%.</small>
+        </div>
+      )}
       {recordingUrl && (
         <div className="preview">
           <video controls src={recordingUrl} />
@@ -301,6 +409,65 @@ export function CaptureStudio() {
             </a>
           </div>
         </div>
+      )}
+      {pendingUploads.length > 0 && (
+        <section
+          className="pending-upload-list"
+          aria-labelledby="pending-title"
+        >
+          <div className="pending-upload-heading">
+            <div>
+              <p className="eyebrow">Recovery</p>
+              <h2 id="pending-title">Interrupted uploads</h2>
+            </div>
+            <span>{pendingUploads.length}</span>
+          </div>
+          {pendingUploads.map((pending) => {
+            const progress = pendingUploadProgress(pending);
+            const busy = activePendingId === pending.sessionId;
+            return (
+              <article className="pending-upload" key={pending.sessionId}>
+                <div className="pending-upload-copy">
+                  <strong>Screen recording</strong>
+                  <span>
+                    {formatBytes(progress.completedBytes)} of{" "}
+                    {formatBytes(progress.totalBytes)} uploaded
+                  </span>
+                </div>
+                <div
+                  className="upload-progress-track"
+                  role="progressbar"
+                  aria-label="Interrupted upload progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={progress.percent}
+                >
+                  <span style={{ width: `${progress.percent}%` }} />
+                </div>
+                <strong className="pending-upload-percent">
+                  {progress.percent}%
+                </strong>
+                <div className="pending-upload-actions">
+                  <button
+                    type="button"
+                    disabled={Boolean(activePendingId)}
+                    onClick={() => void resumePending(pending)}
+                  >
+                    {busy ? "Resuming…" : "Resume"}
+                  </button>
+                  <button
+                    className="pending-upload-cancel"
+                    type="button"
+                    disabled={Boolean(activePendingId)}
+                    onClick={() => void cancelPending(pending)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
       )}
     </section>
   );

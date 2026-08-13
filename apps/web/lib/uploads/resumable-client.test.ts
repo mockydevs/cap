@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   abortResumableUpload,
   beginResumableUpload,
+  pendingUploadProgress,
   type PendingUpload,
 } from "./resumable-client";
 
@@ -80,5 +81,53 @@ describe("resumable-client cross-origin config", () => {
     expect((init.headers as Record<string, string>).authorization).toBe(
       "Bearer tok123",
     );
+  });
+});
+
+describe("pendingUploadProgress", () => {
+  it("reports byte-accurate progress for resumable uploads", () => {
+    const upload: PendingUpload = {
+      sessionId: "s-progress",
+      recordingId: "r-progress",
+      partSizeBytes: 5,
+      blob: new Blob(["1234567890"]),
+      completionIdempotencyKey: "idem-progress",
+      uploadedParts: [
+        {
+          partNumber: 1,
+          etag: "etag-1",
+          checksumSha256: "checksum-1",
+          contentLength: 4,
+          isFinalPart: false,
+        },
+      ],
+    };
+
+    expect(pendingUploadProgress(upload)).toEqual({
+      completedBytes: 4,
+      totalBytes: 10,
+      percent: 40,
+    });
+  });
+
+  it("never reports more than 100 percent", () => {
+    const upload: PendingUpload = {
+      sessionId: "s-over",
+      recordingId: "r-over",
+      partSizeBytes: 5,
+      blob: new Blob(["12345"]),
+      completionIdempotencyKey: "idem-over",
+      uploadedParts: [
+        {
+          partNumber: 1,
+          etag: "etag-1",
+          checksumSha256: "checksum-1",
+          contentLength: 6,
+          isFinalPart: true,
+        },
+      ],
+    };
+
+    expect(pendingUploadProgress(upload).percent).toBe(100);
   });
 });
