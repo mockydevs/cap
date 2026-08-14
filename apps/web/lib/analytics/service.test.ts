@@ -17,7 +17,10 @@ describe("privacy-safe view identity and grants", () => {
     process.env.ANALYTICS_HASH_SECRET =
       "a-secure-analytics-secret-with-32-bytes";
     const request = new Request("https://cap.test", {
-      headers: { "x-real-ip": "203.0.113.4", "user-agent": "Private Browser" },
+      headers: {
+        "x-forwarded-for": "203.0.113.4",
+        "user-agent": "Private Browser",
+      },
     });
     const first = privacySafeViewerHash(
       request,
@@ -33,6 +36,20 @@ describe("privacy-safe view identity and grants", () => {
     expect(first).toMatch(/^[a-f0-9]{64}$/);
     expect(first).not.toContain("203.0.113.4");
     expect(privacySafeViewerHash(request, "user-id")).not.toBe(first);
+
+    const otherViewer = new Request("https://cap.test", {
+      headers: {
+        "x-forwarded-for": "198.51.100.9",
+        "user-agent": "Private Browser",
+      },
+    });
+    expect(
+      privacySafeViewerHash(
+        otherViewer,
+        undefined,
+        new Date("2026-08-09T01:00:00Z"),
+      ),
+    ).not.toBe(first);
   });
 
   it("verifies signed, expiring view grants and rejects tampering", () => {

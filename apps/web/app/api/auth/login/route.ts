@@ -14,10 +14,8 @@ import {
   sessionCookieName,
   sessionCookieOptions,
 } from "../../../../lib/auth/session";
-import {
-  enforceFixedWindowRateLimit,
-  requestAddress,
-} from "../../../../lib/sharing/rate-limit";
+import { clientAddress } from "../../../../lib/http/client-address";
+import { enforceFixedWindowRateLimit } from "../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -31,7 +29,7 @@ export async function POST(request: Request) {
       Object.fromEntries(await request.formData()),
     );
     const limitKey = createHash("sha256")
-      .update(`${requestAddress(request)}:${input.email}`)
+      .update(`${clientAddress(request)}:${input.email}`)
       .digest("hex");
     await enforceFixedWindowRateLimit(`web-login:${limitKey}`, 10, 15 * 60);
     const [user] = await db()

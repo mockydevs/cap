@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../../../../../db/client";
 import { users, workspaceMembers } from "../../../../../db/schema";
@@ -7,6 +8,7 @@ import {
   verifyPassword,
 } from "../../../../../lib/auth/credentials";
 import { createSession } from "../../../../../lib/auth/session";
+import { clientAddress } from "../../../../../lib/http/client-address";
 import { enforceFixedWindowRateLimit } from "../../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
@@ -21,12 +23,8 @@ export async function POST(request: Request) {
         { status: 415 },
       );
     const input = loginSchema.parse(await request.json());
-    const address =
-      request.headers.get("x-real-ip") ??
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "unknown";
     const limitKey = createHash("sha256")
-      .update(`${address}:${input.email}`)
+      .update(`${clientAddress(request)}:${input.email}`)
       .digest("hex");
     await enforceFixedWindowRateLimit(`desktop-login:${limitKey}`, 10, 15 * 60);
     const [user] = await db()
@@ -69,4 +67,3 @@ export async function POST(request: Request) {
     );
   }
 }
-import { createHash } from "node:crypto";

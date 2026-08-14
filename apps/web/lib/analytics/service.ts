@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../db/client";
 import { viewEvents, viewSessions } from "../../db/schema";
+import { clientAddress } from "../http/client-address";
 import { enforceFixedWindowRateLimit } from "../sharing/rate-limit";
 
 const DEDUP_WINDOW_MS = 30 * 60 * 1000;
@@ -30,14 +31,6 @@ function secret(): string {
 
 function hmac(value: string): string {
   return createHmac("sha256", secret()).update(value).digest("hex");
-}
-
-function clientAddress(request: Request): string {
-  return (
-    request.headers.get("x-real-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
 }
 
 /**

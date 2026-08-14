@@ -12,16 +12,6 @@ function connection(): Redis {
   return redis;
 }
 
-export function requestAddress(request: Request): string {
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp;
-  const forwarded = request.headers
-    .get("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-  return forwarded || "unknown";
-}
-
 const incrementScript = `
 local current = redis.call('INCR', KEYS[1])
 if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end

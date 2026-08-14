@@ -5,6 +5,7 @@ import {
   verifyGoogleIdToken,
 } from "../../../../../lib/auth/google";
 import { createSession } from "../../../../../lib/auth/session";
+import { clientAddress } from "../../../../../lib/http/client-address";
 import { enforceFixedWindowRateLimit } from "../../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
@@ -17,12 +18,8 @@ export async function POST(request: Request) {
   try {
     const clientId = process.env.GOOGLE_DESKTOP_OAUTH_CLIENT_ID;
     if (!clientId) throw new Error("GOOGLE_DESKTOP_OAUTH_NOT_CONFIGURED");
-    const address =
-      request.headers.get("x-real-ip") ??
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "unknown";
     await enforceFixedWindowRateLimit(
-      `desktop-google:${createHash("sha256").update(address).digest("hex")}`,
+      `desktop-google:${createHash("sha256").update(clientAddress(request)).digest("hex")}`,
       20,
       15 * 60,
     );

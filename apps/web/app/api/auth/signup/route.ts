@@ -9,10 +9,8 @@ import {
   sessionCookieName,
   sessionCookieOptions,
 } from "../../../../lib/auth/session";
-import {
-  enforceFixedWindowRateLimit,
-  requestAddress,
-} from "../../../../lib/sharing/rate-limit";
+import { clientAddress } from "../../../../lib/http/client-address";
+import { enforceFixedWindowRateLimit } from "../../../../lib/sharing/rate-limit";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -23,7 +21,7 @@ export async function POST(request: Request) {
     );
   try {
     await enforceFixedWindowRateLimit(
-      `web-signup:${requestAddress(request)}`,
+      `web-signup:${clientAddress(request)}`,
       10,
       15 * 60,
     );
