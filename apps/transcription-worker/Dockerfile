@@ -1,13 +1,19 @@
 FROM node:22-bookworm-slim AS build
 RUN corepack enable
-WORKDIR /app
+WORKDIR /workspace
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm --filter @cap/transcription-worker build
-FROM node:22-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/* && corepack enable && groupadd -r cap && useradd -r -g cap cap
+RUN pnpm install --frozen-lockfile && \
+    pnpm --filter @cap/transcription-worker build && \
+    pnpm --filter @cap/transcription-worker deploy --prod --legacy /runtime
+
+FROM node:22-bookworm-slim AS runner
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends ffmpeg ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    npm uninstall --global npm
 WORKDIR /app
-COPY --from=build --chown=cap:cap /app /app
-USER cap
+COPY --from=build --chown=node:node /runtime ./
+USER node
 EXPOSE 8082
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["apps/transcription-worker/node_modules/.bin/tsx","apps/transcription-worker/src/index.ts"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:8082/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node_modules/.bin/tsx", "src/index.ts"]
