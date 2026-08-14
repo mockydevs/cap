@@ -7,16 +7,6 @@ export type SignedUpUser = {
   password: string;
 };
 
-/**
- * Runs the same signup flow verified field-by-field in auth.spec.ts
- * ("Display name" / "Workspace name" / "Email" / "Password" -> "Create
- * account") and waits for the redirect to the authenticated recorder page
- * ("/record").
- * A fresh signup always creates a brand-new workspace with the signer as its
- * OWNER (see apps/web/components/user-nav.tsx, which renders
- * "{displayName} · {role}"), so this also doubles as "create a workspace to
- * test against" for specs that need one.
- */
 const octet = () => Math.floor(Math.random() * 256);
 
 /**
@@ -35,6 +25,15 @@ async function presentAsDistinctClient(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Runs the same signup flow verified field-by-field in auth.spec.ts
+ * ("Display name" / "Workspace name" / "Email" / "Password" -> "Create
+ * account") and waits for the redirect to the authenticated recorder page
+ * ("/record").
+ * A fresh signup always creates a brand-new workspace with the signer as its
+ * OWNER, so this also doubles as "create a workspace to test against" for
+ * specs that need one.
+ */
 export async function signUpAndSignIn(
   page: Page,
   label = "E2E",

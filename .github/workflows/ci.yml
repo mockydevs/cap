@@ -83,6 +83,10 @@ jobs:
             echo 'AWS_SECRET_ACCESS_KEY=test'
             echo 'NEXT_PUBLIC_APP_URL=http://localhost:3000'
             echo 'ANALYTICS_HASH_SECRET=e2e-only-analytics-secret-at-least-32-characters'
+            # Each simulated signup presents its own x-forwarded-for so the
+            # suite does not queue behind one address's rate limit. Playwright
+            # talks to the dev server directly, so it is the single hop.
+            echo 'TRUSTED_PROXY_HOP_COUNT=1'
           } >> "$GITHUB_ENV"
       - run: pnpm --filter @cap/web db:migrate
       - run: pnpm --filter @cap/e2e test:e2e
@@ -166,6 +170,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev libgbm-dev libclang-dev
       - run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
       - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+      # The recorder's own unit tests — upload chunking, crash recovery — are
+      # the only automated coverage the desktop app has.
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
   # Branch protection requires only this stable check name. Every CI job above
   # must pass first, including every container matrix entry.
