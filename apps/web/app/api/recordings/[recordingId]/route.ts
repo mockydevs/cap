@@ -4,8 +4,14 @@ import { recordingAssets, recordings } from "../../../../db/schema";
 import { requireActor } from "../../../../lib/auth/authorization";
 import { hasTrustedOrigin } from "../../../../lib/auth/origin";
 import { recordingError } from "../../../../lib/recordings/http";
-import { deleteRecording } from "../../../../lib/recordings/service";
-import { recordingParamsSchema } from "../../../../lib/recordings/validation";
+import {
+  deleteRecording,
+  renameRecording,
+} from "../../../../lib/recordings/service";
+import {
+  recordingParamsSchema,
+  recordingUpdateSchema,
+} from "../../../../lib/recordings/validation";
 import { findRecordingUploadProgress } from "../../../../lib/uploads/service";
 
 export const runtime = "nodejs";
@@ -82,6 +88,29 @@ export async function DELETE(
     const { recordingId } = recordingParamsSchema.parse(await context.params);
     await deleteRecording(actor, recordingId);
     return Response.json({ status: "DELETED" });
+  } catch (error) {
+    return recordingError(error);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ recordingId: string }> },
+) {
+  try {
+    if (!hasTrustedOrigin(request))
+      return Response.json(
+        { error: { code: "INVALID_ORIGIN" } },
+        { status: 403 },
+      );
+    const actor = await requireActor(request, "MEMBER");
+    const { recordingId } = recordingParamsSchema.parse(await context.params);
+    const { title } = recordingUpdateSchema.parse(await request.json());
+    const result = await renameRecording(actor, recordingId, title);
+    return Response.json({
+      title: result.title,
+      updatedAt: result.updatedAt.toISOString(),
+    });
   } catch (error) {
     return recordingError(error);
   }

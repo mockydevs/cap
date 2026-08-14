@@ -64,23 +64,25 @@ export async function signIn(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type JsonValue = any;
 
-export type RouteHandler = (
+export type RouteHandler<Params extends Record<string, string>> = (
   request: Request,
-  context: { params: Promise<Record<string, string>> },
+  context: { params: Promise<Params> },
 ) => Promise<Response>;
 
 /**
  * Origin is always sent: every mutating route checks it, and omitting it here
  * would make these tests pass for a reason browsers never reproduce.
  */
-export async function call(
-  handler: RouteHandler,
+export async function call<
+  Params extends Record<string, string> = Record<string, string>,
+>(
+  handler: RouteHandler<Params>,
   options: {
     readonly method?: string;
     readonly path?: string;
     readonly session?: SignedInActor | undefined;
     readonly body?: unknown;
-    readonly params?: Record<string, string>;
+    readonly params?: Params;
   } = {},
 ): Promise<{ status: number; body: JsonValue }> {
   const method = options.method ?? "GET";
@@ -96,7 +98,7 @@ export async function call(
         ? {}
         : { body: JSON.stringify(options.body) }),
     }),
-    { params: Promise.resolve(options.params ?? {}) },
+    { params: Promise.resolve((options.params ?? {}) as Params) },
   );
   const text = await response.text();
   return {

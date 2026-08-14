@@ -52,21 +52,25 @@ export async function recordingPreview(
     .orderBy(desc(recordingAssets.processingVersion))
     .limit(1);
 
-  const preview = poster
-    ? { kind: "image" as const, objectKey: poster.objectKey }
-    : recording.sourceSizeBytes
-      ? { kind: "video" as const, objectKey: recording.sourceObjectKey }
-      : null;
+  if (!poster && !recording.sourceSizeBytes) return null;
 
-  if (!preview) return null;
-
-  const signed = await storage.presignPlayback({
-    objectKey: assertManagedMediaObjectKey(preview.objectKey),
-    expiresInSeconds: PREVIEW_URL_TTL_SECONDS,
-  });
+  const [posterPlayback, videoPlayback] = await Promise.all([
+    poster
+      ? storage.presignPlayback({
+          objectKey: assertManagedMediaObjectKey(poster.objectKey),
+          expiresInSeconds: PREVIEW_URL_TTL_SECONDS,
+        })
+      : Promise.resolve(null),
+    recording.sourceSizeBytes
+      ? storage.presignPlayback({
+          objectKey: assertManagedMediaObjectKey(recording.sourceObjectKey),
+          expiresInSeconds: PREVIEW_URL_TTL_SECONDS,
+        })
+      : Promise.resolve(null),
+  ]);
   return {
-    kind: preview.kind,
-    url: signed.url,
-    expiresAt: signed.expiresAt.toISOString(),
+    posterUrl: posterPlayback?.url ?? null,
+    videoUrl: videoPlayback?.url ?? null,
+    expiresAt: (posterPlayback ?? videoPlayback)!.expiresAt.toISOString(),
   };
 }

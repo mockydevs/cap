@@ -9,6 +9,7 @@ import { ShareControls } from "./share-controls";
 import { CommentThread } from "./comment-thread";
 import { TranscriptPanel } from "./transcript-panel";
 import { AiPanel } from "./ai-panel";
+import { RecordingAnalytics } from "./recording-analytics";
 
 type Recording = {
   id: string;
@@ -30,7 +31,7 @@ type Playback = {
   url: string;
   expiresAt: string;
 };
-type InspectorTab = "transcript" | "comments" | "ai";
+type InspectorTab = "transcript" | "comments" | "ai" | "analytics";
 
 export function RecordingViewer({
   recordingId,
@@ -46,6 +47,9 @@ export function RecordingViewer({
   const [error, setError] = useState<string>();
   const [timestampMs, setTimestampMs] = useState(0);
   const [activeTab, setActiveTab] = useState<InspectorTab>("transcript");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
   const playerRef = useRef<HTMLVideoElement>(null);
   const load = useCallback(async () => {
     const response = await fetchFresh(`/api/recordings/${recordingId}`);
@@ -128,6 +132,29 @@ export function RecordingViewer({
     (!uploadProgress ||
       Boolean(uploadProgress.lastError) ||
       observedAt - new Date(uploadProgress.updatedAt).getTime() > 60_000);
+  async function saveTitle() {
+    if (!recording) return;
+    const title = titleDraft.trim();
+    if (!title || title === recording.title) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
+    const response = await sendJson(
+      `/api/recordings/${recording.id}`,
+      "PATCH",
+      {
+        title,
+      },
+    );
+    setSavingTitle(false);
+    if (!response.ok) {
+      setError("Could not rename this recording.");
+      return;
+    }
+    setRecording((current) => (current ? { ...current, title } : current));
+    setEditingTitle(false);
+  }
   return (
     <section className="viewer-shell">
       <div className="viewer-context">
@@ -161,7 +188,62 @@ export function RecordingViewer({
                       ? "Ready"
                       : "Failed"}
               </span>
-              <h1>{recording.title}</h1>
+              <div className="viewer-title-row">
+                {editingTitle ? (
+                  <form
+                    className="viewer-title-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveTitle();
+                    }}
+                  >
+                    <label className="sr-only" htmlFor="recording-title">
+                      Recording title
+                    </label>
+                    <input
+                      id="recording-title"
+                      value={titleDraft}
+                      maxLength={160}
+                      autoFocus
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setEditingTitle(false);
+                      }}
+                    />
+                    <button disabled={savingTitle || !titleDraft.trim()}>
+                      {savingTitle ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      disabled={savingTitle}
+                      onClick={() => setEditingTitle(false)}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <h1>{recording.title}</h1>
+                    {recording.canManageSharing && (
+                      <button
+                        type="button"
+                        className="title-edit-button"
+                        aria-label="Rename recording"
+                        title="Rename recording"
+                        onClick={() => {
+                          setTitleDraft(recording.title);
+                          setEditingTitle(true);
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="m4 16-.8 4.8L8 20 19.2 8.8l-4-4L4 16Zm12.6-12.6 1.1-1.1a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8l-1.1 1.1-4-4Z" />
+                        </svg>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
             <dl className="viewer-meta">
               <div>
@@ -262,7 +344,14 @@ export function RecordingViewer({
             role="tablist"
             aria-label="Recording details"
           >
-            {(["transcript", "comments", "ai"] as const).map((tab) => (
+            {(
+              [
+                "transcript",
+                "comments",
+                "ai",
+                ...(recording.canManageSharing ? (["analytics"] as const) : []),
+              ] as const
+            ).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -303,6 +392,9 @@ export function RecordingViewer({
                   void playerRef.current.play().catch(() => undefined);
                 }}
               />
+            )}
+            {activeTab === "analytics" && (
+              <RecordingAnalytics recordingId={recording.id} />
             )}
           </div>
         </aside>

@@ -1,8 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "../../db/client";
-import { viewEvents, viewSessions } from "../../db/schema";
+import { recordings, viewEvents, viewSessions } from "../../db/schema";
+import { AuthorizationError } from "../auth/authorization";
+import type { Actor } from "../auth/session";
 import { clientAddress } from "../http/client-address";
+import { canManageRecording } from "../recordings/library-policy";
+import { RecordingServiceError } from "../recordings/service";
 import { enforceFixedWindowRateLimit } from "../sharing/rate-limit";
 
 const DEDUP_WINDOW_MS = 30 * 60 * 1000;
@@ -169,4 +173,98 @@ export async function recordViewEvent(
       })
       .where(eq(viewSessions.id, sessionId));
   });
+}
+
+export type RecordingEngagement = {
+  views: number;
+  uniqueViewers: number;
+  averageWatchTimeMs: number;
+  completionRate: number;
+  lastViewedAt: string | null;
+  retention: Array<{ percent: number; viewers: number }>;
+};
+
+/**
+ * Returns privacy-safe aggregate engagement. Raw viewer hashes never leave the
+ * database and small workspaces get the same useful shape as large ones.
+ */
+export async function recordingEngagement(
+  actor: Actor,
+  targetRecordingId: string,
+): Promise<RecordingEngagement> {
+  const [recording] = await db()
+    .select({
+      id: recordings.id,
+      ownerId: recordings.ownerId,
+      durationMs: recordings.durationMs,
+    })
+    .from(recordings)
+    .where(
+      and(
+        eq(recordings.id, targetRecordingId),
+        eq(recordings.workspaceId, actor.workspaceId),
+        ne(recordings.status, "DELETED"),
+      ),
+    )
+    .limit(1);
+  if (!recording) throw new RecordingServiceError("RECORDING_NOT_FOUND", 404);
+  if (!canManageRecording(actor, recording.ownerId))
+    throw new AuthorizationError("Only recording managers can view analytics");
+
+  const summaryRows = await db().execute<{
+    views: number;
+    unique_viewers: number;
+    average_watch_time_ms: number;
+    completed_views: number;
+    last_viewed_at: Date | string | null;
+  }>(sql`
+    SELECT
+      count(*)::int AS views,
+      count(DISTINCT viewer_hash)::int AS unique_viewers,
+      coalesce(avg(watch_time_ms), 0)::bigint AS average_watch_time_ms,
+      count(*) FILTER (WHERE completed)::int AS completed_views,
+      max(last_viewed_at) AS last_viewed_at
+    FROM view_sessions
+    WHERE recording_id = ${recording.id}
+  `);
+  const summary = summaryRows.rows[0];
+  const views = Number(summary?.views ?? 0);
+  const durationMs = Number(recording.durationMs ?? 0);
+  const retentionRows =
+    durationMs > 0
+      ? (
+          await db().execute<{ percent: number; viewers: number }>(sql`
+          SELECT
+            checkpoints.percent::int AS percent,
+            count(view_sessions.id)::int AS viewers
+          FROM generate_series(0, 100, 10) AS checkpoints(percent)
+          LEFT JOIN view_sessions
+            ON view_sessions.recording_id = ${recording.id}
+           AND (
+             checkpoints.percent = 0
+             OR view_sessions.completed
+             OR view_sessions.max_position_ms >= (${durationMs}::bigint * checkpoints.percent / 100)
+           )
+          GROUP BY checkpoints.percent
+          ORDER BY checkpoints.percent
+        `)
+        ).rows
+      : [];
+
+  return {
+    views,
+    uniqueViewers: Number(summary?.unique_viewers ?? 0),
+    averageWatchTimeMs: Number(summary?.average_watch_time_ms ?? 0),
+    completionRate:
+      views === 0
+        ? 0
+        : Math.round((Number(summary?.completed_views ?? 0) / views) * 100),
+    lastViewedAt: summary?.last_viewed_at
+      ? new Date(summary.last_viewed_at).toISOString()
+      : null,
+    retention: retentionRows.map((row) => ({
+      percent: Number(row.percent),
+      viewers: Number(row.viewers),
+    })),
+  };
 }

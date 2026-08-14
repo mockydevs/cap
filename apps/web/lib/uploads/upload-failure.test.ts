@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { uploadFailureMessage } from "../../components/capture-studio";
+import {
+  suggestedRecordingTitle,
+  uploadFailureMessage,
+} from "../../components/capture-studio";
 
 /**
  * Upload failures used to all read "Sign in and retry", whatever went wrong.
@@ -32,5 +35,22 @@ describe("uploadFailureMessage", () => {
       "not an error at all",
     ])
       expect(uploadFailureMessage(error)).toContain("still here");
+  });
+});
+
+describe("suggestedRecordingTitle", () => {
+  it("uses a useful capture-source label without leaking trailing window detail", () => {
+    expect(
+      suggestedRecordingTitle(
+        "Tab: Quarterly planning - Google Chrome",
+        new Date("2026-08-14T12:00:00Z"),
+      ),
+    ).toBe("Quarterly planning");
+  });
+
+  it("falls back when the browser exposes only a numeric screen identifier", () => {
+    expect(
+      suggestedRecordingTitle("Screen 1", new Date("2026-08-14T12:00:00Z")),
+    ).toMatch(/^Recording /);
   });
 });

@@ -21,6 +21,44 @@ export class RecordingServiceError extends Error {
   }
 }
 
+export async function renameRecording(
+  actor: Actor,
+  targetRecordingId: string,
+  title: string,
+) {
+  const [recording] = await db()
+    .select({ id: recordings.id, ownerId: recordings.ownerId })
+    .from(recordings)
+    .where(
+      and(
+        eq(recordings.id, targetRecordingId),
+        eq(recordings.workspaceId, actor.workspaceId),
+        ne(recordings.status, "DELETED"),
+      ),
+    )
+    .limit(1);
+  if (!recording) throw new RecordingServiceError("RECORDING_NOT_FOUND", 404);
+  if (!canManageRecording(actor, recording.ownerId))
+    throw new AuthorizationError(
+      "Only an owner, admin, or the recording's creator can rename it",
+    );
+  const updatedAt = new Date();
+  await db().transaction(async (tx) => {
+    await tx
+      .update(recordings)
+      .set({ title, updatedAt })
+      .where(eq(recordings.id, recording.id));
+    await recordAuditEvent(tx, {
+      workspaceId: actor.workspaceId,
+      actorUserId: actor.userId,
+      action: "recording.renamed",
+      targetType: "recording",
+      targetId: recording.id,
+    });
+  });
+  return { title, updatedAt };
+}
+
 export async function deleteRecording(actor: Actor, targetRecordingId: string) {
   const [recording] = await db()
     .select({

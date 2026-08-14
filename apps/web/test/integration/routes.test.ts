@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { db } from "../../db/client";
+import { recordings, viewSessions } from "../../db/schema";
 import { call, signIn } from "./http";
 
 /**
@@ -14,6 +17,30 @@ const aiProviders = await import("../../app/api/ai/providers/route");
 const aiUsage = await import("../../app/api/ai/usage/route");
 const billing = await import("../../app/api/billing/route");
 const billingCheckout = await import("../../app/api/billing/checkout/route");
+const recordingRoute =
+  await import("../../app/api/recordings/[recordingId]/route");
+const recordingAnalytics =
+  await import("../../app/api/recordings/[recordingId]/analytics/route");
+
+async function createRecording(session: Awaited<ReturnType<typeof signIn>>) {
+  const id = randomUUID();
+  await db()
+    .insert(recordings)
+    .values({
+      id,
+      workspaceId: session.workspaceId,
+      ownerId: session.userId,
+      title: "Original title",
+      status: "READY",
+      sourceObjectKey: `workspaces/${session.workspaceId}/recordings/${id}/source/source.webm`,
+      contentType: "video/webm",
+      sizeBytes: 1_000_000,
+      durationMs: 100_000,
+      width: 1920,
+      height: 1080,
+    });
+  return id;
+}
 
 describe("AI policy round trip", () => {
   it("accepts back exactly what it handed out, once a row exists", async () => {
@@ -189,5 +216,72 @@ describe("Billing", () => {
     });
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe("BILLING_NOT_CONFIGURED");
+  });
+});
+
+describe("Recording management", () => {
+  it("renames a recording and returns the new title on the next read", async () => {
+    const session = await signIn("OWNER");
+    const recordingId = await createRecording(session);
+    const renamed = await call(recordingRoute.PATCH, {
+      method: "PATCH",
+      session,
+      params: { recordingId },
+      body: { title: "  Customer onboarding  " },
+    });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.title).toBe("Customer onboarding");
+
+    const read = await call(recordingRoute.GET, {
+      session,
+      params: { recordingId },
+    });
+    expect(read.body.title).toBe("Customer onboarding");
+  });
+
+  it("returns privacy-safe engagement aggregates and a retention curve", async () => {
+    const session = await signIn("OWNER");
+    const recordingId = await createRecording(session);
+    await db()
+      .insert(viewSessions)
+      .values([
+        {
+          recordingId,
+          workspaceId: session.workspaceId,
+          kind: "SHARE",
+          viewerHash: "a".repeat(64),
+          dedupKeyHash: "b".repeat(64),
+          watchTimeMs: 100_000,
+          maxPositionMs: 100_000,
+          completed: true,
+        },
+        {
+          recordingId,
+          workspaceId: session.workspaceId,
+          kind: "WORKSPACE",
+          viewerHash: "c".repeat(64),
+          dedupKeyHash: "d".repeat(64),
+          watchTimeMs: 40_000,
+          maxPositionMs: 40_000,
+        },
+      ]);
+    const response = await call(recordingAnalytics.GET, {
+      session,
+      params: { recordingId },
+    });
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      views: 2,
+      uniqueViewers: 2,
+      averageWatchTimeMs: 70_000,
+      completionRate: 50,
+    });
+    expect(response.body.retention).toHaveLength(11);
+    expect(response.body.retention[0]).toEqual({ percent: 0, viewers: 2 });
+    expect(response.body.retention[5]).toEqual({ percent: 50, viewers: 1 });
+    expect(response.body.retention[10]).toEqual({
+      percent: 100,
+      viewers: 1,
+    });
   });
 });
