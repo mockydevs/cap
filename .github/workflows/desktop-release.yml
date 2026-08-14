@@ -5,55 +5,87 @@ on:
   push:
     tags: ["desktop-v*"]
 
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Validate release tag and signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+            expected="desktop-v${version}"
+            if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+              echo "Release tag $GITHUB_REF_NAME does not match desktop version $expected" >&2
+              exit 1
+            fi
+          fi
+
+          missing=()
+          for name in \
+            TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+            APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing required release secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
   build:
+    needs: preflight
+    permissions:
+      contents: write
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          # --bundles pins each platform to exactly one, easy-to-install
-          # package format instead of Tauri's full per-platform default set
-          # (msi+nsis on Windows; app+dmg on macOS; deb+rpm+appimage on
-          # Linux) — .dmg, .deb, and .exe (nsis) only.
-          - platform: macos-14
+          - platform: macos-15
             args: --target aarch64-apple-darwin --bundles dmg
-          - platform: macos-13
+          - platform: macos-15-intel
             args: --target x86_64-apple-darwin --bundles dmg
-          # ubuntu-24.04, not -22.04: xcap (screen-source enumeration) pulls
-          # in pipewire-rs/libspa 0.8.0, whose bindgen-generated structs
-          # assume header fields (e.g. spa_video_info_raw.flags) that
-          # 22.04's PipeWire 0.3.48 doesn't define — a real build failure,
-          # not a config issue. 24.04's newer PipeWire has them. Tradeoff:
-          # the resulting .deb links against 24.04's newer glibc, so it
-          # needs a comparably recent host to run — worth reconsidering for
-          # a final non-beta release if broader Linux compatibility matters
-          # more than avoiding this dependency pin.
           - platform: ubuntu-24.04
             args: --bundles deb
           - platform: windows-2022
             args: --bundles nsis
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with: { version: 10.14.0 }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22, cache: pnpm }
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: ${{ contains(matrix.args, '--target') && (contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
-      # libgbm-dev: xcap's Wayland screen-capture path (via the gbm crate,
-      # pulled in through libwayshot-xcap) links against libgbm; without
-      # the dev package the final link step fails with "unable to find
-      # library -lgbm" even though everything compiles.
       - if: startsWith(matrix.platform, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev libgbm-dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cap/desktop typecheck
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -69,10 +101,5 @@ jobs:
           tagName: desktop-v__VERSION__
           releaseName: Cap Desktop v__VERSION__
           releaseDraft: false
-          # A version like 0.2.0-beta.1 (semver pre-release identifier)
-          # marks the GitHub release as a pre-release, which also keeps it
-          # out of "latest" — and therefore out of the auto-updater, which
-          # points at .../releases/latest/download/latest.json — until a
-          # plain (non-pre-release) version is tagged.
           prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
           args: ${{ matrix.args }}
