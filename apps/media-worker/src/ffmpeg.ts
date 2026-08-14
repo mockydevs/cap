@@ -42,16 +42,19 @@ async function execute(
   });
 }
 
-export async function inspectMedia(
-  inputPath: string,
-): Promise<{ durationSeconds: number; width: number; height: number }> {
+export async function inspectMedia(inputPath: string): Promise<{
+  durationSeconds: number;
+  width: number;
+  height: number;
+  videoCodec: string;
+  audioCodec?: string | undefined;
+  container: string;
+}> {
   const output = await execute("ffprobe", [
     "-v",
     "error",
-    "-select_streams",
-    "v:0",
     "-show_entries",
-    "stream=width,height:format=duration",
+    "stream=codec_type,codec_name,width,height:format=duration,format_name",
     "-of",
     "json",
     inputPath,
@@ -60,13 +63,25 @@ export async function inspectMedia(
   if (!parsed || typeof parsed !== "object")
     throw new Error("ffprobe returned invalid JSON");
   const result = parsed as {
-    format?: { duration?: string };
-    streams?: Array<{ width?: number; height?: number }>;
+    format?: { duration?: string; format_name?: string };
+    streams?: Array<{
+      codec_type?: string;
+      codec_name?: string;
+      width?: number;
+      height?: number;
+    }>;
   };
-  const stream = result.streams?.[0];
+  const stream = result.streams?.find(
+    (candidate) => candidate.codec_type === "video",
+  );
+  const audio = result.streams?.find(
+    (candidate) => candidate.codec_type === "audio",
+  );
   let durationSeconds = Number(result.format?.duration);
   const width = stream?.width;
   const height = stream?.height;
+  const videoCodec = stream?.codec_name;
+  const container = result.format?.format_name;
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
     const packetTimeline = await execute("ffprobe", [
       "-v",
@@ -85,10 +100,19 @@ export async function inspectMedia(
     !Number.isFinite(durationSeconds) ||
     durationSeconds <= 0 ||
     !Number.isInteger(width) ||
-    !Number.isInteger(height)
+    !Number.isInteger(height) ||
+    !videoCodec ||
+    !container
   )
     throw new Error("source has no valid video stream");
-  return { durationSeconds, width: width as number, height: height as number };
+  return {
+    durationSeconds,
+    width: width as number,
+    height: height as number,
+    videoCodec,
+    ...(audio?.codec_name ? { audioCodec: audio.codec_name } : {}),
+    container,
+  };
 }
 
 /**
@@ -160,6 +184,46 @@ export function playbackEncodeArguments(
   ];
 }
 
+export type SourceCodecMetadata = {
+  videoCodec: string;
+  audioCodec?: string | undefined;
+  container: string;
+};
+
+/** MP4/H.264/AAC is already the normalized playback format. */
+export function canRemuxForPlayback(source: SourceCodecMetadata): boolean {
+  return (
+    source.videoCodec === "h264" &&
+    (!source.audioCodec || source.audioCodec === "aac") &&
+    source.container
+      .split(",")
+      .some((name) =>
+        new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]).has(name),
+      )
+  );
+}
+
+/** Rebuilds fragmented browser MP4 metadata and moves it to the front. */
+export function playbackRemuxArguments(
+  inputPath: string,
+  outputPath: string,
+): string[] {
+  return [
+    ...BASE_ARGUMENTS,
+    "-i",
+    inputPath,
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a?",
+    "-c",
+    "copy",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ];
+}
+
 /**
  * Packages the encoded MP4 as HLS by copying the streams. No `-c:v` here on
  * purpose: re-encoding for a second rendition of the same quality would double
@@ -219,14 +283,23 @@ export function posterArguments(
 export async function createPlaybackAssets(
   inputPath: string,
   outputDirectory: string,
-  durationSeconds: number,
+  metadata: SourceCodecMetadata & { durationSeconds: number },
 ): Promise<void> {
   await mkdir(outputDirectory, { recursive: true });
   const mp4Path = `${outputDirectory}/playback.mp4`;
-  await execute("ffmpeg", playbackEncodeArguments(inputPath, mp4Path));
+  await execute(
+    "ffmpeg",
+    canRemuxForPlayback(metadata)
+      ? playbackRemuxArguments(inputPath, mp4Path)
+      : playbackEncodeArguments(inputPath, mp4Path),
+  );
   await execute("ffmpeg", hlsPackageArguments(mp4Path, outputDirectory));
   await execute(
     "ffmpeg",
-    posterArguments(mp4Path, `${outputDirectory}/poster.jpg`, durationSeconds),
+    posterArguments(
+      mp4Path,
+      `${outputDirectory}/poster.jpg`,
+      metadata.durationSeconds,
+    ),
   );
 }

@@ -29,7 +29,7 @@ import {
   type BrowserCompletedPart,
 } from "./reconcile";
 import { uploadStorage } from "./storage";
-import { UPLOAD_PART_SIZE_BYTES } from "./validation";
+import { MAX_BROWSER_UPLOAD_BYTES, UPLOAD_PART_SIZE_BYTES } from "./validation";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const COMPLETION_RECOVERY_AFTER_MS = 60 * 1000;
@@ -84,7 +84,8 @@ export async function initiateSourceUpload(
   input: {
     title: string;
     contentType: string;
-    sizeBytes: number;
+    sizeBytes?: number | undefined;
+    streaming?: boolean | undefined;
     linkedRecordingId?: string | undefined;
   },
   storage: MultipartObjectStorage = uploadStorage(),
@@ -109,7 +110,9 @@ export async function initiateSourceUpload(
   }
   const plan = createUploadPlan({
     partSizeBytes: UPLOAD_PART_SIZE_BYTES,
-    maxUploadBytes: input.sizeBytes,
+    maxUploadBytes: input.streaming
+      ? MAX_BROWSER_UPLOAD_BYTES
+      : input.sizeBytes!,
   });
   const workspace = workspaceId(actor.workspaceId);
   const recording = recordingId(randomUUID());
@@ -152,6 +155,7 @@ export async function initiateSourceUpload(
         contentType: mediaType,
         partSizeBytes: plan.partSizeBytes,
         expectedSizeBytes: plan.maxUploadBytes,
+        isStreaming: Boolean(input.streaming),
         maxPartCount: plan.maxPartCount,
         expiresAt,
       });
@@ -266,19 +270,21 @@ export async function signSourceUploadPart(
       checksumSha256: sha256Base64(input.checksumSha256),
       isFinalPart: input.isFinalPart,
     });
-    const expectedFinal = partNumber === plan.maxPartCount;
-    const expectedLength = expectedFinal
-      ? session.expectedSizeBytes - (partNumber - 1) * session.partSizeBytes
-      : session.partSizeBytes;
-    if (
-      intent.isFinalPart !== expectedFinal ||
-      intent.contentLength !== expectedLength
-    ) {
-      throw new UploadServiceError(
-        "UPLOAD_PART_CONFLICT",
-        409,
-        "Part does not match the server-issued upload plan",
-      );
+    if (!session.isStreaming) {
+      const expectedFinal = partNumber === plan.maxPartCount;
+      const expectedLength = expectedFinal
+        ? session.expectedSizeBytes - (partNumber - 1) * session.partSizeBytes
+        : session.partSizeBytes;
+      if (
+        intent.isFinalPart !== expectedFinal ||
+        intent.contentLength !== expectedLength
+      ) {
+        throw new UploadServiceError(
+          "UPLOAD_PART_CONFLICT",
+          409,
+          "Part does not match the server-issued upload plan",
+        );
+      }
     }
 
     const intents = await transaction
@@ -319,6 +325,21 @@ export async function signSourceUploadPart(
         checksumSha256: intent.checksumSha256,
         isFinalPart: intent.isFinalPart,
       });
+      if (session.isStreaming && intent.isFinalPart) {
+        const finalSize =
+          (intent.partNumber - 1) * session.partSizeBytes +
+          intent.contentLength;
+        await transaction
+          .update(uploadSessions)
+          .set({
+            expectedSizeBytes: finalSize,
+            maxPartCount: intent.partNumber,
+            updatedAt: new Date(),
+          })
+          .where(eq(uploadSessions.id, session.id));
+        session.expectedSizeBytes = finalSize;
+        session.maxPartCount = intent.partNumber;
+      }
       if (session.status === "PENDING") {
         await transaction
           .update(uploadSessions)
@@ -742,6 +763,7 @@ export async function restartSourceUpload(
         contentType: current.contentType,
         partSizeBytes: current.partSizeBytes,
         expectedSizeBytes: current.expectedSizeBytes,
+        isStreaming: current.isStreaming,
         maxPartCount: current.maxPartCount,
         expiresAt,
       });

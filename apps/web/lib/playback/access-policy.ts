@@ -61,7 +61,7 @@ export function canListRecordingInWorkspace(
  * This must run before issuing a presigned object-storage URL.
  */
 export function authorizePlayback(input: PlaybackAccess): PlaybackDecision {
-  if (input.availability !== "READY") {
+  if (input.availability !== "READY" && input.availability !== "PROCESSING") {
     return { allowed: false, reason: "RECORDING_UNAVAILABLE" };
   }
 

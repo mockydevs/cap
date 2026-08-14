@@ -145,36 +145,80 @@ export async function updateRecordingSharing(
 }
 
 async function playableRecording(recordingId: string) {
-  const [row] = await db()
+  const [recording] = await db()
     .select({
       recordingId: recordings.id,
       workspaceId: recordings.workspaceId,
       title: recordings.title,
       status: recordings.status,
       visibility: recordings.visibility,
-      assetObjectKey: recordingAssets.objectKey,
-      contentType: recordingAssets.contentType,
-      sizeBytes: recordingAssets.sizeBytes,
+      sourceObjectKey: recordings.sourceObjectKey,
+      sourceContentType: recordings.contentType,
+      sourceSizeBytes: recordings.sizeBytes,
     })
     .from(recordings)
-    .innerJoin(recordingAssets, eq(recordingAssets.recordingId, recordings.id))
-    .where(and(eq(recordings.id, recordingId), eq(recordingAssets.kind, "MP4")))
-    .orderBy(desc(recordingAssets.processingVersion))
+    .where(eq(recordings.id, recordingId))
     .limit(1);
-  if (!row)
+  if (!recording)
     throw new SharingServiceError(
       "RECORDING_NOT_FOUND",
       404,
       "Recording not found",
     );
-  if (row.status !== "READY") {
+  if (recording.status === "DELETED")
+    throw new SharingServiceError(
+      "RECORDING_NOT_FOUND",
+      404,
+      "Recording not found",
+    );
+
+  const [processed] = await db()
+    .select({
+      objectKey: recordingAssets.objectKey,
+      contentType: recordingAssets.contentType,
+      sizeBytes: recordingAssets.sizeBytes,
+    })
+    .from(recordingAssets)
+    .where(
+      and(
+        eq(recordingAssets.recordingId, recordingId),
+        eq(recordingAssets.kind, "MP4"),
+      ),
+    )
+    .orderBy(desc(recordingAssets.processingVersion))
+    .limit(1);
+
+  // A completed source upload is already a valid media asset. Processing adds
+  // the normalized MP4/HLS/poster renditions, but it must not hold the share
+  // link hostage. Prefer the normalized MP4 once available and otherwise serve
+  // the source while the worker continues in the background.
+  const asset =
+    recording.status === "READY" && processed
+      ? processed
+      : recording.sourceSizeBytes
+        ? {
+            objectKey: recording.sourceObjectKey,
+            contentType: recording.sourceContentType,
+            sizeBytes: recording.sourceSizeBytes,
+          }
+        : undefined;
+  if (!asset) {
     throw new SharingServiceError(
       "RECORDING_NOT_READY",
       409,
       "Recording is not ready",
     );
   }
-  return row;
+  return {
+    recordingId: recording.recordingId,
+    workspaceId: recording.workspaceId,
+    title: recording.title,
+    status: recording.status,
+    visibility: recording.visibility,
+    assetObjectKey: asset.objectKey,
+    contentType: asset.contentType,
+    sizeBytes: asset.sizeBytes,
+  };
 }
 
 async function signedPlayback(

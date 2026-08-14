@@ -21,6 +21,24 @@ describe("multipart upload validation", () => {
     ).toMatchObject({ title: "Demo" });
   });
 
+  it("accepts a streaming upload before its final size is known", () => {
+    expect(
+      createUploadSchema.parse({
+        title: "Live demo",
+        contentType: "video/mp4",
+        streaming: true,
+      }),
+    ).toMatchObject({ streaming: true });
+    expect(() =>
+      createUploadSchema.parse({
+        title: "Invalid live demo",
+        contentType: "video/mp4",
+        streaming: true,
+        sizeBytes: 10,
+      }),
+    ).toThrow();
+  });
+
   it("accepts an optional linkedRecordingId for a camera recording", () => {
     const linkedRecordingId = "11111111-1111-1111-1111-111111111111";
     expect(

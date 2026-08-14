@@ -8,17 +8,25 @@ const etag = z
   .max(130)
   .regex(/^"[^"\r\n]+"$/);
 
-export const createUploadSchema = z.object({
+const createUploadBaseSchema = z.object({
   title: z.string().trim().min(1).max(255),
   contentType: z.enum(["video/webm", "video/mp4"]),
-  sizeBytes: z
-    .number()
-    .int()
-    .positive()
-    .max(5 * 1024 * 1024 * 1024),
   /** Marks this as a camera recording captured alongside an existing (usually screen) recording. */
   linkedRecordingId: uuid.optional(),
 });
+
+export const MAX_BROWSER_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
+
+export const createUploadSchema = z.discriminatedUnion("streaming", [
+  createUploadBaseSchema.extend({
+    streaming: z.literal(true),
+    sizeBytes: z.never().optional(),
+  }),
+  createUploadBaseSchema.extend({
+    streaming: z.literal(false).optional(),
+    sizeBytes: z.number().int().positive().max(MAX_BROWSER_UPLOAD_BYTES),
+  }),
+]);
 
 export const signPartSchema = z.object({
   contentLength: z

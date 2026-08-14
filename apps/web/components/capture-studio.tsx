@@ -9,10 +9,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   abortResumableUpload,
   beginResumableUpload,
+  beginStreamingUpload,
+  declaredContentType,
   listPendingUploads,
   pendingUploadProgress,
   type PendingUpload,
   resumeUpload,
+  type StreamingUploadController,
 } from "../lib/uploads/resumable-client";
 
 const captureStateLabel: Record<CaptureState, string> = {
@@ -61,6 +64,8 @@ export function CaptureStudio() {
   const [recordingBlob, setRecordingBlob] = useState<Blob>();
   const [cameraBlob, setCameraBlob] = useState<Blob>();
   const [uploadProgress, setUploadProgress] = useState<number>();
+  const [liveRecordedBytes, setLiveRecordedBytes] = useState(0);
+  const [liveUploadedBytes, setLiveUploadedBytes] = useState(0);
   const [recordingId, setRecordingId] = useState<string>();
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [activePendingId, setActivePendingId] = useState<string>();
@@ -70,6 +75,12 @@ export function CaptureStudio() {
   const micStream = useRef<MediaStream | undefined>(undefined);
   const cameraStream = useRef<MediaStream | undefined>(undefined);
   const startedAt = useRef(0);
+  const streamingUpload = useRef<StreamingUploadController | undefined>(
+    undefined,
+  );
+  const cameraStreamingUpload = useRef<StreamingUploadController | undefined>(
+    undefined,
+  );
 
   useEffect(
     () => () => {
@@ -143,48 +154,105 @@ export function CaptureStudio() {
         MediaRecorder.isTypeSupported(value),
       );
       const recorderOptions = mimeType ? { mimeType } : undefined;
-      const chunks: BlobPart[] = [];
       const nextRecorder = new MediaRecorder(combined, recorderOptions);
       recorder.current = nextRecorder;
+      const title = `Recording ${new Date().toLocaleString()}`;
+      const contentType = nextRecorder.mimeType
+        .toLowerCase()
+        .startsWith("video/mp4")
+        ? "video/mp4"
+        : "video/webm";
+      const liveUpload = await beginStreamingUpload(title, contentType);
+      streamingUpload.current = liveUpload;
+      setRecordingId(liveUpload.recordingId);
+      setLiveRecordedBytes(0);
+      setLiveUploadedBytes(0);
       nextRecorder.ondataavailable = (event) => {
-        if (event.data.size) chunks.push(event.data);
+        if (!event.data.size) return;
+        void liveUpload
+          .append(event.data)
+          .then(({ recordedBytes, uploadedBytes }) => {
+            setLiveRecordedBytes(recordedBytes);
+            setLiveUploadedBytes(uploadedBytes);
+          })
+          .catch(() => {
+            setMessage(
+              "Upload paused. Recording continues safely in this browser and will retry when you stop.",
+            );
+          });
       };
 
-      const cameraChunks: BlobPart[] = [];
       let nextCameraRecorder: MediaRecorder | undefined;
+      let cameraStoppedResolve: (() => void) | undefined;
+      const cameraStopped = new Promise<void>((resolve) => {
+        cameraStoppedResolve = resolve;
+      });
+      let liveCameraUpload: StreamingUploadController | undefined;
       if (camera) {
         nextCameraRecorder = new MediaRecorder(camera, recorderOptions);
         cameraRecorder.current = nextCameraRecorder;
+        liveCameraUpload = await beginStreamingUpload(
+          `${title} (camera)`,
+          contentType,
+          liveUpload.recordingId,
+        );
+        cameraStreamingUpload.current = liveCameraUpload;
         nextCameraRecorder.ondataavailable = (event) => {
-          if (event.data.size) cameraChunks.push(event.data);
+          if (event.data.size)
+            void liveCameraUpload!.append(event.data).catch(() => {
+              setMessage(
+                "Camera upload paused. Capture continues locally and will retry when you stop.",
+              );
+            });
         };
         nextCameraRecorder.onstop = () => {
-          setCameraBlob(
-            new Blob(cameraChunks, {
-              type: nextCameraRecorder!.mimeType || "video/webm",
-            }),
-          );
+          setCameraBlob(liveCameraUpload!.snapshot().blob);
+          cameraStoppedResolve?.();
         };
       } else {
         setCameraBlob(undefined);
+        cameraStoppedResolve?.();
       }
 
-      nextRecorder.onstop = () => {
-        const blob = new Blob(chunks, {
-          type: nextRecorder.mimeType || "video/webm",
-        });
-        setRecordingBlob(blob);
-        setRecordingId(undefined);
+      nextRecorder.onstop = async () => {
         setUploadProgress(undefined);
-        setRecordingUrl((previous) => {
-          if (previous) URL.revokeObjectURL(previous);
-          return URL.createObjectURL(blob);
-        });
         if (nextCameraRecorder?.state === "recording")
           nextCameraRecorder.stop();
-        setState("ready");
-        setMessage("Recording ready. Preview it or download the WebM file.");
         stopTracks();
+        setState("uploading");
+        setMessage("Finishing the last upload part…");
+        try {
+          const result = await liveUpload.finish((completed, total) => {
+            setLiveUploadedBytes(completed);
+            setLiveRecordedBytes(total);
+            setUploadProgress(Math.round((completed / total) * 100));
+          });
+          const completedBlob = liveUpload.snapshot().blob;
+          setRecordingBlob(completedBlob);
+          setRecordingUrl((previous) => {
+            if (previous) URL.revokeObjectURL(previous);
+            return URL.createObjectURL(completedBlob);
+          });
+          setRecordingId(result.recordingId);
+          await cameraStopped;
+          if (liveCameraUpload) {
+            setMessage("Finishing camera upload…");
+            await liveCameraUpload.finish();
+            setCameraBlob(liveCameraUpload.snapshot().blob);
+          }
+          setUploadProgress(100);
+          setState("ready");
+          setMessage(
+            "Upload complete. Playback is available while enhancements finish.",
+          );
+          await refreshPendingUploads();
+          streamingUpload.current = undefined;
+          cameraStreamingUpload.current = undefined;
+        } catch (error) {
+          await refreshPendingUploads().catch(() => undefined);
+          setState("error");
+          setMessage(uploadFailureMessage(error));
+        }
       };
       display.getVideoTracks()[0]?.addEventListener("ended", () => {
         if (nextRecorder.state === "recording") nextRecorder.stop();
@@ -196,10 +264,20 @@ export function CaptureStudio() {
       setState("recording");
       setMessage(
         camera
-          ? "Recording your screen and camera locally in this browser."
-          : "Recording locally in this browser.",
+          ? "Recording and uploading your screen and camera."
+          : "Recording and uploading as you go.",
       );
     } catch (error) {
+      if (streamingUpload.current)
+        await abortResumableUpload(streamingUpload.current.snapshot()).catch(
+          () => undefined,
+        );
+      if (cameraStreamingUpload.current)
+        await abortResumableUpload(
+          cameraStreamingUpload.current.snapshot(),
+        ).catch(() => undefined);
+      streamingUpload.current = undefined;
+      cameraStreamingUpload.current = undefined;
       stopTracks();
       setState("error");
       setMessage(
@@ -371,25 +449,49 @@ export function CaptureStudio() {
           {message}
         </p>
       )}
-      {state === "uploading" && (
-        <div className="studio-upload-progress">
-          <div className="upload-progress-copy">
-            <strong>Uploading recording</strong>
-            <span>{uploadProgress ?? 0}%</span>
+      {(state === "recording" || state === "uploading") &&
+        liveRecordedBytes > 0 && (
+          <div className="studio-upload-progress">
+            <div className="upload-progress-copy">
+              <strong>
+                {state === "recording" ? "Uploading live" : "Finishing upload"}
+              </strong>
+              <span>
+                {formatBytes(liveUploadedBytes)} of{" "}
+                {formatBytes(liveRecordedBytes)}
+              </span>
+            </div>
+            <div
+              className="upload-progress-track"
+              role="progressbar"
+              aria-label="Recording upload progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={
+                liveRecordedBytes === 0
+                  ? 0
+                  : Math.round((liveUploadedBytes / liveRecordedBytes) * 100)
+              }
+            >
+              <span
+                style={{
+                  width: `${
+                    liveRecordedBytes === 0
+                      ? 0
+                      : Math.round(
+                          (liveUploadedBytes / liveRecordedBytes) * 100,
+                        )
+                  }%`,
+                }}
+              />
+            </div>
+            <small>
+              {state === "recording"
+                ? "Captured media is saved locally before each network attempt."
+                : "Keep this tab open while the final part is secured."}
+            </small>
           </div>
-          <div
-            className="upload-progress-track"
-            role="progressbar"
-            aria-label="Recording upload progress"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={uploadProgress ?? 0}
-          >
-            <span style={{ width: `${uploadProgress ?? 0}%` }} />
-          </div>
-          <small>Keep this tab open until the upload reaches 100%.</small>
-        </div>
-      )}
+        )}
       {recordingUrl && (
         <div className="preview">
           <video controls src={recordingUrl} />
@@ -404,7 +506,10 @@ export function CaptureStudio() {
                   ? `Uploading ${uploadProgress ?? 0}%`
                   : "Upload securely"}
             </button>
-            <a href={recordingUrl} download="cap-recording.webm">
+            <a
+              href={recordingUrl}
+              download={`cap-recording.${recordingBlob && declaredContentType(recordingBlob) === "video/mp4" ? "mp4" : "webm"}`}
+            >
               Download backup
             </a>
           </div>

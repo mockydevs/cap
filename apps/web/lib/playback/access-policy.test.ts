@@ -92,7 +92,7 @@ describe("share and playback authorization", () => {
     });
   });
 
-  it("allows ready public recordings without a session but never leaks unready media", () => {
+  it("allows completed sources while processing but never leaks failed media", () => {
     expect(
       authorizePlayback({ ...readyPrivate, visibility: "PUBLIC" }),
     ).toEqual({ allowed: true });
@@ -100,6 +100,13 @@ describe("share and playback authorization", () => {
       authorizePlayback({
         ...readyPrivate,
         availability: "PROCESSING",
+        visibility: "PUBLIC",
+      }),
+    ).toEqual({ allowed: true });
+    expect(
+      authorizePlayback({
+        ...readyPrivate,
+        availability: "FAILED",
         visibility: "PUBLIC",
       }),
     ).toEqual({ allowed: false, reason: "RECORDING_UNAVAILABLE" });

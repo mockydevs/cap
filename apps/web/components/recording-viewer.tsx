@@ -54,14 +54,22 @@ export function RecordingViewer({
     }
     const next = (await response.json()) as Recording;
     setRecording(next);
-    if (next.status === "READY") {
+    if (
+      next.status === "PROCESSING" ||
+      next.status === "READY" ||
+      next.status === "FAILED"
+    ) {
       const media = await sendJson(
         `/api/recordings/${recordingId}/playback`,
         "POST",
         {},
       );
-      if (media.ok) setPlayback((await media.json()) as Playback);
-      else setError("Playback is temporarily unavailable.");
+      if (media.ok) {
+        setPlayback((await media.json()) as Playback);
+        setError(undefined);
+      } else if (next.status === "READY") {
+        setError("Playback is temporarily unavailable.");
+      }
     }
   }, [recordingId, router]);
   useEffect(() => {
@@ -184,7 +192,9 @@ export function RecordingViewer({
               <h2>
                 {recording.status === "FAILED"
                   ? "Processing failed"
-                  : "Preparing playback…"}
+                  : recording.status === "UPLOADING"
+                    ? "Uploading recording…"
+                    : "Preparing playback…"}
               </h2>
               {recording.status === "FAILED" && (
                 <p>

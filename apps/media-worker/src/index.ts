@@ -105,11 +105,7 @@ async function processMedia(
     );
     const metadata = await inspectMedia(sourcePath);
     const outputDirectory = join(workdir, "output");
-    await createPlaybackAssets(
-      sourcePath,
-      outputDirectory,
-      metadata.durationSeconds,
-    );
+    await createPlaybackAssets(sourcePath, outputDirectory, metadata);
     const files = await readdir(outputDirectory);
     const prefix = `workspaces/${data.workspaceId}/recordings/${data.recordingId}`;
     const assets: Asset[] = files.map((filename) => {

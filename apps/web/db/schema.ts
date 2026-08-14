@@ -330,6 +330,8 @@ export const uploadSessions = pgTable(
     expectedSizeBytes: bigint("expected_size_bytes", {
       mode: "number",
     }).notNull(),
+    /** The final byte size is learned from the last recorder chunk. */
+    isStreaming: boolean("is_streaming").notNull().default(false),
     maxPartCount: integer("max_part_count").notNull(),
     status: uploadSessionStatus("status").notNull().default("PENDING"),
     completionIdempotencyKeyHash: text("completion_idempotency_key_hash"),

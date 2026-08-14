@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRemuxForPlayback,
   durationFromPacketTimeline,
   hlsPackageArguments,
   MediaCommandError,
   playbackEncodeArguments,
+  playbackRemuxArguments,
   posterArguments,
 } from "../src/ffmpeg";
 
@@ -39,6 +41,37 @@ describe("playback asset arguments", () => {
     expect(argv).toContain("expr:gte(t,n_forced*6)");
     expect(argv).toContain("+faststart");
     expect(argv.at(-1)).toBe("/tmp/out/pb.mp4");
+  });
+
+  it("remuxes compatible browser MP4 without invoking an encoder", () => {
+    expect(
+      canRemuxForPlayback({
+        videoCodec: "h264",
+        audioCodec: "aac",
+        container: "mov,mp4,m4a,3gp,3g2,mj2",
+      }),
+    ).toBe(true);
+    const argv = playbackRemuxArguments("/tmp/source", "/tmp/playback.mp4");
+    expect(argv).toContain("copy");
+    expect(argv).toContain("+faststart");
+    expect(argv).not.toContain("libx264");
+  });
+
+  it("keeps WebM and incompatible audio on the encode path", () => {
+    expect(
+      canRemuxForPlayback({
+        videoCodec: "vp9",
+        audioCodec: "opus",
+        container: "matroska,webm",
+      }),
+    ).toBe(false);
+    expect(
+      canRemuxForPlayback({
+        videoCodec: "h264",
+        audioCodec: "opus",
+        container: "mov,mp4",
+      }),
+    ).toBe(false);
   });
 
   it("packages HLS by copying streams rather than re-encoding", () => {
