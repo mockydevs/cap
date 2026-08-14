@@ -35,6 +35,11 @@ type RecordingSummary = {
   viewCount: number;
 };
 type Page = { items: RecordingSummary[]; nextCursor: string | null };
+type RecordingPreview = {
+  kind: "image" | "video";
+  url: string;
+  expiresAt: string;
+};
 type Overview = {
   stats: {
     recordings: number;
@@ -305,6 +310,9 @@ export function RecordingLibrary({
                 <div
                   className={`recording-art${uploadStalled ? " recording-art-stalled" : ""}`}
                 >
+                  {recording.status !== "DELETED" && (
+                    <PreviewFrame recordingId={recording.id} />
+                  )}
                   {status === "READY" && (
                     <span className="play-mark" aria-hidden="true">
                       <PlayGlyph />
@@ -506,6 +514,7 @@ function FeaturedRecording({
   return (
     <section className="workspace-hero">
       <Link className="hero-art" href={href}>
+        <PreviewFrame recordingId={featured.id} />
         <span className="play-mark play-mark-lg" aria-hidden="true">
           <PlayGlyph />
         </span>
@@ -550,6 +559,51 @@ function FeaturedRecording({
         </div>
       </div>
     </section>
+  );
+}
+
+function PreviewFrame({ recordingId }: { recordingId: string }) {
+  const [preview, setPreview] = useState<RecordingPreview>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/recordings/${recordingId}/preview`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        setPreview((await response.json()) as RecordingPreview);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError"))
+          console.error("recording preview failed", error);
+      });
+    return () => controller.abort();
+  }, [recordingId]);
+
+  if (!preview) return null;
+  if (preview.kind === "image")
+    return (
+      // The adjacent recording title is the accessible label; this frame is
+      // visual context rather than separate content.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img className="recording-preview" src={preview.url} alt="" />
+    );
+  return (
+    <video
+      className="recording-preview"
+      src={preview.url}
+      aria-hidden="true"
+      muted
+      playsInline
+      preload="metadata"
+      onLoadedMetadata={(event) => {
+        const video = event.currentTarget;
+        if (Number.isFinite(video.duration) && video.duration > 0)
+          video.currentTime = Math.min(1, video.duration / 2);
+      }}
+    />
   );
 }
 

@@ -4699,6 +4699,7 @@ h6 {
 
 .recording-progress {
   position: absolute;
+  z-index: 3;
   right: 18px;
   bottom: 18px;
   left: 18px;
@@ -4747,6 +4748,8 @@ h6 {
 }
 
 .recording-failed-mark {
+  position: relative;
+  z-index: 3;
   display: grid;
   width: 40px;
   height: 40px;
@@ -5108,14 +5111,42 @@ h6 {
 
 .hero-art,
 .recording-art {
-  background: repeating-linear-gradient(
-    135deg,
-    #3a3733 0 2px,
-    var(--panel-raised) 2px 12px
+  background:
+    radial-gradient(
+      circle at 34% 38%,
+      rgba(236, 48, 19, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(145deg, var(--panel-raised), #12110f);
+}
+
+.recording-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  background: #0d0d0c;
+}
+
+.hero-art::after,
+.recording-art::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.08),
+    transparent 50%,
+    rgba(0, 0, 0, 0.28)
   );
 }
 
 .play-mark {
+  position: relative;
+  z-index: 2;
   display: grid;
   width: 44px;
   height: 44px;
@@ -5145,6 +5176,7 @@ h6 {
 
 .hero-flag {
   position: absolute;
+  z-index: 3;
   top: 20px;
   left: 20px;
   padding: 4px 10px;
@@ -5159,6 +5191,7 @@ h6 {
 
 .thumb-time {
   position: absolute;
+  z-index: 3;
   right: 12px;
   bottom: 12px;
   padding: 3px 8px;
@@ -5172,6 +5205,7 @@ h6 {
 
 .hero-progress {
   position: absolute;
+  z-index: 3;
   right: 0;
   bottom: 0;
   left: 0;
@@ -5368,6 +5402,7 @@ h6 {
 
 .recording-status {
   position: absolute;
+  z-index: 3;
   top: 10px;
   left: 10px;
   padding: 3px 8px;
@@ -5386,9 +5421,9 @@ h6 {
 
 .recording-card-actions {
   position: absolute;
+  z-index: 4;
   top: 10px;
   right: 10px;
-  z-index: 2;
   display: flex;
   gap: 6px;
 }

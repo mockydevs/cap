@@ -21,7 +21,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect(page.locator(".viewer-status")).toHaveText("Uploading");
   await expect(
-    page.getByRole("heading", { name: "Preparing playback…" }),
+    page.getByRole("heading", { name: "Uploading recording…" }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Edit recording" })).toHaveCount(
     0,

@@ -20,8 +20,15 @@ describe("upload-during-recording", () => {
     if (!Blob.prototype.arrayBuffer)
       Object.defineProperty(Blob.prototype, "arrayBuffer", {
         configurable: true,
-        value: async function (this: Blob) {
-          return new Response(this).arrayBuffer();
+        value: function (this: Blob) {
+          return new Promise<ArrayBuffer>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.addEventListener("load", () =>
+              resolve(reader.result as ArrayBuffer),
+            );
+            reader.addEventListener("error", () => reject(reader.error));
+            reader.readAsArrayBuffer(this);
+          });
         },
       });
   });
