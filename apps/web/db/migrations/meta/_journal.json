@@ -162,6 +162,13 @@
       "when": 1786838400000,
       "tag": "0022_streaming_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786842000000,
+      "tag": "0023_upload_progress",
+      "breakpoints": true
     }
   ]
 }

@@ -3122,6 +3122,42 @@ h6 {
   line-height: 1.55;
 }
 
+.viewer-upload-progress {
+  display: grid;
+  width: min(440px, 72vw);
+  gap: 10px;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.viewer-upload-progress-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-upload-progress-copy strong {
+  color: var(--ink);
+}
+
+.viewer-upload-progress-copy span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.viewer-upload-recovery {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.viewer-upload-recovery .btn {
+  width: max-content;
+}
+
 .processing-pulse,
 .state-loader {
   width: 22px;

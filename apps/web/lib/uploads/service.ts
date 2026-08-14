@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import {
   createUploadPlan,
   recordingId,
@@ -156,6 +156,7 @@ export async function initiateSourceUpload(
         partSizeBytes: plan.partSizeBytes,
         expectedSizeBytes: plan.maxUploadBytes,
         isStreaming: Boolean(input.streaming),
+        recordedSizeBytes: input.streaming ? 0 : input.sizeBytes!,
         maxPartCount: plan.maxPartCount,
         expiresAt,
       });
@@ -367,6 +368,248 @@ export async function signSourceUploadPart(
     method: signed.method,
     expiresAt: signed.expiresAt.toISOString(),
     requiredHeaders: signed.requiredHeaders,
+  };
+}
+
+export async function acknowledgeSourceUploadPart(
+  actor: UploadActor,
+  sessionIdValue: string,
+  partNumber: number,
+  input: { etag: string; recordedBytes: number },
+) {
+  const now = new Date();
+  return db().transaction(async (transaction) => {
+    const [session] = await transaction
+      .select()
+      .from(uploadSessions)
+      .where(
+        and(
+          eq(uploadSessions.id, sessionIdValue),
+          eq(uploadSessions.workspaceId, actor.workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!session)
+      throw new UploadServiceError(
+        "UPLOAD_SESSION_NOT_FOUND",
+        404,
+        "Upload session not found",
+      );
+    if (!new Set(["PENDING", "UPLOADING"]).has(session.status))
+      throw new UploadServiceError(
+        "UPLOAD_STATE_CONFLICT",
+        409,
+        "Upload is not accepting part receipts",
+      );
+    const [intent] = await transaction
+      .select()
+      .from(uploadPartIntents)
+      .where(
+        and(
+          eq(uploadPartIntents.uploadSessionId, session.id),
+          eq(uploadPartIntents.partNumber, partNumber),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!intent)
+      throw new UploadServiceError(
+        "UPLOAD_PART_CONFLICT",
+        409,
+        "Upload part was not signed by this session",
+      );
+    if (intent.etag && intent.etag !== input.etag)
+      throw new UploadServiceError(
+        "UPLOAD_PART_CONFLICT",
+        409,
+        "A different receipt already exists for this upload part",
+      );
+    await transaction
+      .update(uploadPartIntents)
+      .set({ etag: input.etag, uploadedAt: now })
+      .where(
+        and(
+          eq(uploadPartIntents.uploadSessionId, session.id),
+          eq(uploadPartIntents.partNumber, partNumber),
+        ),
+      );
+    await transaction
+      .update(uploadSessions)
+      .set({
+        recordedSizeBytes: Math.max(
+          session.recordedSizeBytes,
+          input.recordedBytes,
+        ),
+        clientUpdatedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(uploadSessions.id, session.id));
+    await transaction
+      .update(recordings)
+      .set({ updatedAt: now })
+      .where(eq(recordings.id, session.recordingId));
+    return { status: "ACKNOWLEDGED" as const };
+  });
+}
+
+export async function reportSourceUploadProgress(
+  actor: UploadActor,
+  sessionIdValue: string,
+  input: {
+    recordedBytes: number;
+    error?: string | null | undefined;
+    sealed?: boolean | undefined;
+  },
+) {
+  const now = new Date();
+  return db().transaction(async (transaction) => {
+    const [session] = await transaction
+      .select()
+      .from(uploadSessions)
+      .where(
+        and(
+          eq(uploadSessions.id, sessionIdValue),
+          eq(uploadSessions.workspaceId, actor.workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!session)
+      throw new UploadServiceError(
+        "UPLOAD_SESSION_NOT_FOUND",
+        404,
+        "Upload session not found",
+      );
+    if (!new Set(["PENDING", "UPLOADING"]).has(session.status))
+      throw new UploadServiceError(
+        "UPLOAD_STATE_CONFLICT",
+        409,
+        "Upload is not accepting progress",
+      );
+    if (!session.isStreaming)
+      throw new UploadServiceError(
+        "UPLOAD_STATE_CONFLICT",
+        409,
+        "Only streaming uploads can report an unknown final size",
+      );
+    const recordedSizeBytes = Math.max(
+      session.recordedSizeBytes,
+      input.recordedBytes,
+    );
+    let expectedSizeBytes = session.expectedSizeBytes;
+    let maxPartCount = session.maxPartCount;
+    if (input.sealed) {
+      if (recordedSizeBytes <= 0)
+        throw new UploadServiceError(
+          "UPLOAD_INTEGRITY_ERROR",
+          409,
+          "A streaming upload cannot be sealed without media",
+        );
+      const expectedParts = Math.ceil(
+        recordedSizeBytes / session.partSizeBytes,
+      );
+      const intents = await transaction
+        .select()
+        .from(uploadPartIntents)
+        .where(eq(uploadPartIntents.uploadSessionId, session.id))
+        .orderBy(asc(uploadPartIntents.partNumber));
+      if (intents.length !== expectedParts)
+        throw new UploadServiceError(
+          "UPLOAD_INTEGRITY_ERROR",
+          409,
+          "Streaming upload is missing one or more signed parts",
+        );
+      for (let index = 0; index < intents.length; index += 1) {
+        const intent = intents[index]!;
+        const final = index === intents.length - 1;
+        const expectedLength = final
+          ? recordedSizeBytes - index * session.partSizeBytes
+          : session.partSizeBytes;
+        if (
+          intent.partNumber !== index + 1 ||
+          intent.contentLength !== expectedLength ||
+          (!final && intent.isFinalPart)
+        )
+          throw new UploadServiceError(
+            "UPLOAD_INTEGRITY_ERROR",
+            409,
+            "Streaming upload parts do not match the recorded size",
+          );
+      }
+      const finalIntent = intents.at(-1)!;
+      if (!finalIntent.isFinalPart)
+        await transaction
+          .update(uploadPartIntents)
+          .set({ isFinalPart: true })
+          .where(
+            and(
+              eq(uploadPartIntents.uploadSessionId, session.id),
+              eq(uploadPartIntents.partNumber, finalIntent.partNumber),
+            ),
+          );
+      expectedSizeBytes = recordedSizeBytes;
+      maxPartCount = expectedParts;
+    }
+    await transaction
+      .update(uploadSessions)
+      .set({
+        recordedSizeBytes,
+        expectedSizeBytes,
+        maxPartCount,
+        lastClientError:
+          input.error === undefined ? session.lastClientError : input.error,
+        clientUpdatedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(uploadSessions.id, session.id));
+    await transaction
+      .update(recordings)
+      .set({ updatedAt: now })
+      .where(eq(recordings.id, session.recordingId));
+    return { status: input.sealed ? "SEALED" : "REPORTED" } as const;
+  });
+}
+
+export async function findRecordingUploadProgress(
+  workspaceIdValue: string,
+  recordingIdValue: string,
+) {
+  const [session] = await db()
+    .select()
+    .from(uploadSessions)
+    .where(
+      and(
+        eq(uploadSessions.workspaceId, workspaceIdValue),
+        eq(uploadSessions.recordingId, recordingIdValue),
+        inArray(uploadSessions.status, ["PENDING", "UPLOADING", "COMPLETING"]),
+      ),
+    )
+    .orderBy(desc(uploadSessions.createdAt))
+    .limit(1);
+  if (!session) return null;
+  const parts = await db()
+    .select({
+      contentLength: uploadPartIntents.contentLength,
+      uploadedAt: uploadPartIntents.uploadedAt,
+    })
+    .from(uploadPartIntents)
+    .where(eq(uploadPartIntents.uploadSessionId, session.id));
+  const uploadedBytes = parts.reduce(
+    (total, part) => total + (part.uploadedAt ? part.contentLength : 0),
+    0,
+  );
+  const recordedBytes = Math.max(session.recordedSizeBytes, uploadedBytes);
+  return {
+    phase: session.status,
+    recordedBytes,
+    uploadedBytes,
+    percent:
+      recordedBytes === 0
+        ? 0
+        : Math.min(100, Math.round((uploadedBytes / recordedBytes) * 100)),
+    lastError: session.lastClientError,
+    updatedAt: (session.clientUpdatedAt ?? session.updatedAt).toISOString(),
   };
 }
 

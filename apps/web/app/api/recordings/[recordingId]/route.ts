@@ -6,6 +6,7 @@ import { hasTrustedOrigin } from "../../../../lib/auth/origin";
 import { recordingError } from "../../../../lib/recordings/http";
 import { deleteRecording } from "../../../../lib/recordings/service";
 import { recordingParamsSchema } from "../../../../lib/recordings/validation";
+import { findRecordingUploadProgress } from "../../../../lib/uploads/service";
 
 export const runtime = "nodejs";
 export async function GET(
@@ -47,6 +48,10 @@ export async function GET(
       })
       .from(recordingAssets)
       .where(eq(recordingAssets.recordingId, recording.id));
+    const uploadProgress =
+      recording.status === "UPLOADING"
+        ? await findRecordingUploadProgress(actor.workspaceId, recording.id)
+        : null;
     return Response.json({
       ...recording,
       canManageSharing:
@@ -56,6 +61,7 @@ export async function GET(
       createdAt: recording.createdAt.toISOString(),
       updatedAt: recording.updatedAt.toISOString(),
       assets,
+      uploadProgress,
     });
   } catch (error) {
     return recordingError(error);

@@ -17,6 +17,14 @@ type Recording = {
   sizeBytes: number | null;
   createdAt: string;
   canManageSharing: boolean;
+  uploadProgress?: {
+    phase: "PENDING" | "UPLOADING" | "COMPLETING";
+    recordedBytes: number;
+    uploadedBytes: number;
+    percent: number;
+    lastError: string | null;
+    updatedAt: string;
+  } | null;
 };
 type Playback = {
   url: string;
@@ -33,6 +41,7 @@ export function RecordingViewer({
 }) {
   const router = useRouter();
   const [recording, setRecording] = useState<Recording>();
+  const [observedAt, setObservedAt] = useState(0);
   const [playback, setPlayback] = useState<Playback>();
   const [error, setError] = useState<string>();
   const [timestampMs, setTimestampMs] = useState(0);
@@ -54,6 +63,7 @@ export function RecordingViewer({
     }
     const next = (await response.json()) as Recording;
     setRecording(next);
+    setObservedAt(Date.now());
     if (
       next.status === "PROCESSING" ||
       next.status === "READY" ||
@@ -112,6 +122,12 @@ export function RecordingViewer({
         </div>
       </section>
     );
+  const uploadProgress = recording.uploadProgress;
+  const uploadStalled =
+    recording.status === "UPLOADING" &&
+    (!uploadProgress ||
+      Boolean(uploadProgress.lastError) ||
+      observedAt - new Date(uploadProgress.updatedAt).getTime() > 60_000);
   return (
     <section className="viewer-shell">
       <div className="viewer-context">
@@ -196,6 +212,38 @@ export function RecordingViewer({
                     ? "Uploading recording…"
                     : "Preparing playback…"}
               </h2>
+              {recording.status === "UPLOADING" && uploadProgress && (
+                <div className="viewer-upload-progress" aria-live="polite">
+                  <div className="viewer-upload-progress-copy">
+                    <strong>{uploadProgress.percent}%</strong>
+                    <span>
+                      {formatBytes(uploadProgress.uploadedBytes)} of{" "}
+                      {formatBytes(uploadProgress.recordedBytes)} secured
+                    </span>
+                  </div>
+                  <div
+                    className="upload-progress-track"
+                    role="progressbar"
+                    aria-label="Recording upload progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={uploadProgress.percent}
+                  >
+                    <span style={{ width: `${uploadProgress.percent}%` }} />
+                  </div>
+                </div>
+              )}
+              {recording.status === "UPLOADING" && uploadStalled && (
+                <div className="viewer-upload-recovery" role="alert">
+                  <p>
+                    {uploadProgress?.lastError ??
+                      "No upload activity has reached the server recently."}
+                  </p>
+                  <Link className="btn btn-secondary" href="/record">
+                    Resume from this browser
+                  </Link>
+                </div>
+              )}
               {recording.status === "FAILED" && (
                 <p>
                   The source is safe. Contact a workspace administrator to retry

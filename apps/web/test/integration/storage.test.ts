@@ -10,9 +10,11 @@ import { users, workspaceMembers, workspaces } from "../../db/schema";
 import {
   completeSourceUpload,
   initiateSourceUpload,
+  reportSourceUploadProgress,
   signSourceUploadPart,
 } from "../../lib/uploads/service";
 import { uploadStorage } from "../../lib/uploads/storage";
+import { UPLOAD_PART_SIZE_BYTES } from "../../lib/uploads/validation";
 
 describe("small object storage against LocalStack", () => {
   let workspace: ReturnType<typeof workspaceId>;
@@ -143,5 +145,42 @@ describe("resumable multipart upload against LocalStack", () => {
       recordingId: initiated.recordingId,
       sizeBytes: partBody.byteLength,
     });
+  });
+
+  it("seals an exact full streaming part that was uploaded before stop", async () => {
+    const partBody = Buffer.alloc(UPLOAD_PART_SIZE_BYTES, 120);
+    const initiated = await initiateSourceUpload(actor, {
+      title: "Exact multipart boundary",
+      contentType: "video/webm",
+      streaming: true,
+    });
+    const checksumSha256 = createHash("sha256")
+      .update(partBody)
+      .digest("base64");
+    const signed = await signSourceUploadPart(actor, initiated.sessionId, 1, {
+      contentLength: partBody.byteLength,
+      checksumSha256,
+      isFinalPart: false,
+    });
+    const response = await fetch(signed.url, {
+      method: signed.method,
+      body: partBody,
+      headers: signed.requiredHeaders,
+    });
+    expect(response.ok).toBe(true);
+    const etag = response.headers.get("etag");
+    if (!etag) throw new Error("LocalStack did not return an ETag");
+
+    await reportSourceUploadProgress(actor, initiated.sessionId, {
+      recordedBytes: partBody.byteLength,
+      sealed: true,
+    });
+    const result = await completeSourceUpload(
+      actor,
+      initiated.sessionId,
+      randomUUID(),
+      [{ partNumber: 1, etag, checksumSha256 }],
+    );
+    expect(result.sizeBytes).toBe(partBody.byteLength);
   });
 });

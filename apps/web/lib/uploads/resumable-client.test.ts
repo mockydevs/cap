@@ -6,6 +6,7 @@ import {
   abortResumableUpload,
   beginResumableUpload,
   beginStreamingUpload,
+  listPendingUploads,
   pendingUploadProgress,
   resumeUpload,
   declaredContentType,
@@ -39,7 +40,7 @@ describe("upload-during-recording", () => {
       delete (Blob.prototype as { arrayBuffer?: unknown }).arrayBuffer;
   });
 
-  it("uploads full parts while recording and holds the tail until stop", async () => {
+  it("uploads full parts in the background and leaves only a sub-part tail", async () => {
     const signedFinalFlags: boolean[] = [];
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/upload-sessions") {
@@ -53,6 +54,8 @@ describe("upload-during-recording", () => {
         );
       }
       const part = /\/parts\/(\d+)$/.exec(url);
+      if (part && init?.method === "PATCH")
+        return Response.json({ status: "ACKNOWLEDGED" });
       if (part) {
         signedFinalFlags.push(
           (JSON.parse(String(init?.body)) as { isFinalPart: boolean })
@@ -69,6 +72,8 @@ describe("upload-during-recording", () => {
           status: 200,
           headers: { ETag: `"etag-${url.at(-1)}"` },
         });
+      if (url === "/api/upload-sessions/s-live" && init?.method === "PATCH")
+        return Response.json({ status: "REPORTED" });
       if (url.endsWith("/complete"))
         return Response.json({
           recordingId: "r-live",
@@ -84,11 +89,123 @@ describe("upload-during-recording", () => {
       new Blob(["123456"], { type: "video/webm" }),
     );
 
-    expect(progress).toEqual({ recordedBytes: 6, uploadedBytes: 5 });
-    expect(signedFinalFlags).toEqual([false]);
+    expect(progress).toEqual({ recordedBytes: 6, uploadedBytes: 0 });
 
     await upload.finish();
     expect(signedFinalFlags).toEqual([false, true]);
+  });
+
+  it("seals an exact-multiple recording without uploading a duplicate tail", async () => {
+    const finalFlags: boolean[] = [];
+    let sealed = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/upload-sessions")
+        return Response.json(
+          { sessionId: "s-exact", recordingId: "r-exact", partSizeBytes: 5 },
+          { status: 201 },
+        );
+      if (url === "/api/upload-sessions/s-exact" && init?.method === "PATCH") {
+        sealed ||= Boolean(
+          (JSON.parse(String(init.body)) as { sealed?: boolean }).sealed,
+        );
+        return Response.json({ status: sealed ? "SEALED" : "REPORTED" });
+      }
+      const part = /\/parts\/(\d+)$/.exec(url);
+      if (part && init?.method === "PATCH")
+        return Response.json({ status: "ACKNOWLEDGED" });
+      if (part) {
+        finalFlags.push(
+          (JSON.parse(String(init?.body)) as { isFinalPart: boolean })
+            .isFinalPart,
+        );
+        return Response.json({
+          url: `https://storage.example/exact-${part[1]}`,
+          method: "PUT",
+          requiredHeaders: {},
+        });
+      }
+      if (url.startsWith("https://storage.example/exact-"))
+        return new Response(null, {
+          status: 200,
+          headers: { ETag: '"exact-etag"' },
+        });
+      if (url.endsWith("/complete"))
+        return Response.json({
+          recordingId: "r-exact",
+          status: "PROCESSING",
+          sizeBytes: 5,
+        });
+      throw new Error(`unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const upload = await beginStreamingUpload("Exact", "video/webm");
+    await upload.append(new Blob(["12345"], { type: "video/webm" }));
+    expect(
+      (await listPendingUploads()).find(
+        (pending) => pending.sessionId === "s-exact",
+      )?.blob.size,
+    ).toBe(5);
+    await upload.finish();
+
+    expect(finalFlags).toEqual([false]);
+    expect(sealed).toBe(true);
+  });
+
+  it("keeps multiple live storage PUTs in flight", async () => {
+    let active = 0;
+    let peak = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/upload-sessions")
+        return Response.json(
+          {
+            sessionId: "s-concurrent",
+            recordingId: "r-concurrent",
+            partSizeBytes: 5,
+          },
+          { status: 201 },
+        );
+      if (
+        url === "/api/upload-sessions/s-concurrent" &&
+        init?.method === "PATCH"
+      )
+        return Response.json({ status: "REPORTED" });
+      const part = /\/parts\/(\d+)$/.exec(url);
+      if (part && init?.method === "PATCH")
+        return Response.json({ status: "ACKNOWLEDGED" });
+      if (part)
+        return Response.json({
+          url: `https://storage.example/concurrent-${part[1]}`,
+          method: "PUT",
+          requiredHeaders: {},
+        });
+      const stored = /storage\.example\/concurrent-(\d+)$/.exec(url);
+      if (stored) {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        active -= 1;
+        return new Response(null, {
+          status: 200,
+          headers: { ETag: `"etag-${stored[1]}"` },
+        });
+      }
+      if (url.endsWith("/complete"))
+        return Response.json({
+          recordingId: "r-concurrent",
+          status: "PROCESSING",
+          sizeBytes: 16,
+        });
+      throw new Error(`unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const upload = await beginStreamingUpload("Concurrent", "video/webm");
+    await upload.append(new Blob(["1234567890123456"], { type: "video/webm" }));
+    await upload.finish();
+
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(3);
   });
 });
 
@@ -336,6 +453,47 @@ describe("stale multipart recovery", () => {
       }),
     ).rejects.toThrow("Storage rejected upload part (HTTP 404)");
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("seals an already-uploaded exact streaming boundary on resume", async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === "/api/upload-sessions/s-boundary" && init?.method === "PATCH")
+        return Response.json({ status: "SEALED" });
+      if (url.endsWith("/complete"))
+        return Response.json({
+          recordingId: "r-boundary",
+          status: "PROCESSING",
+          sizeBytes: 5,
+        });
+      throw new Error(`unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await resumeUpload({
+      sessionId: "s-boundary",
+      recordingId: "r-boundary",
+      partSizeBytes: 5,
+      blob: new Blob(["12345"], { type: "video/webm" }),
+      completionIdempotencyKey: "idem-boundary-123456",
+      uploadedParts: [
+        {
+          partNumber: 1,
+          etag: '"etag-boundary"',
+          checksumSha256: "checksum-boundary",
+          contentLength: 5,
+          isFinalPart: false,
+        },
+      ],
+      streaming: true,
+      recordedBytes: 5,
+    });
+
+    expect(calls).toEqual([
+      "PATCH /api/upload-sessions/s-boundary",
+      "POST /api/upload-sessions/s-boundary/complete",
+    ]);
   });
 });
 

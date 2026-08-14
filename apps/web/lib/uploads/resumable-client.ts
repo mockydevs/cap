@@ -2,6 +2,8 @@
 
 const DATABASE_NAME = "cap-upload-queue";
 const STORE_NAME = "uploads";
+const CHUNK_STORE_NAME = "upload-chunks";
+const DATABASE_VERSION = 2;
 
 export type UploadedPart = {
   partNumber: number;
@@ -20,9 +22,14 @@ export type PendingUpload = {
   uploadedParts: UploadedPart[];
   /** Size is sealed by the final part because capture began before it was known. */
   streaming?: boolean;
+  /** Streaming uploads persist immutable recorder chunks instead of rewriting one growing Blob. */
+  chunkCount?: number;
+  recordedBytes?: number;
+  blobType?: string;
 };
 
 const DEFAULT_UPLOAD_CONCURRENCY = 4;
+const LIVE_UPLOAD_CONCURRENCY = 3;
 
 /**
  * MediaRecorder reports the full type it negotiated — "video/mp4;codecs=avc1…"
@@ -54,7 +61,7 @@ export function pendingUploadProgress(upload: PendingUpload): {
     (total, part) => total + (part.contentLength || 0),
     0,
   );
-  const totalBytes = upload.blob.size;
+  const totalBytes = upload.recordedBytes ?? upload.blob.size;
   return {
     completedBytes,
     totalBytes,
@@ -102,9 +109,17 @@ function apiHeaders(
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore(STORE_NAME, { keyPath: "sessionId" });
+    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME))
+        request.result.createObjectStore(STORE_NAME, { keyPath: "sessionId" });
+      if (!request.result.objectStoreNames.contains(CHUNK_STORE_NAME)) {
+        const chunks = request.result.createObjectStore(CHUNK_STORE_NAME, {
+          keyPath: ["sessionId", "index"],
+        });
+        chunks.createIndex("sessionId", "sessionId");
+      }
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -114,18 +129,71 @@ async function write(upload: PendingUpload) {
   const database = await openDatabase();
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(upload);
+    transaction.objectStore(STORE_NAME).put(
+      upload.chunkCount === undefined
+        ? upload
+        : {
+            ...upload,
+            blob: new Blob([], {
+              type: upload.blobType || upload.blob.type,
+            }),
+          },
+    );
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
   database.close();
 }
 
+async function appendStreamingChunk(
+  upload: PendingUpload,
+  index: number,
+  chunk: Blob,
+) {
+  const bytes = await chunk.arrayBuffer();
+  const database = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(
+      [STORE_NAME, CHUNK_STORE_NAME],
+      "readwrite",
+    );
+    transaction.objectStore(CHUNK_STORE_NAME).put({
+      sessionId: upload.sessionId,
+      index,
+      bytes,
+    });
+    transaction.objectStore(STORE_NAME).put({
+      ...upload,
+      blob: new Blob([], { type: upload.blobType || chunk.type }),
+    });
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+}
+
+async function deleteStoredChunks(
+  transaction: IDBTransaction,
+  sessionId: string,
+): Promise<void> {
+  const store = transaction.objectStore(CHUNK_STORE_NAME);
+  const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+    const request = store.index("sessionId").getAllKeys(sessionId);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  for (const key of keys) store.delete(key);
+}
+
 async function remove(sessionId: string) {
   const database = await openDatabase();
   await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [STORE_NAME, CHUNK_STORE_NAME],
+      "readwrite",
+    );
     transaction.objectStore(STORE_NAME).delete(sessionId);
+    void deleteStoredChunks(transaction, sessionId).catch(reject);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -138,10 +206,19 @@ async function replace(
 ): Promise<void> {
   const database = await openDatabase();
   await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
+    const transaction = database.transaction(
+      [STORE_NAME, CHUNK_STORE_NAME],
+      "readwrite",
+    );
     const store = transaction.objectStore(STORE_NAME);
-    store.put(upload);
+    store.put({
+      ...upload,
+      chunkCount: undefined,
+      recordedBytes: upload.blob.size,
+      blobType: upload.blob.type,
+    });
     store.delete(previousSessionId);
+    void deleteStoredChunks(transaction, previousSessionId).catch(reject);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -158,8 +235,69 @@ export async function listPendingUploads(): Promise<PendingUpload[]> {
     request.onsuccess = () => resolve(request.result as PendingUpload[]);
     request.onerror = () => reject(request.error);
   });
+  const hydrated = await Promise.all(
+    uploads.map((upload) => hydrateStoredUpload(database, upload)),
+  );
   database.close();
-  return uploads;
+  return hydrated;
+}
+
+async function hydrateStoredUpload(
+  database: IDBDatabase,
+  upload: PendingUpload,
+): Promise<PendingUpload> {
+  if (upload.chunkCount === undefined) return upload;
+  const chunks = await new Promise<
+    { sessionId: string; index: number; bytes: ArrayBuffer }[]
+  >((resolve, reject) => {
+    const request = database
+      .transaction(CHUNK_STORE_NAME)
+      .objectStore(CHUNK_STORE_NAME)
+      .index("sessionId")
+      .getAll(IDBKeyRange.only(upload.sessionId));
+    request.onsuccess = () =>
+      resolve(
+        (
+          request.result as {
+            sessionId: string;
+            index: number;
+            bytes: ArrayBuffer;
+          }[]
+        )
+          .filter((chunk) => chunk.sessionId === upload.sessionId)
+          .sort((left, right) => left.index - right.index),
+      );
+    request.onerror = () => reject(request.error);
+  });
+  return {
+    ...upload,
+    blob: new Blob(
+      chunks.slice(0, upload.chunkCount).map((chunk) => chunk.bytes),
+      { type: upload.blobType || upload.blob.type },
+    ),
+  };
+}
+
+async function readPendingUpload(
+  sessionId: string,
+): Promise<PendingUpload | undefined> {
+  const database = await openDatabase();
+  const upload = await new Promise<PendingUpload | undefined>(
+    (resolve, reject) => {
+      const request = database
+        .transaction(STORE_NAME)
+        .objectStore(STORE_NAME)
+        .get(sessionId);
+      request.onsuccess = () =>
+        resolve(request.result as PendingUpload | undefined);
+      request.onerror = () => reject(request.error);
+    },
+  );
+  const hydrated = upload
+    ? await hydrateStoredUpload(database, upload)
+    : undefined;
+  database.close();
+  return hydrated;
 }
 
 async function checksumSha256(blob: Blob): Promise<string> {
@@ -178,6 +316,49 @@ async function responseError(
   const payload = (await response.json().catch(() => undefined)) as
     { error?: { code?: string } } | undefined;
   return new Error(payload?.error?.code ?? fallback);
+}
+
+async function acknowledgeStoredPart(
+  upload: PendingUpload,
+  part: UploadedPart,
+  config?: UploadClientConfig,
+): Promise<void> {
+  const response = await fetch(
+    apiUrl(
+      config,
+      `/api/upload-sessions/${upload.sessionId}/parts/${part.partNumber}`,
+    ),
+    {
+      method: "PATCH",
+      headers: apiHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({
+        etag: part.etag,
+        recordedBytes: upload.recordedBytes ?? upload.blob.size,
+      }),
+    },
+  );
+  if (!response.ok)
+    throw await responseError(response, "Could not acknowledge upload part");
+}
+
+async function reportStreamingProgress(
+  upload: PendingUpload,
+  input: { error?: string | null; sealed?: boolean } = {},
+  config?: UploadClientConfig,
+): Promise<void> {
+  const response = await fetch(
+    apiUrl(config, `/api/upload-sessions/${upload.sessionId}`),
+    {
+      method: "PATCH",
+      headers: apiHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({
+        recordedBytes: upload.recordedBytes ?? upload.blob.size,
+        ...input,
+      }),
+    },
+  );
+  if (!response.ok)
+    throw await responseError(response, "Could not report upload progress");
 }
 
 /** Persists the source Blob before the first part is uploaded so reloads can resume. */
@@ -231,9 +412,9 @@ export type StreamingUploadController = {
 
 /**
  * Starts an upload before MediaRecorder knows the final Blob size. Each chunk is
- * durably folded into the IndexedDB snapshot first. Complete fixed-size parts
- * are then sent in the background, while one tail part is deliberately held
- * back so it can be declared final when recording stops.
+ * durably appended to IndexedDB first. Complete provider-sized parts are sent
+ * immediately with bounded parallel PUTs; only the sub-part tail remains when
+ * capture stops.
  */
 export async function beginStreamingUpload(
   title: string,
@@ -264,27 +445,66 @@ export async function beginStreamingUpload(
     completionIdempotencyKey: crypto.randomUUID(),
     uploadedParts: [],
     streaming: true,
+    chunkCount: 0,
+    recordedBytes: 0,
+    blobType: contentType,
   };
   await write(current);
+  let tailChunks: Blob[] = [];
+  let tailBytes = 0;
+  let nextPartNumber = 1;
+  let appendWork: Promise<unknown> = Promise.resolve();
+  let signWork: Promise<unknown> = Promise.resolve();
+  let signError: unknown;
+  let commitWork: Promise<unknown> = Promise.resolve();
+  let activePuts = 0;
+  const putWaiters: (() => void)[] = [];
+  const partTasks: Promise<void>[] = [];
+  let streamError: unknown;
+  let lastProgressReportAt = 0;
+  let progressReportInFlight = false;
 
-  // MediaRecorder events may arrive while a previous checksum or PUT is still
-  // running. One chain preserves byte order and bounds concurrent memory.
-  let work: Promise<unknown> = Promise.resolve();
+  const acquirePutSlot = async () => {
+    if (activePuts < LIVE_UPLOAD_CONCURRENCY) {
+      activePuts += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => putWaiters.push(resolve));
+    activePuts += 1;
+  };
+  const releasePutSlot = () => {
+    activePuts -= 1;
+    putWaiters.shift()?.();
+  };
 
-  const uploadReadyPrefix = async (): Promise<void> => {
-    let uploadedBytes = current.uploadedParts.reduce(
-      (total, part) => total + part.contentLength,
-      0,
-    );
-    // Strictly greater leaves at least one byte (or one whole part) for the
-    // final request. S3/R2 cannot change an already-uploaded non-final part into
-    // a final part after stop.
-    while (current.blob.size - uploadedBytes > current.partSizeBytes) {
-      const partNumber = current.uploadedParts.length + 1;
-      const body = current.blob.slice(
-        uploadedBytes,
-        uploadedBytes + current.partSizeBytes,
-      );
+  const reportProgressSoon = () => {
+    if (progressReportInFlight || Date.now() - lastProgressReportAt < 5_000)
+      return;
+    lastProgressReportAt = Date.now();
+    progressReportInFlight = true;
+    void reportStreamingProgress(
+      current,
+      {
+        error:
+          streamError instanceof Error
+            ? streamError.message
+            : streamError
+              ? "Upload paused"
+              : null,
+      },
+      config,
+    )
+      .catch(() => undefined)
+      .finally(() => {
+        progressReportInFlight = false;
+      });
+  };
+
+  const schedulePart = (body: Blob, isFinalPart: boolean) => {
+    const partNumber = nextPartNumber;
+    nextPartNumber += 1;
+    const signed = signWork.then(async () => {
+      if (signError) throw signError;
       const checksum = await checksumSha256(body);
       const sign = await fetch(
         apiUrl(
@@ -297,84 +517,141 @@ export async function beginStreamingUpload(
           body: JSON.stringify({
             contentLength: body.size,
             checksumSha256: checksum,
-            isFinalPart: false,
+            isFinalPart,
           }),
         },
       );
       if (!sign.ok)
         throw await responseError(sign, "Could not sign streaming upload part");
-      const signed = (await sign.json()) as {
-        url: string;
-        method: "PUT";
-        requiredHeaders: Record<string, string>;
+      return {
+        checksumSha256: checksum,
+        signed: (await sign.json()) as {
+          url: string;
+          method: "PUT";
+          requiredHeaders: Record<string, string>;
+        },
       };
-      const stored = await fetch(signed.url, {
-        method: signed.method,
-        headers: signed.requiredHeaders,
-        body,
-      });
-      const etag = stored.headers.get("etag");
-      if (!stored.ok)
-        throw new Error(
-          `Storage rejected streaming upload part (HTTP ${stored.status})`,
-        );
-      if (!etag)
-        throw new Error(
-          "Upload succeeded but storage CORS did not expose ETag",
-        );
-      current = {
-        ...current,
-        uploadedParts: [
-          ...current.uploadedParts,
-          {
+    });
+    // Signing remains ordered because the service persists contiguous intents;
+    // storage PUTs begin independently as soon as each signature is available.
+    signWork = signed.then(
+      () => undefined,
+      (error) => {
+        signError ??= error;
+      },
+    );
+    const task = signed
+      .then(async ({ checksumSha256, signed: request }) => {
+        await acquirePutSlot();
+        try {
+          const stored = await fetch(request.url, {
+            method: request.method,
+            headers: request.requiredHeaders,
+            body,
+          });
+          const etag = stored.headers.get("etag");
+          if (!stored.ok)
+            throw new Error(
+              `Storage rejected streaming upload part (HTTP ${stored.status})`,
+            );
+          if (!etag)
+            throw new Error(
+              "Upload succeeded but storage CORS did not expose ETag",
+            );
+          const receipt: UploadedPart = {
             partNumber,
             etag,
-            checksumSha256: checksum,
+            checksumSha256,
             contentLength: body.size,
-            isFinalPart: false,
+            isFinalPart,
+          };
+          await (commitWork = commitWork.then(async () => {
+            current = {
+              ...current,
+              uploadedParts: [...current.uploadedParts, receipt].sort(
+                (left, right) => left.partNumber - right.partNumber,
+              ),
+            };
+            await write(current);
+            await acknowledgeStoredPart(current, receipt, config).catch(
+              () => undefined,
+            );
+          }));
+        } finally {
+          releasePutSlot();
+        }
+      })
+      .catch((error) => {
+        streamError ??= error;
+        void reportStreamingProgress(
+          current,
+          {
+            error: error instanceof Error ? error.message : "Upload paused",
           },
-        ],
-      };
-      uploadedBytes += body.size;
-      await write(current);
-    }
+          config,
+        ).catch(() => undefined);
+        throw error;
+      });
+    // A capture may continue safely after the network task rejects; finish()
+    // observes the same task and surfaces the failure without an unhandled rejection.
+    void task.catch(() => undefined);
+    partTasks.push(task);
   };
 
   return {
     recordingId: current.recordingId,
     sessionId: current.sessionId,
     append(chunk) {
-      const operation = work.then(async () => {
+      const operation = appendWork.then(async () => {
         if (!chunk.size)
           return {
-            recordedBytes: current.blob.size,
+            recordedBytes: current.recordedBytes ?? 0,
             uploadedBytes: pendingUploadProgress(current).completedBytes,
           };
+        tailChunks.push(chunk);
+        tailBytes += chunk.size;
         current = {
           ...current,
-          blob: new Blob([current.blob, chunk], {
-            type: current.blob.type || contentType,
-          }),
+          chunkCount: (current.chunkCount ?? 0) + 1,
+          recordedBytes: (current.recordedBytes ?? 0) + chunk.size,
         };
-        // Durability precedes network I/O: a failed PUT still leaves a complete
-        // local recording that the recovery panel can resume.
-        await write(current);
-        await uploadReadyPrefix();
+        await appendStreamingChunk(current, current.chunkCount! - 1, chunk);
+        while (tailBytes >= current.partSizeBytes) {
+          const tail = new Blob(tailChunks, { type: contentType });
+          schedulePart(tail.slice(0, current.partSizeBytes), false);
+          const remainder = tail.slice(current.partSizeBytes);
+          tailChunks = remainder.size ? [remainder] : [];
+          tailBytes = remainder.size;
+        }
+        reportProgressSoon();
         return {
-          recordedBytes: current.blob.size,
+          recordedBytes: current.recordedBytes ?? 0,
           uploadedBytes: pendingUploadProgress(current).completedBytes,
         };
       });
-      work = operation.catch(() => undefined);
+      appendWork = operation.catch(() => undefined);
       return operation;
     },
     async finish(onProgress) {
-      await work;
-      if (!current.blob.size)
+      await appendWork;
+      if (!(current.recordedBytes ?? 0))
         throw new Error("Recording produced no media data");
+      if (tailBytes) {
+        schedulePart(new Blob(tailChunks, { type: contentType }), true);
+        tailChunks = [];
+        tailBytes = 0;
+      }
+      const settled = await Promise.allSettled(partTasks);
+      await commitWork;
+      current = (await readPendingUpload(current.sessionId)) ?? current;
+      const failed = settled.find(
+        (outcome): outcome is PromiseRejectedResult =>
+          outcome.status === "rejected",
+      );
+      if (streamError || failed) throw streamError ?? failed?.reason;
       const result = await resumeUploadAttempt(current, onProgress, {
         ...config,
-        concurrency: 1,
+        concurrency: LIVE_UPLOAD_CONCURRENCY,
       });
       return result;
     },
@@ -448,7 +725,7 @@ async function resumeUploadAttempt(
   /** Set when a part 404s: the whole session is restarted, so stop feeding it. */
   let providerRestartNeeded = false;
 
-  const uploadPart = async (partNumber: number) => {
+  const prepareUploadPart = async (partNumber: number) => {
     const start = (partNumber - 1) * upload.partSizeBytes;
     const body = upload.blob.slice(
       start,
@@ -472,11 +749,23 @@ async function resumeUploadAttempt(
       },
     );
     if (!sign.ok) throw await responseError(sign, "Could not sign upload part");
-    const signed = (await sign.json()) as {
-      url: string;
-      method: "PUT";
-      requiredHeaders: Record<string, string>;
+    return {
+      partNumber,
+      body,
+      checksum,
+      isFinalPart,
+      signed: (await sign.json()) as {
+        url: string;
+        method: "PUT";
+        requiredHeaders: Record<string, string>;
+      },
     };
+  };
+
+  const uploadPreparedPart = async (
+    prepared: Awaited<ReturnType<typeof prepareUploadPart>>,
+  ) => {
+    const { partNumber, body, checksum, isFinalPart, signed } = prepared;
     const result = await fetch(signed.url, {
       method: signed.method,
       headers: signed.requiredHeaders,
@@ -493,44 +782,63 @@ async function resumeUploadAttempt(
     if (!etag) {
       throw new Error("Upload succeeded but storage CORS did not expose ETag");
     }
-    completed.set(partNumber, {
+    const receipt: UploadedPart = {
       partNumber,
       etag,
       checksumSha256: checksum,
       contentLength: body.size,
       isFinalPart,
-    });
+    };
+    completed.set(partNumber, receipt);
     await persist();
+    if (upload.streaming)
+      await acknowledgeStoredPart(upload, receipt, config).catch(
+        () => undefined,
+      );
     onProgress?.(
       pendingUploadProgress(upload).completedBytes,
       upload.blob.size,
     );
   };
 
-  // Parts are independent objects in the same multipart upload, so the only
-  // reason to send them one at a time was that the loop did. A handful in
-  // flight keeps a home connection saturated; more than that mostly competes
-  // with itself and with the recorder still holding the tab.
-  let next = 0;
-  const workers = Array.from(
-    { length: Math.min(uploadConcurrency(config), outstanding.length) },
-    async () => {
-      while (next < outstanding.length && !providerRestartNeeded)
-        await uploadPart(outstanding[next++]!);
-    },
-  );
-  const settled = await Promise.allSettled(workers);
-  // Every worker is awaited before rethrowing, so no request is still running
-  // against a session that is about to be replaced or abandoned.
+  // Signatures are requested in contiguous order because the service persists
+  // ordered intents. Each small batch is then PUT in parallel to saturate the
+  // connection without creating thousands of short-lived presigned URLs.
+  const concurrency = uploadConcurrency(config);
+  let failure: PromiseRejectedResult | undefined;
+  for (
+    let offset = 0;
+    offset < outstanding.length && !providerRestartNeeded && !failure;
+    offset += concurrency
+  ) {
+    const batchNumbers = outstanding.slice(offset, offset + concurrency);
+    const prepared = [];
+    for (const partNumber of batchNumbers)
+      prepared.push(await prepareUploadPart(partNumber));
+    const settled = await Promise.allSettled(prepared.map(uploadPreparedPart));
+    failure = settled.find(
+      (outcome): outcome is PromiseRejectedResult =>
+        outcome.status === "rejected",
+    );
+  }
   await persisted.catch(() => undefined);
-  const failure = settled.find((outcome) => outcome.status === "rejected");
-  if (failure?.status === "rejected") throw failure.reason;
+  if (failure) throw failure.reason;
 
   if (providerRestartNeeded) {
     const restarted = await restartPendingUpload(upload, config);
     onProgress?.(0, restarted.blob.size);
     return resumeUploadAttempt(restarted, onProgress, config, false);
   }
+
+  // Recovery may resume an exact-multiple recording whose final full part was
+  // uploaded while capture was live. Seal it only after every missing intent
+  // and storage part has been restored.
+  if (upload.streaming)
+    await reportStreamingProgress(
+      upload,
+      { error: null, sealed: true },
+      config,
+    );
 
   const finished = await fetch(
     apiUrl(config, `/api/upload-sessions/${upload.sessionId}/complete`),
@@ -569,7 +877,9 @@ export async function resumeUpload(
   return resumeUploadAttempt(
     initialUpload,
     onProgress,
-    initialUpload.streaming ? { ...config, concurrency: 1 } : config,
+    initialUpload.streaming
+      ? { ...config, concurrency: LIVE_UPLOAD_CONCURRENCY }
+      : config,
   );
 }
 

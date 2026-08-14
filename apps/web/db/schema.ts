@@ -332,6 +332,15 @@ export const uploadSessions = pgTable(
     }).notNull(),
     /** The final byte size is learned from the last recorder chunk. */
     isStreaming: boolean("is_streaming").notNull().default(false),
+    /** Best-known bytes produced by the capture client while it is still live. */
+    recordedSizeBytes: bigint("recorded_size_bytes", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
+    /** A bounded, user-safe client failure code/message for recovery UI. */
+    lastClientError: text("last_client_error"),
+    clientUpdatedAt: timestamp("client_updated_at", { withTimezone: true }),
     maxPartCount: integer("max_part_count").notNull(),
     status: uploadSessionStatus("status").notNull().default("PENDING"),
     completionIdempotencyKeyHash: text("completion_idempotency_key_hash"),
@@ -372,6 +381,9 @@ export const uploadPartIntents = pgTable(
     contentLength: bigint("content_length", { mode: "number" }).notNull(),
     checksumSha256: text("checksum_sha256").notNull(),
     isFinalPart: boolean("is_final_part").notNull(),
+    /** Receipt reported only after storage returned a successful PUT + ETag. */
+    etag: text("etag"),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

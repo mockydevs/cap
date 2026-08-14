@@ -38,6 +38,17 @@ export const signPartSchema = z.object({
   isFinalPart: z.boolean(),
 });
 
+export const acknowledgePartSchema = z.object({
+  etag,
+  recordedBytes: z.number().int().nonnegative().max(MAX_BROWSER_UPLOAD_BYTES),
+});
+
+export const reportUploadProgressSchema = z.object({
+  recordedBytes: z.number().int().nonnegative().max(MAX_BROWSER_UPLOAD_BYTES),
+  error: z.string().trim().min(1).max(500).nullable().optional(),
+  sealed: z.boolean().optional(),
+});
+
 export const completeUploadSchema = z
   .object({
     parts: z
@@ -67,4 +78,5 @@ export const idempotencyKeySchema = z
   .min(16)
   .max(200)
   .regex(/^[\x21-\x7E]+$/);
-export const UPLOAD_PART_SIZE_BYTES = 10 * 1024 * 1024;
+/** S3's minimum non-final multipart size; minimizes the post-stop tail. */
+export const UPLOAD_PART_SIZE_BYTES = 5 * 1024 * 1024;

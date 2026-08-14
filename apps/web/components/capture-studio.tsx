@@ -54,6 +54,17 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
 }
 
+function recordingBitrate(track: MediaStreamTrack | undefined): number {
+  const settings = track?.getSettings();
+  const pixels = (settings?.width ?? 1_920) * (settings?.height ?? 1_080);
+  // Screen text needs more detail than camera footage. Cap the browser's
+  // otherwise unbounded default while retaining enough bitrate for 4K shares.
+  if (pixels >= 3_840 * 2_160) return 10_000_000;
+  if (pixels >= 2_560 * 1_440) return 7_000_000;
+  if (pixels >= 1_920 * 1_080) return 5_000_000;
+  return 3_000_000;
+}
+
 export function CaptureStudio() {
   const [state, setState] = useState<CaptureState>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -153,7 +164,11 @@ export function CaptureStudio() {
       const mimeType = selectRecorderMimeType((value) =>
         MediaRecorder.isTypeSupported(value),
       );
-      const recorderOptions = mimeType ? { mimeType } : undefined;
+      const recorderOptions: MediaRecorderOptions = {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: recordingBitrate(display.getVideoTracks()[0]),
+        audioBitsPerSecond: 128_000,
+      };
       const nextRecorder = new MediaRecorder(combined, recorderOptions);
       recorder.current = nextRecorder;
       const title = `Recording ${new Date().toLocaleString()}`;
@@ -189,7 +204,13 @@ export function CaptureStudio() {
       });
       let liveCameraUpload: StreamingUploadController | undefined;
       if (camera) {
-        nextCameraRecorder = new MediaRecorder(camera, recorderOptions);
+        nextCameraRecorder = new MediaRecorder(camera, {
+          ...recorderOptions,
+          videoBitsPerSecond: Math.min(
+            3_000_000,
+            recordingBitrate(camera.getVideoTracks()[0]),
+          ),
+        });
         cameraRecorder.current = nextCameraRecorder;
         liveCameraUpload = await beginStreamingUpload(
           `${title} (camera)`,
@@ -222,11 +243,26 @@ export function CaptureStudio() {
         setState("uploading");
         setMessage("Finishing the last upload part…");
         try {
-          const result = await liveUpload.finish((completed, total) => {
+          const screenFinish = liveUpload.finish((completed, total) => {
             setLiveUploadedBytes(completed);
             setLiveRecordedBytes(total);
             setUploadProgress(Math.round((completed / total) * 100));
           });
+          const cameraFinish = liveCameraUpload
+            ? cameraStopped.then(async () => {
+                setMessage("Securing the final screen and camera chunks…");
+                const cameraResult = await liveCameraUpload.finish();
+                setCameraBlob(liveCameraUpload.snapshot().blob);
+                return cameraResult;
+              })
+            : Promise.resolve(undefined);
+          const [screenOutcome, cameraOutcome] = await Promise.allSettled([
+            screenFinish,
+            cameraFinish,
+          ]);
+          if (screenOutcome.status === "rejected") throw screenOutcome.reason;
+          if (cameraOutcome.status === "rejected") throw cameraOutcome.reason;
+          const result = screenOutcome.value;
           const completedBlob = liveUpload.snapshot().blob;
           setRecordingBlob(completedBlob);
           setRecordingUrl((previous) => {
@@ -235,11 +271,6 @@ export function CaptureStudio() {
           });
           setRecordingId(result.recordingId);
           await cameraStopped;
-          if (liveCameraUpload) {
-            setMessage("Finishing camera upload…");
-            await liveCameraUpload.finish();
-            setCameraBlob(liveCameraUpload.snapshot().blob);
-          }
           setUploadProgress(100);
           setState("ready");
           setMessage(
@@ -249,6 +280,14 @@ export function CaptureStudio() {
           streamingUpload.current = undefined;
           cameraStreamingUpload.current = undefined;
         } catch (error) {
+          const backup = liveUpload.snapshot().blob;
+          if (backup.size) {
+            setRecordingBlob(backup);
+            setRecordingUrl((previous) => {
+              if (previous) URL.revokeObjectURL(previous);
+              return URL.createObjectURL(backup);
+            });
+          }
           await refreshPendingUploads().catch(() => undefined);
           setState("error");
           setMessage(uploadFailureMessage(error));
