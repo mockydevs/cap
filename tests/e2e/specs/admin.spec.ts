@@ -60,7 +60,7 @@ test("invites a new member and saves the retention policy", async ({
     .getByLabel("Auto-delete recordings after (days, blank = keep forever)")
     .fill("90");
   await page.getByRole("button", { name: "Save retention policy" }).click();
-  await expect(page.getByText("Retention policy saved.")).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Retention policy saved.");
 });
 
 // apps/web/components/ai-settings.tsx and billing-settings.tsx. A fresh
@@ -75,7 +75,7 @@ test("tells a fresh workspace who pays for each AI feature", async ({
   await page.getByRole("button", { name: "AI", exact: true }).click();
 
   await expect(
-    page.getByRole("heading", { name: "Who pays for AI" }),
+    page.getByRole("heading", { name: "Feature access" }),
   ).toBeVisible();
   for (const feature of ["Transcripts", "Analysis", "Semantic search"])
     await expect(page.getByText(feature, { exact: true })).toBeVisible();

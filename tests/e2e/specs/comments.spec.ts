@@ -15,6 +15,9 @@ test("adds a timestamped comment to a recording you own", async ({ page }) => {
   );
   await page.goto(`/library/${recordingId}`);
 
+  // The inspector is a tablist that opens on Transcript.
+  await page.getByRole("tab", { name: "Comments" }).click();
+
   const commentBody = `A note left during review ${Date.now()}`;
   await page.getByLabel("Comment", { exact: true }).fill(commentBody);
   // The submit button's label encodes the current playback position; with no

@@ -10,7 +10,7 @@ test("shows the empty state for a freshly created workspace", async ({
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Recordings" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "No recordings yet." }),
+    page.getByRole("heading", { name: "No recordings yet" }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Start recording" }),

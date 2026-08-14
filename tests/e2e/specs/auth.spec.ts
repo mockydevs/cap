@@ -17,7 +17,9 @@ test("shows an error message after a failed login", async ({ page }) => {
   await page.getByLabel("Password").fill("wrong-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/login\?error=credentials/);
-  await expect(page.getByRole("alert")).toContainText("incorrect");
+  // Scoped to the form's own error: Next's route announcer is also role=alert,
+  // and it enters the DOM on hydration, so an unscoped role query is a race.
+  await expect(page.locator(".form-error")).toContainText("incorrect");
 });
 
 test("redirects an unauthenticated visitor away from the library", async ({
@@ -47,15 +49,21 @@ test("signs up, reaches an authenticated session, and can sign out", async ({
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/\/record$/);
-  const account = page.locator(".account-pill");
+  // Identity and sign-out live behind the workspace bar's account menu, which
+  // is a <details> and starts closed.
+  const account = page.locator(".account-menu");
+  await account.locator("summary").click();
+  const identity = account.locator(".account-identity");
   await expect(
-    account.getByText("E2E Test User", { exact: true }),
+    identity.getByText("E2E Test User", { exact: true }),
   ).toBeVisible();
-  await expect(account.getByText("owner", { exact: true })).toBeVisible();
+  await expect(identity.getByText("owner", { exact: true })).toBeVisible();
 
   await page.goto("/library");
   await expect(page).toHaveURL(/\/library/);
 
+  await page.locator(".account-menu summary").click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "Sign in." })).toBeVisible();
 });

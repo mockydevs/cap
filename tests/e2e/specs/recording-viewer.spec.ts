@@ -19,7 +19,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
   await page.goto(`/library/${recordingId}`);
 
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
-  await expect(page.getByText("UPLOADING", { exact: true })).toBeVisible();
+  await expect(page.locator(".viewer-status")).toHaveText("Uploading");
   await expect(
     page.getByRole("heading", { name: "Preparing playback…" }),
   ).toBeVisible();
@@ -27,15 +27,13 @@ test("shows an owner their own recording's pre-processing panels", async ({
     0,
   );
 
+  // The inspector is a tablist, so only one panel is mounted at a time.
   // TranscriptPanel: no transcript exists yet for this recording.
-  await expect(page.getByRole("heading", { name: "Transcript" })).toBeVisible();
-  await expect(
-    page.getByText(
-      "A transcript will appear here when transcription is complete.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("No transcript", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Transcribe" })).toBeVisible();
 
   // AiPanel: renders its capability actions regardless of processing status.
+  await page.getByRole("tab", { name: "AI" }).click();
   await expect(
     page.getByRole("heading", { name: "Recording intelligence" }),
   ).toBeVisible();
@@ -43,6 +41,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
   await expect(page.getByRole("button", { name: "summary" })).toBeVisible();
 
   // CommentThread: available regardless of processing status.
+  await page.getByRole("tab", { name: "Comments" }).click();
   await expect(page.getByRole("heading", { name: "Comments" })).toBeVisible();
   await expect(page.getByLabel("Comment", { exact: true })).toBeVisible();
 
@@ -69,7 +68,7 @@ test("enforces private access across workspaces", async ({ page, browser }) => {
       outsiderPage.getByText("Recording not found in this workspace."),
     ).toBeVisible();
     await expect(
-      outsiderPage.getByRole("link", { name: "← Library" }),
+      outsiderPage.getByRole("link", { name: "Return to library" }),
     ).toBeVisible();
   } finally {
     await outsiderContext.close();

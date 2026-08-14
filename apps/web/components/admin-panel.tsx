@@ -297,6 +297,11 @@ export function AdminPanel() {
           </button>
         ))}
       </nav>
+      {message && (
+        <p className="hint" role="status">
+          {message}
+        </p>
+      )}
       {tab === "members" && (
         <>
           <section className="admin-section admin-section-members">
@@ -367,7 +372,6 @@ export function AdminPanel() {
               </button>
             </div>
             {inviteLink && <p className="hint">{inviteLink}</p>}
-            {message && <p className="hint">{message}</p>}
           </section>
 
           {invitations.length > 0 && (

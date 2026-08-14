@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 
 export type SignedUpUser = {
@@ -17,11 +18,37 @@ export type SignedUpUser = {
  * "{displayName} · {role}"), so this also doubles as "create a workspace to
  * test against" for specs that need one.
  */
+const octet = () => Math.floor(Math.random() * 256);
+
+/**
+ * A distinct caller address per signup, from the shared-CGNAT range so it can
+ * never be confused with a real client.
+ *
+ * Sign-up and sign-in are rate limited per address (10 per 15 minutes). Every
+ * page here reaches the dev server over the same loopback connection, so
+ * without this the whole suite queues behind one bucket and starts failing
+ * partway through a run — a throttled suite, not a tested one. Honoured only
+ * because the E2E server runs with TRUSTED_PROXY_HOP_COUNT=1.
+ */
+async function presentAsDistinctClient(page: Page): Promise<void> {
+  await page.setExtraHTTPHeaders({
+    "x-forwarded-for": `100.64.${octet()}.${octet()}`,
+  });
+}
+
 export async function signUpAndSignIn(
   page: Page,
   label = "E2E",
 ): Promise<SignedUpUser> {
+  await presentAsDistinctClient(page);
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const address = randomUUID().replaceAll("-", "").match(/.{4}/g)!.slice(0, 6);
+  await page.setExtraHTTPHeaders({
+    // Each helper call represents a separate user. Give those users distinct
+    // TEST-NET IPv6 addresses so the real signup limiter does not treat the
+    // entire CI runner as one client (including Playwright retries).
+    "x-forwarded-for": `2001:db8:${address.join(":")}`,
+  });
   const emailLabel = label
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
