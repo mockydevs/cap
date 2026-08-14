@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { withTransaction } from "@cap/postgres";
 import { createStorageClient, storageWriteEncryption } from "@cap/storage";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
@@ -131,14 +132,16 @@ async function processMedia(
         }),
       );
     }
-    await pool.query("BEGIN");
-    try {
-      await pool.query(
+    const assetSizes = await Promise.all(
+      assets.map(async (asset) => (await stat(asset.filePath)).size),
+    );
+    await withTransaction(pool, async (transaction) => {
+      await transaction.query(
         "DELETE FROM recording_assets WHERE recording_id = $1 AND processing_version = $2",
         [data.recordingId, data.processingVersion],
       );
-      for (const asset of assets)
-        await pool.query(
+      for (const [index, asset] of assets.entries())
+        await transaction.query(
           "INSERT INTO recording_assets (recording_id, processing_version, kind, object_key, content_type, size_bytes) VALUES ($1, $2, $3, $4, $5, $6)",
           [
             data.recordingId,
@@ -146,10 +149,10 @@ async function processMedia(
             asset.kind,
             asset.objectKey,
             asset.contentType,
-            (await stat(asset.filePath)).size,
+            assetSizes[index],
           ],
         );
-      await pool.query(
+      await transaction.query(
         "UPDATE recording_processing_attempts SET status = 'COMPLETED', completed_at = now(), source_metadata = $2::jsonb, asset_manifest = $3::jsonb WHERE id = $1",
         [
           attemptId,
@@ -159,7 +162,7 @@ async function processMedia(
           ),
         ],
       );
-      await pool.query(
+      await transaction.query(
         "UPDATE recordings SET status = 'READY', duration_ms=$2, width=$3, height=$4, updated_at = now() WHERE id = $1",
         [
           data.recordingId,
@@ -168,7 +171,7 @@ async function processMedia(
           metadata.height,
         ],
       );
-      await pool.query(
+      await transaction.query(
         "INSERT INTO webhook_outbox (event, workspace_id, aggregate_id, payload) VALUES ('recording.ready', $1, $2, $3::jsonb)",
         [
           data.workspaceId,
@@ -176,16 +179,14 @@ async function processMedia(
           JSON.stringify({ recordingId: data.recordingId }),
         ],
       );
-      await pool.query("COMMIT");
-      await transcriptionQueue.add(
-        "transcribe",
-        data,
-        transcriptionJobOptions(data.recordingId, data.processingVersion),
-      );
-    } catch (error) {
-      await pool.query("ROLLBACK");
-      throw error;
-    }
+    });
+    // Enqueued only after the commit, so a rolled-back attempt never schedules
+    // transcription for assets that were not persisted.
+    await transcriptionQueue.add(
+      "transcribe",
+      data,
+      transcriptionJobOptions(data.recordingId, data.processingVersion),
+    );
   } catch (error) {
     await pool.query(
       "UPDATE recording_processing_attempts SET status = 'FAILED', completed_at = now(), failure_category = $2, failure_detail = $3 WHERE id = $1",

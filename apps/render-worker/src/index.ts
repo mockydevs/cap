@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { withTransaction } from "@cap/postgres";
 import { createStorageClient, storageWriteEncryption } from "@cap/storage";
 import { Worker, type Job } from "bullmq";
 import { Pool } from "pg";
@@ -96,21 +97,16 @@ async function run(job: Job<RenderJob>) {
       }),
     );
     const size = (await stat(output)).size;
-    await pool.query("BEGIN");
-    try {
-      const asset = await pool.query<{ id: string }>(
+    await withTransaction(pool, async (transaction) => {
+      const asset = await transaction.query<{ id: string }>(
         "INSERT INTO recording_assets(recording_id,processing_version,kind,object_key,content_type,size_bytes) VALUES($1,$2,'EXPORT',$3,'video/mp4',$4) RETURNING id",
-        [claimed.rows[0].recording_id, d.revision, key, size],
+        [claimed.rows[0]!.recording_id, d.revision, key, size],
       );
-      await pool.query(
+      await transaction.query(
         "UPDATE render_jobs SET status='COMPLETED',output_asset_id=$2,completed_at=now() WHERE id=$1",
         [d.renderJobId, asset.rows[0]!.id],
       );
-      await pool.query("COMMIT");
-    } catch (e) {
-      await pool.query("ROLLBACK");
-      throw e;
-    }
+    });
   } catch (e) {
     await pool.query(
       "UPDATE render_jobs SET status='FAILED',error_category=$2,completed_at=now() WHERE id=$1",
@@ -141,3 +137,15 @@ server.listen(
   Number(process.env.RENDER_WORKER_HEALTH_PORT ?? "8083"),
   "0.0.0.0",
 );
+async function shutdown() {
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  // Lets the in-flight render finish so its `finally` removes the scratch
+  // directory; BullMQ re-queues anything still running when the deadline hits.
+  await worker.close();
+  await redis.quit();
+  await pool.end();
+}
+process.once("SIGTERM", () => void shutdown());
+process.once("SIGINT", () => void shutdown());
