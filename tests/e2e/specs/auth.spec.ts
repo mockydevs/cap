@@ -47,8 +47,11 @@ test("signs up, reaches an authenticated session, and can sign out", async ({
   await page.getByRole("button", { name: "Create account" }).click();
 
   await expect(page).toHaveURL(/\/record$/);
-  await expect(page.getByText("E2E Test User", { exact: false })).toBeVisible();
-  await expect(page.getByText("owner", { exact: false })).toBeVisible();
+  const account = page.locator(".account-pill");
+  await expect(
+    account.getByText("E2E Test User", { exact: true }),
+  ).toBeVisible();
+  await expect(account.getByText("owner", { exact: true })).toBeVisible();
 
   await page.goto("/library");
   await expect(page).toHaveURL(/\/library/);

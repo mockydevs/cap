@@ -22,10 +22,14 @@ export async function signUpAndSignIn(
   label = "E2E",
 ): Promise<SignedUpUser> {
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const emailLabel = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
   const user: SignedUpUser = {
     displayName: `${label} User ${unique}`,
     workspaceName: `${label} Workspace ${unique}`,
-    email: `e2e-${label.toLowerCase()}-${unique}@example.com`,
+    email: `e2e-${emailLabel}-${unique}@example.com`,
     password: "a genuinely random password",
   };
   await page.goto("/signup");

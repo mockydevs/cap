@@ -44,7 +44,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
 
   // CommentThread: available regardless of processing status.
   await expect(page.getByRole("heading", { name: "Comments" })).toBeVisible();
-  await expect(page.getByLabel("Comment")).toBeVisible();
+  await expect(page.getByLabel("Comment", { exact: true })).toBeVisible();
 
   // ShareControls: rendered for the owner (canManageSharing).
   await expect(
