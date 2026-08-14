@@ -24,8 +24,11 @@ test("adds a timestamped comment to a recording you own", async ({ page }) => {
   // video loaded yet timestampMs stays 0, so it reads "Comment at 00:00".
   await page.getByRole("button", { name: "Comment at 00:00" }).click();
 
-  await expect(page.getByText(commentBody)).toBeVisible();
-  await expect(page.getByText(user.displayName)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
+  // Scoped to the posted comment: the author's name also labels the account
+  // menu in the workspace bar.
+  const comment = page.locator(".comment").filter({ hasText: commentBody });
+  await expect(comment).toBeVisible();
+  await expect(comment.getByText(user.displayName)).toBeVisible();
+  await expect(comment.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(comment.getByRole("button", { name: "Delete" })).toBeVisible();
 });

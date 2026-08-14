@@ -12,10 +12,13 @@ test("shows the empty state for a freshly created workspace", async ({
   await expect(
     page.getByRole("heading", { name: "No recordings yet" }),
   ).toBeVisible();
+  // The empty state's own call to action, and the workspace bar's permanent one.
   await expect(
     page.getByRole("link", { name: "Start recording" }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "New recording" })).toBeVisible();
+  await expect(
+    page.locator(".workspace-record").getByText("Record"),
+  ).toBeVisible();
 });
 
 test("lists a recording created through the upload API", async ({ page }) => {

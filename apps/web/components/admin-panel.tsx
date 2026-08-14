@@ -258,11 +258,14 @@ export function AdminPanel() {
 
   const saveRetention = async () => {
     if (!retention) return;
-    const response = await sendJson(
-      "/api/workspace/retention-policy",
-      "PUT",
-      retention,
-    );
+    // Only the two fields the endpoint accepts. `retention` holds whatever the
+    // GET returned — including `updatedAt` — and the PUT schema is strict, so
+    // sending the object back as-is is rejected. TypeScript cannot see this:
+    // the state is typed, but it is filled from an unvalidated `response.json()`.
+    const response = await sendJson("/api/workspace/retention-policy", "PUT", {
+      recordingRetentionDays: retention.recordingRetentionDays,
+      deletedRecordingPurgeDays: retention.deletedRecordingPurgeDays,
+    });
     setMessage(
       response.ok
         ? "Retention policy saved."
