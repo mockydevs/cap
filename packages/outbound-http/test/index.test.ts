@@ -3,6 +3,8 @@ import {
   assertSafeOutboundUrl,
   isPublicIpAddress,
   privateHostAllowlist,
+  pinnedLookup,
+  safeFetch,
   UnsafeOutboundUrlError,
 } from "../src/index";
 
@@ -90,5 +92,66 @@ describe("outbound URL policy", () => {
       "ai.internal",
       "service.example",
     ]);
+  });
+});
+
+describe("pinnedLookup", () => {
+  const approved = [
+    { address: "93.184.216.34", family: 4 },
+    { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+  ];
+
+  it("answers every lookup from the approved set, ignoring the hostname", () => {
+    const lookup = pinnedLookup(approved);
+    const seen: unknown[] = [];
+    lookup("rebound.example.com", { all: true }, (error, addresses) =>
+      seen.push([error, addresses]),
+    );
+    expect(seen).toEqual([[null, approved]]);
+  });
+
+  it("returns the first address and its family when `all` is not requested", () => {
+    const lookup = pinnedLookup(approved);
+    const seen: unknown[] = [];
+    lookup("rebound.example.com", {}, (error, address, family) =>
+      seen.push([error, address, family]),
+    );
+    expect(seen).toEqual([[null, "93.184.216.34", 4]]);
+  });
+
+  it("cannot be mutated through the array the caller passed in", () => {
+    const mutable = [{ address: "93.184.216.34", family: 4 }];
+    const lookup = pinnedLookup(mutable);
+    mutable.push({ address: "169.254.169.254", family: 4 });
+
+    const seen: unknown[] = [];
+    lookup("rebound.example.com", { all: true }, (_error, addresses) =>
+      seen.push(addresses),
+    );
+    expect(seen).toEqual([[{ address: "93.184.216.34", family: 4 }]]);
+  });
+});
+
+describe("safeFetch", () => {
+  it("refuses an unsafe URL before opening any connection", async () => {
+    await expect(
+      safeFetch(
+        "https://metadata.example.com",
+        {},
+        {
+          lookup: resolvesTo("169.254.169.254"),
+        },
+      ),
+    ).rejects.toThrow(UnsafeOutboundUrlError);
+  });
+
+  it("refuses plaintext regardless of where it resolves", async () => {
+    await expect(
+      safeFetch(
+        "http://example.com",
+        {},
+        { lookup: resolvesTo("93.184.216.34") },
+      ),
+    ).rejects.toThrow(UnsafeOutboundUrlError);
   });
 });

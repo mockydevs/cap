@@ -10,8 +10,8 @@ import {
 } from "@cap/crypto";
 import { AiServiceError } from "./service";
 import {
-  assertSafeOutboundUrl,
   privateHostAllowlist,
+  safeFetch,
   UnsafeOutboundUrlError,
 } from "@cap/outbound-http";
 
@@ -60,25 +60,29 @@ export async function validateProviderCredential(input: {
 }): Promise<{ models: string[] }> {
   const root = endpoint(input.provider, input.baseUrl).replace(/\/$/, "");
   const modelsUrl = `${root}${input.provider === "ANTHROPIC" ? "/v1/models" : "/models"}`;
+  let response: Response;
   try {
-    await assertSafeOutboundUrl(modelsUrl, {
-      allowedPrivateHosts: privateHostAllowlist(
-        process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
-      ),
-    });
+    response = await safeFetch(
+      modelsUrl,
+      {
+        headers:
+          input.provider === "ANTHROPIC"
+            ? { "x-api-key": input.apiKey, "anthropic-version": "2023-06-01" }
+            : { authorization: `Bearer ${input.apiKey}` },
+        signal: AbortSignal.timeout(10_000),
+        redirect: "error",
+      },
+      {
+        allowedPrivateHosts: privateHostAllowlist(
+          process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+        ),
+      },
+    );
   } catch (error) {
     if (error instanceof UnsafeOutboundUrlError)
       throw new AiServiceError("AI_PROVIDER_VALIDATION_FAILED", 400);
     throw error;
   }
-  const response = await fetch(modelsUrl, {
-    headers:
-      input.provider === "ANTHROPIC"
-        ? { "x-api-key": input.apiKey, "anthropic-version": "2023-06-01" }
-        : { authorization: `Bearer ${input.apiKey}` },
-    signal: AbortSignal.timeout(10_000),
-    redirect: "error",
-  });
   if (!response.ok)
     throw new AiServiceError("AI_PROVIDER_VALIDATION_FAILED", 400);
   const models = await response

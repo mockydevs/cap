@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "undici": "^7.16.0"
+  },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "typescript": "^5.8.3",

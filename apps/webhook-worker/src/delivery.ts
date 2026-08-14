@@ -2,10 +2,7 @@ import { createHmac } from "node:crypto";
 import type { KMSClient } from "@aws-sdk/client-kms";
 import { decryptCredential } from "@cap/crypto";
 import type { Pool } from "pg";
-import {
-  assertSafeOutboundUrl,
-  privateHostAllowlist,
-} from "@cap/outbound-http";
+import { privateHostAllowlist, safeFetch } from "@cap/outbound-http";
 
 interface DeliveryRow {
   id: string;
@@ -61,23 +58,26 @@ export async function deliverWebhook(
   let responseExcerpt = "";
   let succeeded = false;
   try {
-    await assertSafeOutboundUrl(delivery.url, {
-      allowedPrivateHosts: privateHostAllowlist(
-        process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
-      ),
-    });
-    const response = await fetch(delivery.url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-cap-event": delivery.event,
-        "x-cap-delivery-id": delivery.id,
-        "x-cap-signature-256": signature,
+    const response = await safeFetch(
+      delivery.url,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-cap-event": delivery.event,
+          "x-cap-delivery-id": delivery.id,
+          "x-cap-signature-256": signature,
+        },
+        body,
+        signal: AbortSignal.timeout(10_000),
+        redirect: "manual",
       },
-      body,
-      signal: AbortSignal.timeout(10_000),
-      redirect: "manual",
-    });
+      {
+        allowedPrivateHosts: privateHostAllowlist(
+          process.env.OUTBOUND_PRIVATE_HOST_ALLOWLIST,
+        ),
+      },
+    );
     responseStatus = response.status;
     responseExcerpt = (await response.text()).slice(0, 2_000);
     succeeded = response.ok;

@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { Agent } from "undici";
 
 export interface ResolvedAddress {
   address: string;
@@ -135,15 +136,18 @@ async function defaultLookup(hostname: string): Promise<ResolvedAddress[]> {
 }
 
 /**
- * Rejects credentials, non-HTTPS URLs, local names, private IP literals, and
- * hostnames that currently resolve to any non-public address. Call this again
- * immediately before each request; validation only at configuration time is
- * insufficient because DNS answers can change.
+ * The addresses a request to this URL may connect to, or `null` when the
+ * operator allowlisted the host and asked for no further constraint.
  */
-export async function assertSafeOutboundUrl(
+type ValidatedOutboundUrl = {
+  url: URL;
+  pinned: readonly ResolvedAddress[] | null;
+};
+
+async function validateOutboundUrl(
   value: string,
-  policy: OutboundUrlPolicy = {},
-): Promise<URL> {
+  policy: OutboundUrlPolicy,
+): Promise<ValidatedOutboundUrl> {
   let url: URL;
   try {
     url = new URL(value);
@@ -159,7 +163,7 @@ export async function assertSafeOutboundUrl(
   const allowlist = new Set(
     (policy.allowedPrivateHosts ?? []).map((host) => normalizeHost(host)),
   );
-  if (allowlist.has(hostname)) return url;
+  if (allowlist.has(hostname)) return { url, pinned: null };
   if (url.port && url.port !== "443")
     throw new UnsafeOutboundUrlError(
       "non-standard ports require an operator-allowlisted hostname",
@@ -176,7 +180,10 @@ export async function assertSafeOutboundUrl(
   if (isIP(hostname)) {
     if (!isPublicIpAddress(hostname))
       throw new UnsafeOutboundUrlError("private or reserved IP address");
-    return url;
+    return {
+      url,
+      pinned: [{ address: hostname, family: isIP(hostname) }],
+    };
   }
 
   let addresses: readonly ResolvedAddress[];
@@ -191,5 +198,90 @@ export async function assertSafeOutboundUrl(
     throw new UnsafeOutboundUrlError(
       "hostname resolves to a private or reserved address",
     );
-  return url;
+  return { url, pinned: addresses };
+}
+
+/**
+ * Rejects credentials, non-HTTPS URLs, local names, private IP literals, and
+ * hostnames that currently resolve to any non-public address.
+ *
+ * Validating a hostname does not by itself make a later request to it safe:
+ * whoever controls the name can answer this lookup publicly and the connection's
+ * lookup privately. Prefer {@link safeFetch}, which connects only to the
+ * addresses this check approved.
+ */
+export async function assertSafeOutboundUrl(
+  value: string,
+  policy: OutboundUrlPolicy = {},
+): Promise<URL> {
+  return (await validateOutboundUrl(value, policy)).url;
+}
+
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | ResolvedAddress[],
+  family?: number,
+) => void;
+
+/**
+ * A `dns.lookup` that answers with the approved addresses and nothing else.
+ * Validation rejects an empty result, so there is always a first address.
+ *
+ * Exported for tests: this substitution is what stops the connection resolving
+ * the hostname a second time, so its contract with Node's resolver is worth
+ * pinning down directly.
+ */
+export function pinnedLookup(addresses: readonly ResolvedAddress[]) {
+  const approved = [...addresses];
+  const first = approved[0]!;
+  return (
+    _hostname: string,
+    options: { all?: boolean | undefined },
+    callback: LookupCallback,
+  ) =>
+    options.all
+      ? callback(null, approved)
+      : callback(null, first.address, first.family);
+}
+
+/** Node's fetch accepts an undici dispatcher that the DOM types do not declare. */
+type DispatcherInit = RequestInit & { dispatcher?: Agent };
+
+/**
+ * Validates `value` and performs the request against the addresses that
+ * validation approved.
+ *
+ * Checking a URL and then handing the hostname to `fetch` leaves the name to be
+ * resolved a second time, which is a window for whoever runs its DNS to answer
+ * publicly for the check and privately for the connection. Connecting to the
+ * already-approved addresses removes that second resolution.
+ *
+ * The body is buffered before the connection pool is torn down, so the returned
+ * response is complete rather than streaming.
+ */
+export async function safeFetch(
+  value: string,
+  init: RequestInit = {},
+  policy: OutboundUrlPolicy = {},
+): Promise<Response> {
+  const { url, pinned } = await validateOutboundUrl(value, policy);
+  // An allowlisted host is the operator's own service; honour whatever its name
+  // resolves to rather than freezing it here.
+  if (!pinned) return fetch(url, init);
+
+  const dispatcher = new Agent({ connect: { lookup: pinnedLookup(pinned) } });
+  try {
+    const response = await fetch(url, {
+      ...init,
+      dispatcher,
+    } as DispatcherInit);
+    const body = await response.arrayBuffer();
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  } finally {
+    await dispatcher.close();
+  }
 }
