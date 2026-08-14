@@ -13,8 +13,26 @@ receive a Coolify domain.
 2. Create private Coolify services for PostgreSQL and Redis. Enable persistent storage and provider-level encrypted backups.
 3. Configure the web, media, render, transcription, and AI worker containers from this repository. Only the web service is public.
 4. Put every value from `.env.example` in the Coolify secret store. Use a distinct least-privilege AWS identity for each container when workload identity is unavailable. Never reuse the web identity for a worker.
-5. Run database migrations exactly once before deploying application containers: `pnpm --filter @cap/web db:migrate`.
-6. Deploy workers, then web. Check `/api/health` on web and `/health` on every worker before shifting traffic.
+5. Set `TRUSTED_PROXY_HOP_COUNT` to the number of reverse proxies in front of web — `1` for a stock Coolify/Traefik deployment. See "Request addresses" below before changing it.
+6. Deploy workers, then web. The web container applies migrations itself under a PostgreSQL advisory lock, so concurrent replicas serialize rather than race; no separate migration step is required. Check `/api/health` on web and `/health` on every worker before shifting traffic — web reports 503 until it can reach both PostgreSQL and Redis.
+
+To inspect or apply migrations by hand — a staging dry run, or a forward fix — use `pnpm --filter @cap/web db:migrate`. It writes the same `drizzle.__drizzle_migrations` ledger the container uses, so running it first simply leaves the container with nothing to do.
+
+## Request addresses
+
+Rate limiting on sign-in, sign-up, sharing, and comments keys on the caller's
+address, which web reads from `x-forwarded-for` counting `TRUSTED_PROXY_HOP_COUNT`
+entries from the right. Each proxy appends the peer it accepted, so entries a
+caller writes stay to the left of the ones the proxies added.
+
+Two deployment requirements follow, and both are load-bearing:
+
+- The count must match reality. Setting it higher than the number of real proxies hands a caller a forgeable position in the chain, and every limit above becomes bypassable by sending a different value per request.
+- Web must be unreachable except through those proxies. A container exposed directly on a public port lets a caller write the whole header.
+
+Set `TRUSTED_PROXY_HOP_COUNT=0` where nothing fronts the app. No request is then
+attributed to an address and all callers share one bucket, which throttles
+legitimate traffic but cannot be evaded.
 
 The AI worker is optional. Configure the dedicated `AI_CREDENTIALS_KMS_KEY_ARN` and attach only the Terraform web-encrypt and worker-decrypt policies to their respective services. Deployments without AWS set `AI_CREDENTIALS_LOCAL_KEY` instead, and must include it in their secret backups — see [ADR 0003](decisions/0003-credential-envelope.md). Leave workspace AI disabled until an administrator adds and routes a validated provider connection and explicitly approves external processing. Deployment-wide credentials are a compatibility fallback and should remain disabled.
 

@@ -12,6 +12,14 @@ x-app-environment: &app-environment
   AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
   OUTBOUND_PRIVATE_HOST_ALLOWLIST: ${OUTBOUND_PRIVATE_HOST_ALLOWLIST:-}
 
+# Every service shares a host with PostgreSQL and Redis in the single-node
+# topology this file describes, so each one is capped: an oversized recording
+# should fail its own job rather than starve the database. Raise these for a
+# host with more to give; the transcode and export workers want it first.
+x-limits: &default-limits
+  mem_limit: ${DEFAULT_MEM_LIMIT:-512m}
+  cpus: ${DEFAULT_CPUS:-0.5}
+
 services:
   web:
     build:
@@ -22,9 +30,15 @@ services:
     labels:
       - "traefik.docker.network=coolify"
     restart: unless-stopped
+    mem_limit: ${WEB_MEM_LIMIT:-1g}
+    cpus: ${WEB_CPUS:-1.0}
     environment:
       <<: *app-environment
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?Set the public HTTPS application URL}
+      # Reverse proxies between the internet and this container. Rate limits
+      # read the client address this many entries from the right of
+      # x-forwarded-for, so an over-count lets callers forge it.
+      TRUSTED_PROXY_HOP_COUNT: ${TRUSTED_PROXY_HOP_COUNT:-1}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:?Set the Google web OAuth client ID}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:?Set the Google web OAuth client secret}
       GOOGLE_DESKTOP_OAUTH_CLIENT_ID: ${GOOGLE_DESKTOP_OAUTH_CLIENT_ID:-}
@@ -52,6 +66,8 @@ services:
       context: .
       dockerfile: apps/media-worker/Dockerfile
     restart: unless-stopped
+    mem_limit: ${MEDIA_WORKER_MEM_LIMIT:-2g}
+    cpus: ${MEDIA_WORKER_CPUS:-2.0}
     environment:
       <<: *app-environment
       MEDIA_WORKER_CONCURRENCY: ${MEDIA_WORKER_CONCURRENCY:-1}
@@ -63,6 +79,8 @@ services:
       context: .
       dockerfile: apps/transcription-worker/Dockerfile
     restart: unless-stopped
+    mem_limit: ${TRANSCRIPTION_WORKER_MEM_LIMIT:-1g}
+    cpus: ${TRANSCRIPTION_WORKER_CPUS:-1.0}
     environment:
       <<: *app-environment
       TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-openai-compatible}
@@ -87,6 +105,8 @@ services:
       context: .
       dockerfile: apps/render-worker/Dockerfile
     restart: unless-stopped
+    mem_limit: ${RENDER_WORKER_MEM_LIMIT:-3g}
+    cpus: ${RENDER_WORKER_CPUS:-2.0}
     environment:
       <<: *app-environment
       RENDER_WORKER_CONCURRENCY: ${RENDER_WORKER_CONCURRENCY:-1}
@@ -99,6 +119,7 @@ services:
       context: .
       dockerfile: apps/ai-worker/Dockerfile
     restart: unless-stopped
+    <<: *default-limits
     environment:
       <<: *app-environment
       AI_PROVIDER: ${AI_PROVIDER:-OPENAI}
@@ -120,6 +141,7 @@ services:
       context: .
       dockerfile: apps/webhook-worker/Dockerfile
     restart: unless-stopped
+    <<: *default-limits
     environment:
       <<: *app-environment
       WEBHOOK_WORKER_CONCURRENCY: ${WEBHOOK_WORKER_CONCURRENCY:-4}
