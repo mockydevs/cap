@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 
 export type SignedUpUser = {
@@ -42,13 +41,6 @@ export async function signUpAndSignIn(
 ): Promise<SignedUpUser> {
   await presentAsDistinctClient(page);
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const address = randomUUID().replaceAll("-", "").match(/.{4}/g)!.slice(0, 6);
-  await page.setExtraHTTPHeaders({
-    // Each helper call represents a separate user. Give those users distinct
-    // TEST-NET IPv6 addresses so the real signup limiter does not treat the
-    // entire CI runner as one client (including Playwright retries).
-    "x-forwarded-for": `2001:db8:${address.join(":")}`,
-  });
   const emailLabel = label
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
