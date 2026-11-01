@@ -6,7 +6,8 @@
 Reads TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT (repository variables)
 and fails if either is missing, so no release ships without signed updates.
 On Windows it also bundles the FFmpeg fetched by fetch-windows-ffmpeg.py;
-dev builds and `cargo check` never need it.
+dev builds and `cargo check` never need it. Linux .deb installs are updated
+by downloading the new .deb, so no Linux updater artifact is made.
 """
 
 import json
@@ -31,7 +32,7 @@ if not re.match(r"^https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*latest\.json$", end
     sys.exit(1)
 
 config = {
-    "bundle": {"createUpdaterArtifacts": True},
+    "bundle": {"createUpdaterArtifacts": not sys.platform.startswith("linux")},
     "plugins": {
         "updater": {
             "pubkey": pubkey,

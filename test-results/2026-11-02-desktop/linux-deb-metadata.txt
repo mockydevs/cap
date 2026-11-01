@@ -1,15 +1,15 @@
-Local build (updater artifacts off: no signing key on this machine). CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech
+Local build, release-config Linux settings (no updater artifact). CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech
 == sha256
-ff53fc316513e81f69868464c1faaf93d38848abae51bfaca31fa1daecba6d2b  Cap_0.2.0-beta.6_amd64.deb
+09bfbbb8fe422c39eff5417cffe708f6b8c97f81dcd345fedf86f58565e6935c  Cap_0.2.0-beta.6_amd64.deb
 == dpkg -I
  new Debian package, version 2.0.
- size 7959548 bytes: control archive=482 bytes.
+ size 7930166 bytes: control archive=481 bytes.
      223 bytes,     9 lines      control
      384 bytes,     5 lines      md5sums
  Package: cap
  Version: 0.2.0-beta.6
  Architecture: amd64
- Installed-Size: 22817
+ Installed-Size: 22788
  Maintainer: mocky
  Priority: optional
  Depends: ffmpeg, libwebkit2gtk-4.1-0, libgtk-3-0
@@ -32,4 +32,4 @@ drwxr-xr-x 0 usr/share/icons/hicolor/128x128/apps
 drwxr-xr-x 0 usr/share/applications
 -rw-r--r-- 207 usr/share/applications/Cap.desktop
 drwxr-xr-x 0 usr/bin
--rwxr-xr-x 23310864 usr/bin/cap-desktop
+-rwxr-xr-x 23280968 usr/bin/cap-desktop

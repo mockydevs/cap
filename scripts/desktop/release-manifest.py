@@ -4,8 +4,8 @@
         --commit SHA --download-base https://meetings.calari.tech/downloads/ \
         [--linux available|pending] [--windows available|pending]
 
-DIR holds the installers the release workflow built and checked in this run
-(and their .sig files). Only files listed here can be marked "available";
+DIR holds the installers the release workflow built and checked in this run,
+and the Windows installer's updater .sig. Only files listed here can be marked "available";
 macOS stays "signing_pending" until signing exists. Writes into DIR:
   cap-desktop-manifest.json  download hub v1: only schema_version + artifacts;
                              a pending entry is just platform + status
@@ -27,9 +27,10 @@ import sys
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
-# platform -> (installer suffix, updater platform key)
+# platform -> (installer suffix, updater platform key). Linux .deb installs
+# are updated manually by downloading the new .deb, so they have no key.
 PLATFORMS = {
-    "linux-x86_64": ("linux-x86_64.deb", "linux-x86_64-deb"),
+    "linux-x86_64": ("linux-x86_64.deb", None),
     "windows-x86_64": ("windows-x86_64-setup.exe", "windows-x86_64-nsis"),
     "macos-aarch64": ("macos-aarch64.dmg", None),
     "macos-x86_64": ("macos-x86_64.dmg", None),
@@ -87,23 +88,25 @@ def main() -> None:
         entry = {"platform": platform, "status": status}
         if status == "available":
             path = args.dir / filename
-            sig = args.dir / f"{filename}.sig"
             if not regular_file(path) or path.stat().st_size == 0:
                 fail(f"{filename} is missing or not a regular file")
-            if not regular_file(sig):
-                fail(f"{filename}.sig is missing: updater signing is required")
             digest = sha256(path)
             entry = {"platform": platform, "version": args.version, "filename": filename,
                      "bytes": path.stat().st_size, "sha256": digest, "status": status}
-            sig_digest = sha256(sig)
             sums.append(f"{digest}  {filename}")
+        artifacts.append(entry)
+        if status != "available" or updater_key is None:
+            continue
+        # Updates are offered only with a signature; never an unsigned one.
+        sig = args.dir / f"{filename}.sig"
+        if regular_file(sig) and sig.stat().st_size > 0:
+            sig_digest = sha256(sig)
             sums.append(f"{sig_digest}  {sig.name}")
             updater[updater_key] = {
                 "payload": {"filename": filename, "bytes": entry["bytes"], "sha256": digest},
                 "signature": {"filename": sig.name, "bytes": sig.stat().st_size,
                               "sha256": sig_digest},
             }
-        artifacts.append(entry)
 
     manifest = {"schema_version": 1, "artifacts": artifacts}
     write(args.dir / "cap-desktop-manifest.json", manifest)

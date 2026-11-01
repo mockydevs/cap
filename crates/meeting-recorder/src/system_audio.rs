@@ -113,16 +113,27 @@ mod windows_loopback {
     use wasapi::{Direction, SampleType, StreamMode, WaveFormat};
     use windows_sys::Win32::{
         Foundation::{
-            CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, GENERIC_WRITE, HANDLE,
+            CloseHandle, GetLastError, LocalFree, ERROR_PIPE_CONNECTED, GENERIC_READ, HANDLE,
             INVALID_HANDLE_VALUE,
+        },
+        Security::{
+            Authorization::{
+                ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+                SDDL_REVISION_1,
+            },
+            GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY,
+            TOKEN_USER,
         },
         Storage::FileSystem::{
             CreateFileW, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE, OPEN_EXISTING,
             PIPE_ACCESS_OUTBOUND,
         },
-        System::Pipes::{
-            ConnectNamedPipe, CreateNamedPipeW, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
-            PIPE_WAIT,
+        System::{
+            Pipes::{
+                ConnectNamedPipe, CreateNamedPipeW, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+                PIPE_WAIT,
+            },
+            Threading::{GetCurrentProcess, OpenProcessToken},
         },
     };
 
@@ -141,6 +152,70 @@ mod windows_loopback {
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(Some(0)).collect()
+    }
+
+    /// Only this Windows user (and SYSTEM) may open the pipe: it carries
+    /// meeting audio. The default security would let other users read it.
+    struct PipeSecurity(PSECURITY_DESCRIPTOR);
+
+    impl PipeSecurity {
+        fn current_user() -> Result<Self, String> {
+            let err = || "Could not secure system audio recording.".to_owned();
+            unsafe {
+                let mut token: HANDLE = std::ptr::null_mut();
+                if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+                    return Err(err());
+                }
+                let mut len = 0u32;
+                GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut len);
+                // u64 storage keeps TOKEN_USER (pointers inside) aligned.
+                let mut buf = vec![0u64; (len as usize).div_ceil(8).max(1)];
+                let ok =
+                    GetTokenInformation(token, TokenUser, buf.as_mut_ptr().cast(), len, &mut len);
+                CloseHandle(token);
+                if ok == 0 {
+                    return Err(err());
+                }
+                let user = &*(buf.as_ptr() as *const TOKEN_USER);
+                let mut sid_text: *mut u16 = std::ptr::null_mut();
+                if ConvertSidToStringSidW(user.User.Sid, &mut sid_text) == 0 {
+                    return Err(err());
+                }
+                let mut n = 0;
+                while *sid_text.add(n) != 0 {
+                    n += 1;
+                }
+                let sid = String::from_utf16_lossy(std::slice::from_raw_parts(sid_text, n));
+                LocalFree(sid_text.cast());
+                // Protected DACL: full access for this user and SYSTEM only.
+                let sddl = wide(&format!("D:P(A;;GA;;;{sid})(A;;GA;;;SY)"));
+                let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+                if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                ) == 0
+                {
+                    return Err(err());
+                }
+                Ok(Self(descriptor))
+            }
+        }
+
+        fn attributes(&self) -> SECURITY_ATTRIBUTES {
+            SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: self.0,
+                bInheritHandle: 0,
+            }
+        }
+    }
+
+    impl Drop for PipeSecurity {
+        fn drop(&mut self) {
+            unsafe { LocalFree(self.0.cast()) };
+        }
     }
 
     /// A running loopback capture. FFmpeg reads it from [`Loopback::path`].
@@ -168,7 +243,9 @@ mod windows_loopback {
         pub(super) fn start_pipe() -> Result<Self, String> {
             let path = format!(r"\\.\pipe\cap-loopback-{}", uuid::Uuid::new_v4().simple());
             let name = wide(&path);
-            // One instance, this machine only, default security (this user).
+            let security = PipeSecurity::current_user()?;
+            let attributes = security.attributes();
+            // One instance, this machine only, this user only.
             let handle = unsafe {
                 CreateNamedPipeW(
                     name.as_ptr(),
@@ -178,7 +255,7 @@ mod windows_loopback {
                     1 << 20,
                     0,
                     0,
-                    std::ptr::null(),
+                    &attributes,
                 )
             };
             if handle == INVALID_HANDLE_VALUE {
@@ -202,20 +279,23 @@ mod windows_loopback {
             &self.path
         }
 
-        /// Stops capture. Safe to call twice and when FFmpeg never connected.
+        /// Stops capture. Safe to call twice and when FFmpeg never connected;
+        /// never waits more than about two seconds.
         pub fn stop(&mut self) {
             self.stop.store(true, Ordering::SeqCst);
             let Some(thread) = self.thread.take() else {
                 return;
             };
-            // If FFmpeg never opened the pipe, the thread is still waiting
-            // for it: connect once ourselves so it wakes up and exits.
-            if !thread.is_finished() {
-                let name = wide(&self.path);
+            // If FFmpeg never opened the pipe, the writer is still waiting
+            // for a reader: open it ourselves (as a reader, since the pipe is
+            // outbound) so it wakes up, sees the stop flag and exits.
+            let name = wide(&self.path);
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !thread.is_finished() && Instant::now() < deadline {
                 let h = unsafe {
                     CreateFileW(
                         name.as_ptr(),
-                        GENERIC_WRITE,
+                        GENERIC_READ,
                         0,
                         std::ptr::null(),
                         OPEN_EXISTING,
@@ -226,8 +306,13 @@ mod windows_loopback {
                 if h != INVALID_HANDLE_VALUE {
                     unsafe { CloseHandle(h) };
                 }
+                std::thread::sleep(Duration::from_millis(20));
             }
-            let _ = thread.join();
+            if thread.is_finished() {
+                let _ = thread.join();
+            }
+            // Otherwise the writer is blocked on a stuck reader; it exits when
+            // that reader closes. Stopping a recording must never hang.
         }
     }
 

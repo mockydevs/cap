@@ -283,9 +283,13 @@ fn reveal_project(app: AppHandle, project_id: String) -> Result<(), String> {
 }
 
 /// Release builds get the update address and signing key from the release
-/// workflow; other builds have no endpoint, so this does nothing.
+/// workflow; other builds have no endpoint, so this does nothing. Linux
+/// installs are updated by downloading the new .deb, so Linux never checks.
 fn check_for_update(app: &AppHandle) {
     use tauri_plugin_updater::UpdaterExt;
+    if cfg!(target_os = "linux") {
+        return;
+    }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let Ok(updater) = handle.updater() else {
