@@ -7,11 +7,13 @@ name: Desktop release
 #
 #   gh workflow run desktop-release.yml --ref <branch> [-f include_mac=true]
 #
-# Secrets (Linux + Windows): TAURI_SIGNING_PRIVATE_KEY,
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (the updater signing key).
-# Variables: CAP_DEFAULT_SERVER_URL (https://meetings.calari.tech),
-#   TAURI_UPDATER_PUBKEY (public half of the updater key),
-#   CAP_UPDATER_ENDPOINT (https://<host>/<path>/latest.json).
+# Required variable: CAP_DEFAULT_SERVER_URL (https://meetings.calari.tech).
+# Optional variables, embedded so the app can find a future signed update:
+#   TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT (set both or neither).
+# No update payload is built yet: Tauri CLI 2.11 signs updates without the
+# version, which the app's required signed-version check rejects. The
+# updater signing secrets stay in place for when a version-bound signer is
+# reviewed.
 # macOS lane only (off by default, Mac signing is deferred): APPLE_CERTIFICATE,
 #   APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID,
 #   APPLE_PASSWORD, APPLE_TEAM_ID.
@@ -35,6 +37,8 @@ env:
   CAP_DEFAULT_SERVER_URL: ${{ vars.CAP_DEFAULT_SERVER_URL }}
   TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
   CAP_UPDATER_ENDPOINT: ${{ vars.CAP_UPDATER_ENDPOINT }}
+  # Bounded parallel builds: the recorder tests pull in the whole server.
+  CARGO_BUILD_JOBS: 2
 
 jobs:
   preflight:
@@ -44,8 +48,6 @@ jobs:
       version: ${{ steps.check.outputs.version }}
       download_base: ${{ steps.check.outputs.download_base }}
     env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -64,10 +66,7 @@ jobs:
           version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Bad version $version" >&2; exit 1; }
           missing=()
-          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
-            CAP_DEFAULT_SERVER_URL TAURI_UPDATER_PUBKEY CAP_UPDATER_ENDPOINT; do
-            [[ -n "${!name:-}" ]] || missing+=("$name")
-          done
+          [[ -n "${CAP_DEFAULT_SERVER_URL:-}" ]] || missing+=(CAP_DEFAULT_SERVER_URL)
           if [[ "$INCLUDE_MAC" == true ]]; then
             for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
               APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
@@ -81,11 +80,18 @@ jobs:
           if [[ ! "$CAP_DEFAULT_SERVER_URL" =~ ^https://[A-Za-z0-9.-]+$ || "$CAP_DEFAULT_SERVER_URL" =~ localhost|^https://127\. ]]; then
             echo "CAP_DEFAULT_SERVER_URL must be the production https origin" >&2; exit 1
           fi
-          if [[ ! "$CAP_UPDATER_ENDPOINT" =~ ^(https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*)latest\.json$ ]]; then
-            echo "CAP_UPDATER_ENDPOINT must be https://<host>/<path>/latest.json" >&2; exit 1
+          if [[ -n "${TAURI_UPDATER_PUBKEY:-}" && -z "${CAP_UPDATER_ENDPOINT:-}" ]] || [[ -z "${TAURI_UPDATER_PUBKEY:-}" && -n "${CAP_UPDATER_ENDPOINT:-}" ]]; then
+            echo "Set both TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT, or neither" >&2; exit 1
+          fi
+          base=""
+          if [[ -n "${CAP_UPDATER_ENDPOINT:-}" ]]; then
+            if [[ ! "$CAP_UPDATER_ENDPOINT" =~ ^(https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*)latest\.json$ ]]; then
+              echo "CAP_UPDATER_ENDPOINT must be https://<host>/<path>/latest.json" >&2; exit 1
+            fi
+            base="${BASH_REMATCH[1]}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "download_base=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "download_base=$base" >> "$GITHUB_OUTPUT"
 
   linux:
     needs: preflight
@@ -124,9 +130,6 @@ jobs:
       - name: Microphone + speaker capture through PulseAudio (synthetic audio)
         run: scripts/desktop/pulse-capture-smoke.sh
       - name: Build the .deb (manual updates; no updater artifact)
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           python3 -I scripts/desktop/release-config.py > "$RUNNER_TEMP/tauri.release.json"
@@ -142,10 +145,10 @@ jobs:
           [[ "$(dpkg-deb -f "$deb" Package)" == cap ]]
           [[ "$(dpkg-deb -f "$deb" Version)" == "$VERSION" ]]
           [[ "$(dpkg-deb -f "$deb" Architecture)" == amd64 ]]
-          dpkg-deb -f "$deb" Depends | grep -qw ffmpeg
+          dpkg-deb -f "$deb" Depends | grep -w ffmpeg > /dev/null
           tmp="$(mktemp -d)"; dpkg-deb -x "$deb" "$tmp"
-          file "$tmp/usr/bin/cap-desktop" | grep -q "ELF 64-bit LSB pie executable, x86-64"
-          strings "$tmp/usr/bin/cap-desktop" | grep -qF "$CAP_DEFAULT_SERVER_URL"
+          file "$tmp/usr/bin/cap-desktop" | grep "ELF 64-bit LSB pie executable, x86-64" > /dev/null
+          strings "$tmp/usr/bin/cap-desktop" | grep -F "$CAP_DEFAULT_SERVER_URL" > /dev/null
           docker run --rm -v "$PWD/$deb:/tmp/cap.deb:ro" ubuntu:24.04 bash -euc '
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq && apt-get install -y -qq /tmp/cap.deb >/dev/null
@@ -222,10 +225,7 @@ jobs:
       - name: Recorder unit tests on Windows (loopback pipe, pacing, devices)
         run: cargo test -p cap-meeting-recorder --lib --locked
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
-      - name: Build the signed installer
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Build the installer
         run: |
           set -euo pipefail
           python -I scripts/desktop/release-config.py > "$RUNNER_TEMP/tauri.release.json"
@@ -238,7 +238,6 @@ jobs:
           $name = "cap-desktop_$($env:VERSION)_windows-x86_64-setup.exe"
           $src = "apps/desktop/src-tauri/target/release/bundle/nsis/Cap_$($env:VERSION)_x64-setup.exe"
           Copy-Item $src "$out/$name"
-          Copy-Item "$src.sig" "$out/$name.sig"
           python -I scripts/desktop/check-pe.py "$out/$name"
           if ($LASTEXITCODE -ne 0) { throw 'installer is not an x86-64 Windows program' }
           $p = Start-Process -FilePath "$out/$name" -ArgumentList '/S' -Wait -PassThru
@@ -292,8 +291,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build the signed, notarized DMG
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -339,7 +336,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist/desktop
           python3 -I scripts/desktop/release-manifest.py --dir dist/desktop \
-            --version "$VERSION" --commit "$GITHUB_SHA" --download-base "$DOWNLOAD_BASE" \
+            --version "$VERSION" --commit "$GITHUB_SHA" ${DOWNLOAD_BASE:+--download-base "$DOWNLOAD_BASE"} \
             --linux "$LINUX" --windows "$WINDOWS"
           ls -la dist/desktop
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -434,12 +434,69 @@ mod tests {
     /// Windows only: FFmpeg's side of the pipe gets a real-time stream of
     /// silence when nothing is captured, and stop never hangs, whether or
     /// not a reader connected.
+    /// The pipe's access list as SDDL, read through an open client handle.
+    #[cfg(windows)]
+    #[allow(unsafe_code)]
+    fn pipe_dacl(file: &std::fs::File) -> String {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::{
+            Foundation::LocalFree,
+            Security::{
+                Authorization::{
+                    ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo,
+                    SDDL_REVISION_1, SE_KERNEL_OBJECT,
+                },
+                DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+            },
+        };
+        unsafe {
+            let mut sd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+            let rc = GetSecurityInfo(
+                file.as_raw_handle(),
+                SE_KERNEL_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut sd,
+            );
+            assert_eq!(rc, 0, "GetSecurityInfo failed");
+            let mut text: *mut u16 = std::ptr::null_mut();
+            let ok = ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                sd,
+                SDDL_REVISION_1,
+                DACL_SECURITY_INFORMATION,
+                &mut text,
+                std::ptr::null_mut(),
+            );
+            assert_ne!(ok, 0);
+            let mut n = 0;
+            while *text.add(n) != 0 {
+                n += 1;
+            }
+            let out = String::from_utf16_lossy(std::slice::from_raw_parts(text, n));
+            LocalFree(text.cast());
+            LocalFree(sd.cast());
+            out
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn the_windows_pipe_streams_silence_and_stops_cleanly() {
         use std::io::Read;
         let mut lb = windows_loopback::Loopback::start_pipe().unwrap();
         let mut reader = std::fs::File::open(lb.path()).unwrap();
+        let dacl = pipe_dacl(&reader);
+        // Protected, only this user and SYSTEM: no Everyone/anonymous entry.
+        assert!(dacl.starts_with("D:P"), "{dacl}");
+        assert_eq!(dacl.matches("(A;").count(), 2, "{dacl}");
+        assert!(dacl.contains(";;;SY)"), "{dacl}");
+        assert!(
+            !dacl.contains(";;;WD)") && !dacl.contains(";;;AN)"),
+            "{dacl}"
+        );
         let mut buf = vec![0u8; RATE as usize * FRAME_BYTES / 2]; // 0.5 s
         let started = Instant::now();
         reader.read_exact(&mut buf).unwrap();
