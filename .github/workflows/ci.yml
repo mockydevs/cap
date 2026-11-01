@@ -174,6 +174,74 @@ jobs:
       # the only automated coverage the desktop app has.
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
+  rust-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cap
+          POSTGRES_PASSWORD: cap
+          POSTGRES_DB: cap_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cap -d cap_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CAP_TEST_DATABASE_URL: postgres://cap:cap@127.0.0.1:5432/cap_test
+      CAP_TEST_FFMPEG: ffmpeg
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - name: Install synthetic capture test dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Both variables above are required: otherwise the DB/capture tests skip.
+      - run: cargo test --workspace --locked
+
+  extension-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22 }
+      - run: node --test apps/extension/test/chunker.test.mjs apps/extension/test/uploads.test.mjs
+
+  cap-server-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: docker build -f crates/cap-server/Dockerfile -t cap-server:ci .
+
+  desktop-platform-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.95.0
+      # Compile native platform code; this does not test audio devices or capture hardware.
+      - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+
   # Branch protection requires only this stable check name. Every CI job above
   # must pass first, including every container matrix entry.
   ci-required:
@@ -186,6 +254,10 @@ jobs:
         container-security,
         rust-security,
         desktop-rust,
+        rust-workspace,
+        extension-tests,
+        cap-server-build,
+        desktop-platform-check,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -198,7 +270,11 @@ jobs:
           CONTAINERS: ${{ needs.container-security.result }}
           RUST_SECURITY: ${{ needs.rust-security.result }}
           DESKTOP_RUST: ${{ needs.desktop-rust.result }}
+          RUST_WORKSPACE: ${{ needs.rust-workspace.result }}
+          EXTENSION_TESTS: ${{ needs.extension-tests.result }}
+          CAP_SERVER_BUILD: ${{ needs.cap-server-build.result }}
+          DESKTOP_PLATFORMS: ${{ needs.desktop-platform-check.result }}
         run: |
-          for result in "$CHECKS" "$INTEGRATION" "$E2E" "$CONTAINERS" "$RUST_SECURITY" "$DESKTOP_RUST"; do
+          for result in "$CHECKS" "$INTEGRATION" "$E2E" "$CONTAINERS" "$RUST_SECURITY" "$DESKTOP_RUST" "$RUST_WORKSPACE" "$EXTENSION_TESTS" "$CAP_SERVER_BUILD" "$DESKTOP_PLATFORMS"; do
             test "$result" = success
           done
