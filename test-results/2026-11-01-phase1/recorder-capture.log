@@ -1,25 +1,33 @@
    Compiling cap-meeting-recorder v0.1.0 (/home/don/code/cap/crates/meeting-recorder)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s
      Running unittests src/lib.rs (target/debug/deps/cap_meeting_recorder-e2f627ad624d1e1c)
 
-running 4 tests
+running 8 tests
+test devices::tests::windows_defaults_to_the_first_microphone_and_needs_a_loopback_device ... ok
+test devices::tests::linux_and_mac_rules ... ok
 test ffmpeg::tests::segment_list_parsing ... ok
+test devices::tests::parses_device_lists ... ok
 test ffmpeg::tests::audio_mode_ignores_a_video_input ... ok
 test ffmpeg::tests::video_mode_adds_the_screen_and_webm_segments ... ok
 test ffmpeg::tests::audio_mode_mixes_inputs_into_segments_and_pcm ... ok
+test tests::only_confirmed_uploads_count_as_acknowledged ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
      Running tests/capture.rs (target/debug/deps/capture-b4f0a271ef7751ab)
 
-running 5 tests
+running 9 tests
 test prolonged_silence_warns_then_stops ... ok
+test a_stalled_upload_never_delays_stop ... ok
 test user_stop_closes_the_last_segment_and_uploads_it ... ok
-test video_mode_uploads_webm_segments ... ok
+test an_outage_keeps_audio_until_the_server_is_back ... ok
 test a_crashed_session_is_recovered_as_interrupted ... ok
+test expired_or_replaced_credentials_never_lose_audio ... ok
+test a_conflicting_chunk_is_quarantined_not_deleted ... ok
+test video_mode_uploads_webm_segments ... ok
 test source_ending_stops_finalizes_and_delivers_every_segment ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.80s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.97s
 
    Doc-tests cap_meeting_recorder
 

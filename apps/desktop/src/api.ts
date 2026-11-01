@@ -73,7 +73,12 @@ export type MeetingEvent =
     }
   | { kind: "stopped"; reason: string }
   | { kind: "finalized"; meeting_id: string }
-  | { kind: "failed"; message: string };
+  | { kind: "failed"; message: string; reauthorize: boolean };
+export type AudioDevices = {
+  microphones: { id: string; name: string }[];
+  systemAudioAvailable: boolean;
+  platform: "linux" | "windows" | "macos";
+};
 export type MeetingOptions = {
   title: string;
   mode: "audio" | "video";
@@ -95,4 +100,5 @@ export const meeting = {
   recording: () => invoke<string | null>("meeting_recording"),
   pendingLink: () => invoke<NoteTakerLink | null>("meeting_pending_link"),
   knownServer: () => invoke<string | null>("meeting_known_server"),
+  audioDevices: () => invoke<AudioDevices>("meeting_audio_devices"),
 };

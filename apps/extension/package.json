@@ -1,0 +1,8 @@
+{
+  "name": "@cap/extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/chunker.test.mjs test/uploads.test.mjs"
+  }
+}

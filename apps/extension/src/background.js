@@ -7,11 +7,11 @@ import {
   ApiError,
   MARKER,
   SIGNAL,
+  acceptableGaps,
   api,
+  drainMeeting,
   isMeetingUrl,
   pendingChunks,
-  uploadChunk,
-  deleteChunk,
 } from "./shared.js";
 
 const get = async (k) => (await chrome.storage.local.get(k))[k];
@@ -93,6 +93,8 @@ async function startRecording({ tabId, streamId, mode }) {
     useMic: options.useMic !== false,
   });
   if (!res?.ok) throw new Error(res?.error || "Could not start recording");
+  // The meeting keeps the credential it was created with, so pairing with
+  // another client later cannot strand its audio.
   await set({
     active: {
       meetingId: meeting.id,
@@ -100,99 +102,134 @@ async function startRecording({ tabId, streamId, mode }) {
       mode,
       startedAt: Date.now(),
       wasOnMeeting: isMeetingUrl(tab.url),
+      server,
+      token: d.token,
     },
   });
   badge("REC", "#c62828");
   return { meetingId: meeting.id };
 }
 
-async function finalize(meetingId, reason, lastSeq) {
-  const d = await get("device");
-  const server = await get("server");
-  if (!d || !server) return;
+// Meetings waiting to upload or finalize, keyed by meeting id. Each keeps
+// its own server and token.
+async function unfinished() {
+  return (await get("unfinished")) ?? {};
+}
+
+async function saveUnfinished(m) {
+  await set({ unfinished: { ...(await unfinished()), [m.meetingId]: m } });
+}
+
+async function dropUnfinished(meetingId) {
+  const all = await unfinished();
+  delete all[meetingId];
+  await set({ unfinished: all });
+}
+
+/// Uploads what is stored, then finalizes. Gaps are accepted only for audio
+/// this browser does not have or holds as quarantined; audio still waiting
+/// to upload keeps the meeting open, because the server refuses chunks after
+/// finalize. Returns "done", "retry" or "reauth".
+async function settle(m) {
+  const outcome = await drainMeeting(m.server, m.token, m.meetingId);
+  if (outcome !== "done") return outcome;
   const body = {
-    last_seq: Math.max(0, lastSeq),
-    stop_reason: reason,
-    ended_at: new Date().toISOString(),
+    last_seq: Math.max(0, m.lastSeq),
+    stop_reason: m.reason,
+    ended_at: m.endedAt ?? new Date().toISOString(),
     allow_missing: false,
   };
+  const path = `/v1/meetings/${m.meetingId}/finalize`;
   try {
-    await api(server, d.token, `/v1/meetings/${meetingId}/finalize`, {
-      method: "POST",
-      json: body,
-    });
+    await api(m.server, m.token, path, { method: "POST", json: body });
+    return "done";
   } catch (e) {
-    if (e instanceof ApiError && e.body?.error === "missing_chunks") {
-      // Re-send anything still stored locally, then accept the gaps.
-      for (const c of await pendingChunks(meetingId))
-        if (await uploadChunk(server, d.token, c))
-          await deleteChunk(meetingId, c.seq);
-      await api(server, d.token, `/v1/meetings/${meetingId}/finalize`, {
+    if (!(e instanceof ApiError)) return "retry";
+    if (e.status === 401 || e.status === 404) return "reauth";
+    if (e.body?.error === "no_audio") return "done";
+    if (
+      e.body?.error === "missing_chunks" &&
+      acceptableGaps(
+        e.body.missing_chunks ?? [],
+        await pendingChunks(m.meetingId),
+      )
+    ) {
+      await api(m.server, m.token, path, {
         method: "POST",
         json: { ...body, allow_missing: true },
       });
-    } else if (!(e instanceof ApiError && e.body?.error === "no_audio")) {
-      // Keep it for the recovery pass on the next start.
-      await set({ unfinished: { meetingId, reason, lastSeq } });
-      throw e;
+      return "done";
     }
+    return "retry";
   }
 }
 
 async function stopped({ meetingId, reason, lastSeq }) {
+  const active = await get("active");
   await chrome.storage.local.remove("active");
   badge("", null);
-  await finalize(meetingId, reason, lastSeq).catch((e) =>
-    console.warn("Cap: finalize failed", e),
-  );
+  if (!active || active.meetingId !== meetingId) return;
+  const m = {
+    meetingId,
+    server: active.server,
+    token: active.token,
+    reason,
+    lastSeq,
+    endedAt: new Date().toISOString(),
+  };
+  await saveUnfinished(m);
+  const outcome = await settle(m).catch(() => "retry");
+  if (outcome === "done") await dropUnfinished(meetingId);
   chrome.notifications.create(`stopped:${meetingId}`, {
     type: "basic",
     iconUrl: "src/icon.png",
     title: "Cap stopped recording",
     message:
-      reason === "user_stopped"
-        ? "Uploading the transcript to Calari."
-        : `Stopped (${reason.replaceAll("_", " ")}). Uploading to Calari.`,
+      outcome === "done"
+        ? "Sent to Calari."
+        : outcome === "reauth"
+          ? "Cap's pairing expired. The recording is saved in this browser and uploads after you pair with the same client again."
+          : "The recording is saved in this browser. Cap keeps retrying the upload.",
   });
 }
 
-// Recover a recording interrupted by a browser crash: upload what was saved
-// and finalize it as interrupted.
+// Retries every unfinished meeting, including one interrupted by a browser
+// crash (its stored chunks are uploaded and it is finalized as interrupted).
 async function recover() {
   const active = await get("active");
-  const unfinished = await get("unfinished");
-  if (!active && !unfinished) return;
-  if (await chrome.offscreen.hasDocument()) {
-    const s = await toOffscreen({ type: "status" }).catch(() => null);
+  if (active) {
+    const s = (await chrome.offscreen.hasDocument())
+      ? await toOffscreen({ type: "status" }).catch(() => null)
+      : null;
     if (s?.recording) return;
+    const chunks = await pendingChunks(active.meetingId);
+    await saveUnfinished({
+      meetingId: active.meetingId,
+      server: active.server,
+      token: active.token,
+      reason: "interrupted",
+      lastSeq: Math.max(-1, ...chunks.map((c) => c.seq)),
+    });
+    await chrome.storage.local.remove("active");
+    badge("", null);
   }
-  const d = await get("device");
-  const server = await get("server");
-  const id = active?.meetingId ?? unfinished.meetingId;
-  let last = unfinished?.lastSeq ?? -1;
-  if (d && server) {
-    for (const c of await pendingChunks(id)) {
-      last = Math.max(last, c.seq);
-      if (await uploadChunk(server, d.token, c)) await deleteChunk(id, c.seq);
+  for (const m of Object.values(await unfinished())) {
+    if (m.lastSeq < 0) {
+      // Find the highest chunk the server has seen if this browser kept none.
+      const view = await api(
+        m.server,
+        m.token,
+        `/v1/meetings/${m.meetingId}`,
+      ).catch(() => null);
+      if (view)
+        m.lastSeq = Math.max(
+          0,
+          view.received_chunks + view.missing_chunks.length - 1,
+        );
     }
-    const view = await api(server, d.token, `/v1/meetings/${id}`).catch(
-      () => null,
-    );
-    if (view?.state === "recording") {
-      const seen = view.received_chunks + view.missing_chunks.length - 1;
-      await api(server, d.token, `/v1/meetings/${id}/finalize`, {
-        method: "POST",
-        json: {
-          last_seq: Math.max(last, seen, 0),
-          stop_reason: unfinished?.reason ?? "interrupted",
-          ended_at: new Date().toISOString(),
-          allow_missing: true,
-        },
-      }).catch((e) => console.warn("Cap: recovery finalize failed", e));
-    }
+    const outcome = await settle(m).catch(() => "retry");
+    if (outcome === "done") await dropUnfinished(m.meetingId);
   }
-  await chrome.storage.local.remove(["active", "unfinished"]);
-  badge("", null);
 }
 
 // ---- Calendar: "[Cap: record audio|video]" in an event's description ----
@@ -300,6 +337,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (a && sender.tab?.id === a.tabId)
         await toOffscreen({ type: "signal", code: SIGNAL.meetingEnded });
     },
+    // Unfinished meetings keep their own credential, so unpairing never
+    // strands audio that is still waiting to upload.
     unpair: () => chrome.storage.local.remove(["device"]),
   };
   const h = handlers[msg.type];
@@ -388,11 +427,13 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "calendar-sync") syncCalendar();
+  else if (alarm.name === "retry-uploads") recover();
   else if (alarm.name.startsWith("meeting:")) remind(alarm.name.slice(8));
 });
 
 chrome.runtime.onStartup.addListener(recover);
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create("calendar-sync", { periodInMinutes: 5 });
+  chrome.alarms.create("retry-uploads", { periodInMinutes: 5 });
   recover();
 });

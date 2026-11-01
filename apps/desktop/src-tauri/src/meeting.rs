@@ -7,9 +7,15 @@ use cap_meeting_detector::{Config as DetectorConfig, Signal};
 use cap_meeting_protocol::{
     CaptureMode, DeviceKind, PairingKind, RedeemPairingRequest, RedeemPairingResponse,
 };
-use cap_meeting_recorder::{ffmpeg::Input, Client, Event, Session, StartOptions};
+use cap_meeting_recorder::{
+    devices::{self, AudioDevice, InputChoice, Platform},
+    Client, Event, Journal, Session, StartOptions,
+};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const KEYRING_SERVICE: &str = "cap-desktop";
@@ -133,66 +139,52 @@ pub fn meeting_unpair(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn inputs(opts: &MeetingOptions) -> Result<Vec<Input>, String> {
-    let mut list = Vec::new();
-    if opts.mode == CaptureMode::Video {
-        let id = opts
-            .video_source_id
-            .as_deref()
-            .ok_or("Choose a screen to record")?;
-        let (x, y, width, height) = crate::capture::source_geometry(id)?;
-        #[cfg(target_os = "linux")]
-        list.push(Input::LinuxX11 {
-            display: std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into()),
-            x,
-            y,
-            width,
-            height,
-        });
-        #[cfg(target_os = "windows")]
-        list.push(Input::WindowsGdi {
-            x,
-            y,
-            width,
-            height,
-        });
-        #[cfg(target_os = "macos")]
-        {
-            let _ = (x, y, width, height);
-            return Err("Video meeting mode is not available on macOS yet; use audio mode or the screen recorder.".into());
-        }
+/// Each meeting keeps its own credential, so a meeting recorded for one
+/// client still uploads after the app is paired with another.
+fn meeting_token_key(meeting_id: &str) -> String {
+    format!("meeting-token:{meeting_id}")
+}
+
+fn token_for_meeting(j: &Journal) -> Option<String> {
+    entry(&meeting_token_key(&j.meeting_id))
+        .ok()?
+        .get_password()
+        .ok()
+}
+
+fn forget_meeting_token(meeting_id: &str) {
+    if let Ok(e) = entry(&meeting_token_key(meeting_id)) {
+        let _ = e.delete_credential();
     }
-    #[cfg(target_os = "linux")]
-    {
-        list.push(Input::LinuxPulse {
-            source: opts
-                .microphone_id
-                .clone()
-                .unwrap_or_else(|| "default".into()),
-        });
-        if opts.system_audio {
-            list.push(Input::LinuxMonitor);
-        }
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let mic = opts.microphone_id.clone().ok_or("Choose a microphone")?;
-        list.push(Input::WindowsDshow { device: mic });
-        if opts.system_audio {
-            list.push(Input::WindowsDshow {
-                device: "virtual-audio-capturer".into(),
-            });
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        // System audio on macOS needs the ScreenCaptureKit helper, which has
-        // not been verified on real hardware; meeting mode records the mic.
-        list.push(Input::MacAvfoundation {
-            device: opts.microphone_id.clone().unwrap_or_else(|| "0".into()),
-        });
-    }
-    Ok(list)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDevices {
+    pub microphones: Vec<AudioDevice>,
+    pub system_audio_available: bool,
+    pub platform: &'static str,
+}
+
+/// Microphones FFmpeg can see, and whether other people's audio (the
+/// computer's sound) can be recorded on this machine.
+#[tauri::command]
+pub async fn meeting_audio_devices() -> Result<AudioDevices, String> {
+    let platform = Platform::current();
+    let found = tauri::async_runtime::spawn_blocking(move || {
+        devices::list_audio_devices("ffmpeg", platform)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(AudioDevices {
+        system_audio_available: devices::system_audio_available(platform, &found),
+        microphones: found.into_iter().filter(|d| !d.loopback).collect(),
+        platform: match platform {
+            Platform::Linux => "linux",
+            Platform::Windows => "windows",
+            Platform::Mac => "macos",
+        },
+    })
 }
 
 #[tauri::command]
@@ -216,7 +208,24 @@ pub async fn meeting_start(
         .map_err(|_| "Pair Cap with a Calari client first.")?;
     let token = device_token().ok_or("Pair Cap with a Calari client first.")?;
     let client = Client::new(&server, &token).map_err(|e| e.to_string())?;
-    let list = inputs(&options)?;
+    let platform = Platform::current();
+    let screen = match (&options.mode, options.video_source_id.as_deref()) {
+        (CaptureMode::Video, Some(id)) => Some(crate::capture::source_geometry(id)?),
+        _ => None,
+    };
+    let choice = InputChoice {
+        mode: options.mode,
+        microphone_id: options.microphone_id.clone(),
+        system_audio: options.system_audio,
+        screen,
+        x11_display: std::env::var("DISPLAY").ok(),
+    };
+    let list = tauri::async_runtime::spawn_blocking(move || {
+        let found = devices::list_audio_devices("ffmpeg", platform);
+        devices::resolve_inputs(platform, &choice, &found)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     let dir = meetings_dir(&app)?.join(uuid::Uuid::new_v4().to_string());
     let watch = options
         .watch_window
@@ -245,15 +254,22 @@ pub async fn meeting_start(
             segment_seconds: cap_meeting_recorder::ffmpeg::SEGMENT_SECONDS,
             detector: DetectorConfig::default(),
             watch_window: watch,
-            on_event: Box::new(move |ev: Event| {
+            on_event: Arc::new(move |ev: Event| {
+                if let Event::Finalized { meeting_id } = &ev {
+                    forget_meeting_token(meeting_id);
+                }
                 let _ = emitter.emit("meeting-event", ev);
             }),
+            upload_interval: std::time::Duration::from_secs(3),
         })
     })
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
     let id = session.meeting_id.clone();
+    entry(&meeting_token_key(&id))?
+        .set_password(&token)
+        .map_err(|e| e.to_string())?;
     *state.0.lock().map_err(|e| e.to_string())? = Some(session);
     Ok(id)
 }
@@ -270,8 +286,9 @@ pub async fn meeting_signal(state: State<'_, MeetingState>, action: String) -> R
         }
         "stop" => {
             let session = state.0.lock().map_err(|e| e.to_string())?.take();
-            if let Some(s) = session {
-                // Waits for FFmpeg to close the last segment and the upload.
+            if let Some(mut s) = session {
+                // Returns once FFmpeg has closed the last segment; uploading
+                // carries on in the background and reports by event.
                 tauri::async_runtime::spawn_blocking(move || s.stop())
                     .await
                     .map_err(|e| e.to_string())?;
@@ -298,8 +315,9 @@ pub fn recover_in_background(app: &AppHandle) {
     let Ok(root) = meetings_dir(app) else { return };
     let emitter = app.clone();
     std::thread::spawn(move || {
-        let done = cap_meeting_recorder::recover_all(&root, |_| device_token());
+        let done = cap_meeting_recorder::recover_all(&root, token_for_meeting);
         for id in done {
+            forget_meeting_token(&id);
             let _ = emitter.emit("meeting-event", Event::Finalized { meeting_id: id });
         }
     });

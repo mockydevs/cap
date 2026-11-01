@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import {
   meeting,
+  type AudioDevices,
   type MeetingEvent,
   type NoteTakerLink,
   type PairInfo,
@@ -34,6 +35,8 @@ export function MeetingPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<NoteTakerLink | null>(null);
+  const [devices, setDevices] = useState<AudioDevices | null>(null);
+  const [microphone, setMicrophone] = useState("");
 
   const screens = sources.filter((s) => s.kind === "MONITOR");
 
@@ -105,6 +108,7 @@ export function MeetingPanel({
       const id = await meeting.start({
         title: overrideTitle || title,
         mode: m,
+        microphoneId: microphone || undefined,
         systemAudio,
         videoSourceId: m === "video" ? screen || screens[0]?.id : undefined,
         watchWindow: watchWindow || undefined,
@@ -124,6 +128,7 @@ export function MeetingPanel({
       const id = await meeting.start({
         title: l.title || "Meeting notes",
         mode: l.mode,
+        microphoneId: microphone || undefined,
         systemAudio,
         videoSourceId:
           l.mode === "video" ? screen || screens[0]?.id : undefined,
@@ -242,14 +247,35 @@ export function MeetingPanel({
               ))}
             </select>
           )}
+          {devices && devices.microphones.length > 0 && (
+            <select
+              value={microphone}
+              onChange={(e) => setMicrophone(e.target.value)}
+              aria-label="Microphone"
+            >
+              {devices.microphones.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          )}
           <label>
             <input
               type="checkbox"
               checked={systemAudio}
+              disabled={devices !== null && !devices.systemAudioAvailable}
               onChange={(e) => setSystemAudio(e.target.checked)}
             />{" "}
             Include other people's audio (computer sound)
           </label>
+          {devices && !devices.systemAudioAvailable && (
+            <p className="card-subtitle">
+              {devices.platform === "windows"
+                ? 'This PC has no device that records its own sound. Enable "Stereo Mix" in Windows sound settings or install a loopback device, then reopen Cap.'
+                : "Recording the computer's sound is not available on this Mac yet, so only your microphone is recorded."}
+            </p>
+          )}
           <input
             className="record-title-input"
             placeholder="Stop when this window closes, e.g. Zoom Meeting (optional)"

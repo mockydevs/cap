@@ -2,15 +2,15 @@
 // standalone 30-second chunks, keeps the call audible, and asks the Rust
 // detector (detector.wasm) whether to warn or stop.
 
+import { createChunker } from "./chunker.js";
 import {
   CHUNK_MS,
   SIGNAL,
   STOP_REASONS,
-  putChunk,
-  deleteChunk,
+  drainMeeting,
   pendingChunks,
+  putChunk,
   sha256Hex,
-  uploadChunk,
 } from "./shared.js";
 
 let rec = null; // current recording session
@@ -54,7 +54,7 @@ async function start(msg) {
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       ctx.createMediaStreamSource(mic).connect(mix); // not to speakers: no echo
-    } catch (e) {
+    } catch {
       chrome.runtime.sendMessage({
         type: "offscreen-notice",
         text: "Microphone not available; recording the meeting tab only. Grant it in Cap options.",
@@ -76,56 +76,53 @@ async function start(msg) {
     msg.idleStopMs ?? 0,
     msg.hardMaxMs ?? 0,
   );
+  const mime = pickMime(video);
 
   rec = {
     meetingId: msg.meetingId,
     server: msg.server,
     token: msg.token,
-    mime: pickMime(video),
-    stream,
     tab,
     mic,
     ctx,
     analyser,
     detector,
-    seq: msg.nextSeq ?? 0,
-    offsetMs: msg.offsetMs ?? 0,
-    recorder: null,
-    chunkTimer: null,
-    tickTimer: null,
     uploading: false,
     stopping: false,
     lastWarn: 0,
+    tickTimer: null,
   };
-  for (const track of tab.getTracks())
-    track.onended = () => signal(SIGNAL.tabClosed);
-  if (mic)
-    for (const track of mic.getTracks())
-      track.onended = () => signal(SIGNAL.deviceLost);
-  nextChunk();
-  rec.tickTimer = setInterval(tick, 500);
-}
-
-function nextChunk() {
   const r = rec;
-  if (!r || r.stopping) return;
-  // A fresh MediaRecorder per chunk makes every chunk a complete, decodable
-  // file; the gap between recorders is a few milliseconds.
-  const recorder = new MediaRecorder(r.stream, {
-    mimeType: r.mime,
-    audioBitsPerSecond: 64_000,
-    videoBitsPerSecond: 1_500_000,
-  });
-  const startedAt = performance.now();
-  const seq = r.seq++;
-  const startMs = r.offsetMs;
-  const parts = [];
-  recorder.ondataavailable = (e) => e.data.size && parts.push(e.data);
-  recorder.onstop = async () => {
-    const durationMs = Math.round(performance.now() - startedAt);
-    r.offsetMs = startMs + durationMs;
-    const blob = new Blob(parts, { type: r.mime.split(";")[0] });
-    if (blob.size) {
+  r.chunker = createChunker({
+    chunkMs: CHUNK_MS,
+    now: () => performance.now(),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (t) => clearTimeout(t),
+    makeRecorder: () =>
+      new MediaRecorder(stream, {
+        mimeType: mime,
+        audioBitsPerSecond: 64_000,
+        videoBitsPerSecond: 1_500_000,
+      }),
+    startSeq: msg.nextSeq ?? 0,
+    baseOffsetMs: msg.offsetMs ?? 0,
+    onChunk: async ({ seq, startMs, durationMs, parts }) => {
+      const blob = new Blob(parts, { type: mime.split(";")[0] });
+      if (blob.size === 0) {
+        // Nothing was captured for this slot; record that so finalize can
+        // accept the gap instead of waiting for audio that never existed.
+        await putChunk({
+          meetingId: r.meetingId,
+          seq,
+          startMs,
+          durationMs,
+          blob,
+          sha256: "",
+          quarantined: true,
+          empty: true,
+        });
+        return;
+      }
       await putChunk({
         meetingId: r.meetingId,
         seq,
@@ -134,31 +131,23 @@ function nextChunk() {
         blob,
         sha256: await sha256Hex(blob),
       });
-      r.lastSeq = seq;
       drain();
-    } else {
-      r.seq = Math.min(r.seq, seq); // nothing captured; reuse the number
-    }
-    r.onChunkStored?.();
-  };
-  recorder.start();
-  r.recorder = recorder;
-  r.chunkTimer = setTimeout(() => {
-    nextChunk();
-    recorder.stop();
-  }, CHUNK_MS);
+    },
+  });
+  for (const track of tab.getTracks())
+    track.onended = () => signal(SIGNAL.tabClosed);
+  if (mic)
+    for (const track of mic.getTracks())
+      track.onended = () => signal(SIGNAL.deviceLost);
+  r.tickTimer = setInterval(tick, 500);
 }
 
 async function drain() {
   const r = rec;
-  if (!r || r.uploading) return;
+  if (!r || r.uploading) return "busy";
   r.uploading = true;
   try {
-    for (const c of await pendingChunks(r.meetingId)) {
-      if (await uploadChunk(r.server, r.token, c))
-        await deleteChunk(c.meetingId, c.seq);
-      else break; // offline or server busy: keep it, retry on the next chunk or tick
-    }
+    return await drainMeeting(r.server, r.token, r.meetingId);
   } finally {
     r.uploading = false;
   }
@@ -203,29 +192,39 @@ async function stop(reason) {
   if (!r || r.stopping) return;
   r.stopping = true;
   clearInterval(r.tickTimer);
-  clearTimeout(r.chunkTimer);
-  const stored = new Promise((resolve) => (r.onChunkStored = resolve));
-  if (r.recorder?.state === "recording") {
-    r.recorder.stop();
-    await Promise.race([stored, new Promise((res) => setTimeout(res, 5_000))]);
-  }
+  // Stopping capture never waits on the network.
+  const { lastSeq } = await Promise.race([
+    r.chunker.stop(),
+    new Promise((res) => setTimeout(() => res({ lastSeq: -1 }), 5_000)),
+  ]);
   for (const t of [...r.tab.getTracks(), ...(r.mic?.getTracks() ?? [])])
     t.stop();
   await r.ctx.close().catch(() => {});
-  // Give uploads up to a minute; anything left is retried by the service worker.
-  const deadline = Date.now() + 60_000;
-  while ((await pendingChunks(r.meetingId)).length && Date.now() < deadline) {
-    r.uploading = false;
-    await drain();
-    if ((await pendingChunks(r.meetingId)).length)
-      await new Promise((res) => setTimeout(res, 3_000));
-  }
   rec = null;
+  // Reply to Stop now; uploading continues without holding anything up.
+  void finishUploads(r, reason, lastSeq);
+}
+
+async function finishUploads(r, reason, lastSeq) {
+  // Up to a minute here; anything left stays in IndexedDB and the service
+  // worker keeps retrying it before finalizing.
+  const deadline = Date.now() + 60_000;
+  let outcome = "retry";
+  while (Date.now() < deadline) {
+    outcome = await drainMeeting(r.server, r.token, r.meetingId);
+    if (outcome !== "retry") break;
+    await new Promise((res) => setTimeout(res, 3_000));
+  }
+  const highest = Math.max(
+    lastSeq,
+    ...(await pendingChunks(r.meetingId)).map((c) => c.seq),
+  );
   chrome.runtime.sendMessage({
     type: "offscreen-stopped",
     meetingId: r.meetingId,
     reason,
-    lastSeq: r.seq - 1,
+    lastSeq: highest,
+    uploads: outcome,
   });
 }
 

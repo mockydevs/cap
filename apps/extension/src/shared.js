@@ -107,7 +107,18 @@ export async function api(
   return parsed;
 }
 
-/// Uploads one stored chunk. Resolves true when the server has it.
+// What the device should do with its copy of a chunk after an upload try.
+export function classifyUpload(status, body) {
+  if (status === 200 || status === 201) return "ack";
+  // Expired or replaced credential: keep the audio until the user pairs again.
+  if (status === 401 || status === 404) return "reauth";
+  if (status === 408 || status === 429 || status >= 500) return "retry";
+  // The server will never take these bytes for this slot. Keep them anyway.
+  return "quarantine";
+}
+
+/// Uploads one stored chunk: "ack" | "retry" | "reauth" | "quarantine".
+/// Only "ack" means the server has it; nothing else may delete local audio.
 export async function uploadChunk(server, token, c) {
   try {
     await api(server, token, `/v1/meetings/${c.meetingId}/chunks/${c.seq}`, {
@@ -120,21 +131,31 @@ export async function uploadChunk(server, token, c) {
         "x-chunk-duration-ms": String(Math.max(1, c.durationMs)),
       },
     });
-    return true;
+    return "ack";
   } catch (e) {
-    // 409 chunk_conflict / meeting_not_recording will never succeed; drop it.
-    if (
-      e instanceof ApiError &&
-      e.status >= 400 &&
-      e.status < 500 &&
-      e.status !== 408 &&
-      e.status !== 429
-    ) {
-      console.warn("Cap: chunk rejected permanently", c.seq, e.message);
-      return true;
-    }
-    return false;
+    return e instanceof ApiError ? classifyUpload(e.status, e.body) : "retry";
   }
+}
+
+/// Sends every stored, unquarantined chunk of a meeting in order. Returns
+/// "done" when nothing is left to send, else why it stopped.
+export async function drainMeeting(server, token, meetingId) {
+  for (const c of await pendingChunks(meetingId)) {
+    if (c.quarantined) continue;
+    const outcome = await uploadChunk(server, token, c);
+    if (outcome === "ack") await deleteChunk(c.meetingId, c.seq);
+    else if (outcome === "quarantine")
+      await putChunk({ ...c, quarantined: true });
+    else return outcome;
+  }
+  return "done";
+}
+
+/// Which missing chunks may be given up on: only ones this device does not
+/// have, or holds as quarantined. Anything still uploadable blocks finalize.
+export function acceptableGaps(missing, localChunks) {
+  const local = new Map(localChunks.map((c) => [c.seq, c]));
+  return missing.every((seq) => !local.has(seq) || local.get(seq).quarantined);
 }
 
 export const STOP_REASONS = {

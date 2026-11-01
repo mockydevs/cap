@@ -650,7 +650,8 @@ pub fn run() {
             meeting::meeting_signal,
             meeting::meeting_recording,
             meeting::meeting_pending_link,
-            meeting::meeting_known_server
+            meeting::meeting_known_server,
+            meeting::meeting_audio_devices
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Cap desktop")

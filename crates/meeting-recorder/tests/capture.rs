@@ -5,11 +5,15 @@
 //! `CAP_TEST_FFMPEG` (an FFmpeg binary or `tests/rust-e2e/ffmpeg-docker.sh`).
 
 use cap_meeting_detector::Config as DetectorConfig;
-use cap_meeting_protocol::{signing, CaptureMode, DeliveryPayload, StopReason};
-use cap_meeting_recorder::{ffmpeg::Input, Client, Event, Journal, Session, StartOptions};
+use cap_meeting_protocol::{
+    signing, CaptureMode, CreateMeetingRequest, DeliveryPayload, StopReason,
+};
+use cap_meeting_recorder::{
+    ffmpeg::Input, Client, Event, Journal, Session, StartOptions, UploadOutcome,
+};
 use cap_server::config::{Config, Integration, Secret, StorageConfig, TranscriptionConfig};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -88,7 +92,19 @@ fn env() -> Option<Env> {
         tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
         (server, state)
     });
-    // Pair like Calari would, then redeem like the desktop app.
+    let token = pair_token(&server);
+    Some(Env {
+        server,
+        token,
+        state,
+        rt,
+        deliveries,
+        ffmpeg,
+    })
+}
+
+/// Pairs like Calari would, then redeems like the desktop app.
+fn pair_token(server: &str) -> String {
     let http = reqwest::blocking::Client::new();
     let body = serde_json::to_vec(&serde_json::json!({
         "request_id": uuid::Uuid::new_v4().to_string(), "tenant_id": TENANT, "pairing_kind": "internal_team", "ttl_seconds": 300
@@ -117,54 +133,55 @@ fn env() -> Option<Env> {
         .unwrap()
         .json()
         .unwrap();
-    Some(Env {
-        server,
-        token: r["device_token"].as_str().unwrap().to_owned(),
-        state,
-        rt,
-        deliveries,
-        ffmpeg,
-    })
+    r["device_token"].as_str().unwrap().to_owned()
 }
 
-fn dir() -> PathBuf {
-    let d = PathBuf::from(format!("/tmp/cap-recorder-test-{}", uuid::Uuid::new_v4()));
+/// A fresh parent folder per test, so recovery only sees this test's meetings.
+fn dir() -> (PathBuf, PathBuf) {
+    let root = PathBuf::from(format!("/tmp/cap-recorder-test-{}", uuid::Uuid::new_v4()));
+    let d = root.join("meeting");
     std::fs::create_dir_all(&d).unwrap();
-    d
+    (root, d)
 }
 
-fn start(
-    e: &Env,
-    dir: &std::path::Path,
-    input: Input,
-    detector: DetectorConfig,
-) -> (Session, Arc<Mutex<Vec<Event>>>) {
-    start_with(e, dir, vec![input], CaptureMode::Audio, detector)
-}
+type Events = Arc<Mutex<Vec<Event>>>;
 
 fn start_with(
-    e: &Env,
-    dir: &std::path::Path,
+    client: Client,
+    ffmpeg: &str,
+    dir: &Path,
     inputs: Vec<Input>,
     mode: CaptureMode,
     detector: DetectorConfig,
-) -> (Session, Arc<Mutex<Vec<Event>>>) {
-    let events = Arc::new(Mutex::new(Vec::new()));
+) -> (Session, Events) {
+    let events: Events = Arc::new(Mutex::new(Vec::new()));
     let sink = events.clone();
     let s = Session::start(StartOptions {
-        client: Client::new(&e.server, &e.token).unwrap(),
+        client,
         dir: dir.to_path_buf(),
-        ffmpeg: e.ffmpeg.clone(),
+        ffmpeg: ffmpeg.to_owned(),
         inputs,
         title: "Synthetic test meeting".into(),
         mode,
         segment_seconds: 2,
         detector,
         watch_window: None,
-        on_event: Box::new(move |ev| sink.lock().unwrap().push(ev)),
+        on_event: Arc::new(move |ev| sink.lock().unwrap().push(ev)),
+        upload_interval: Duration::from_millis(500),
     })
     .unwrap();
     (s, events)
+}
+
+fn start(e: &Env, dir: &Path, input: Input, detector: DetectorConfig) -> (Session, Events) {
+    start_with(
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
+        dir,
+        vec![input],
+        CaptureMode::Audio,
+        detector,
+    )
 }
 
 fn wait_for(deadline: Duration, mut f: impl FnMut() -> bool) -> bool {
@@ -190,11 +207,63 @@ fn delivered(e: &Env) -> DeliveryPayload {
     serde_json::from_slice(&e.deliveries.lock().unwrap()[0]).unwrap()
 }
 
+/// Records `seconds` of synthetic audio into `dir` with FFmpeg alone, as if
+/// the app had died before uploading anything, and writes its journal.
+fn crashed_recording(e: &Env, dir: &Path, token: &str, seconds: u32) -> String {
+    let client = Client::new(&e.server, token).unwrap();
+    let m = client
+        .create_meeting(&CreateMeetingRequest {
+            title: "crashed".into(),
+            idempotency_key: uuid::Uuid::new_v4().to_string(),
+            started_at: chrono::Utc::now(),
+            capture_mode: CaptureMode::Audio,
+            provider_hint: None,
+            meeting_url: None,
+        })
+        .unwrap();
+    Journal {
+        meeting_id: m.id.clone(),
+        server: e.server.clone(),
+        mode: CaptureMode::Audio,
+        uploaded: vec![],
+        quarantined: vec![],
+        stop_reason: None,
+        finalized: false,
+    }
+    .save(dir)
+    .unwrap();
+    let args = cap_meeting_recorder::ffmpeg::args(
+        &[Input::Synthetic {
+            seconds,
+            silent: false,
+        }],
+        CaptureMode::Audio,
+        dir,
+        2,
+    );
+    let status = std::process::Command::new(&e.ffmpeg)
+        .args(&args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    m.id
+}
+
+fn segment_files(dir: &Path) -> usize {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .filter(|f| f.file_name().to_string_lossy().starts_with("seg_"))
+        .count()
+}
+
 #[test]
 fn source_ending_stops_finalizes_and_delivers_every_segment() {
     let Some(e) = env() else { return };
-    let d = dir();
-    let (session, events) = start(
+    let (_, d) = dir();
+    let (mut session, events) = start(
         &e,
         &d,
         Input::Synthetic {
@@ -204,6 +273,7 @@ fn source_ending_stops_finalizes_and_delivers_every_segment() {
         DetectorConfig::default(),
     );
     assert!(wait_for(Duration::from_secs(60), || !session.is_running()));
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
         evs.contains(&Event::Stopped {
@@ -231,8 +301,8 @@ fn source_ending_stops_finalizes_and_delivers_every_segment() {
 #[test]
 fn user_stop_closes_the_last_segment_and_uploads_it() {
     let Some(e) = env() else { return };
-    let d = dir();
-    let (session, events) = start(
+    let (_, d) = dir();
+    let (mut session, events) = start(
         &e,
         &d,
         Input::Synthetic {
@@ -243,6 +313,7 @@ fn user_stop_closes_the_last_segment_and_uploads_it() {
     );
     std::thread::sleep(Duration::from_secs(5));
     session.stop();
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
         evs.contains(&Event::Stopped {
@@ -263,7 +334,7 @@ fn user_stop_closes_the_last_segment_and_uploads_it() {
 #[test]
 fn prolonged_silence_warns_then_stops() {
     let Some(e) = env() else { return };
-    let d = dir();
+    let (_, d) = dir();
     let cfg = DetectorConfig {
         idle_warning_after_ms: 2_000,
         idle_stop_after_warning_ms: 2_000,
@@ -304,62 +375,12 @@ fn prolonged_silence_warns_then_stops() {
 }
 
 #[test]
-fn a_crashed_session_is_recovered_as_interrupted() {
-    let Some(e) = env() else { return };
-    let d = dir();
-    // Record segments with FFmpeg directly, as if the app died before finalizing.
-    let client = Client::new(&e.server, &e.token).unwrap();
-    let m = client
-        .create_meeting(&cap_meeting_protocol::CreateMeetingRequest {
-            title: "crashed".into(),
-            idempotency_key: "crash-1".into(),
-            started_at: chrono::Utc::now(),
-            capture_mode: CaptureMode::Audio,
-            provider_hint: None,
-            meeting_url: None,
-        })
-        .unwrap();
-    Journal {
-        meeting_id: m.id.clone(),
-        server: e.server.clone(),
-        mode: CaptureMode::Audio,
-        uploaded: vec![],
-        stop_reason: None,
-        finalized: false,
-    }
-    .save(&d)
-    .unwrap();
-    let args = cap_meeting_recorder::ffmpeg::args(
-        &[Input::Synthetic {
-            seconds: 5,
-            silent: false,
-        }],
-        CaptureMode::Audio,
-        &d,
-        2,
-    );
-    let status = std::process::Command::new(&e.ffmpeg)
-        .args(&args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .status()
-        .unwrap();
-    assert!(status.success());
-    let token = e.token.clone();
-    let done = cap_meeting_recorder::recover_all(d.parent().unwrap(), |_| Some(token.clone()));
-    assert!(done.contains(&m.id), "{done:?}");
-    let p = delivered(&e);
-    assert_eq!(p.meeting.stop_reason, StopReason::Interrupted);
-    assert!(p.meeting.partial);
-    e.rt.block_on(e.state.db.close());
-}
-
-#[test]
 fn video_mode_uploads_webm_segments() {
     let Some(e) = env() else { return };
-    let d = dir();
+    let (_, d) = dir();
     let (session, _) = start_with(
-        &e,
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
         &d,
         vec![
             Input::SyntheticVideo { seconds: 5 },
@@ -379,5 +400,177 @@ fn video_mode_uploads_webm_segments() {
         .flatten()
         .any(|f| f.file_name().to_string_lossy().ends_with(".webm")));
     assert!(p.transcript.segments.len() >= 2);
+    e.rt.block_on(e.state.db.close());
+}
+
+#[test]
+fn a_crashed_session_is_recovered_as_interrupted() {
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let id = crashed_recording(&e, &d, &e.token, 5);
+    let token = e.token.clone();
+    let done = cap_meeting_recorder::recover_all(&root, |_| Some(token.clone()));
+    assert_eq!(done, vec![id]);
+    let p = delivered(&e);
+    assert_eq!(p.meeting.stop_reason, StopReason::Interrupted);
+    assert!(p.meeting.partial);
+    e.rt.block_on(e.state.db.close());
+}
+
+/// Review finding 4: a stalled upload must not delay Stop.
+#[test]
+fn a_stalled_upload_never_delays_stop() {
+    let Ok(ffmpeg) = std::env::var("CAP_TEST_FFMPEG") else {
+        return;
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(async {
+        let meeting = serde_json::json!({
+            "id": "00000000-0000-4000-8000-0000000000aa", "pairing_kind": "internal_team", "capture_mode": "audio",
+            "client_id": null, "title": "t", "state": "recording", "received_chunks": 0, "missing_chunks": [],
+            "stop_reason": null, "delivery": null, "failure": null
+        });
+        let app = axum::Router::new()
+            .route("/v1/meetings", axum::routing::post(move || async move { (axum::http::StatusCode::CREATED, axum::Json(meeting)) }))
+            .route(
+                "/v1/meetings/{id}/chunks/{seq}",
+                axum::routing::put(|| async {
+                    tokio::time::sleep(Duration::from_secs(600)).await;
+                    "never"
+                }),
+            );
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", l.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+        url
+    });
+    let (_, d) = dir();
+    let (mut session, events) = start_with(
+        Client::new(&server, &format!("capdev_{}", "1".repeat(64))).unwrap(),
+        &ffmpeg,
+        &d,
+        vec![Input::Synthetic {
+            seconds: 120,
+            silent: false,
+        }],
+        CaptureMode::Audio,
+        DetectorConfig::default(),
+    );
+    std::thread::sleep(Duration::from_secs(5)); // segments exist, first upload is hanging
+    let t = Instant::now();
+    session.stop();
+    let took = t.elapsed();
+    assert!(took < Duration::from_secs(12), "stop took {took:?}");
+    assert!(events.lock().unwrap().contains(&Event::Stopped {
+        reason: StopReason::UserStopped
+    }));
+    assert!(segment_files(&d) >= 2, "audio stays on disk");
+    let j = Journal::load(&d).unwrap();
+    assert!(j.uploaded.is_empty() && !j.finalized);
+}
+
+/// Review finding 2: an outage keeps audio and finalizes later, complete.
+#[test]
+fn an_outage_keeps_audio_until_the_server_is_back() {
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let id = crashed_recording(&e, &d, &e.token, 5);
+    let mut j = Journal::load(&d).unwrap();
+    let real = j.server.clone();
+    j.server = "http://127.0.0.1:9".into(); // nothing listens here
+    j.save(&d).unwrap();
+    let token = e.token.clone();
+    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())).is_empty());
+    let after = Journal::load(&d).unwrap();
+    assert!(after.uploaded.is_empty() && !after.finalized);
+    let files = segment_files(&d);
+    let mut j = after;
+    j.server = real;
+    j.save(&d).unwrap();
+    assert_eq!(
+        cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())),
+        vec![id]
+    );
+    let p = delivered(&e);
+    assert_eq!(p.transcript.segments.len(), files, "every segment arrived");
+    assert_eq!(segment_files(&d), files, "local files are never deleted");
+    e.rt.block_on(e.state.db.close());
+}
+
+/// Review finding 2: an expired or replaced credential is not an upload, and
+/// each meeting recovers with its own credential after re-pairing A→B.
+#[test]
+fn expired_or_replaced_credentials_never_lose_audio() {
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let token_a = e.token.clone();
+    let id = crashed_recording(&e, &d, &token_a, 5);
+    e.rt.block_on(async {
+        sqlx::query("UPDATE meeting_devices SET expires_at = now() - interval '1 second'")
+            .execute(&e.state.db)
+            .await
+            .unwrap();
+    });
+    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token_a.clone())).is_empty());
+    let j = Journal::load(&d).unwrap();
+    assert!(
+        j.uploaded.is_empty() && j.quarantined.is_empty() && !j.finalized,
+        "{j:?}"
+    );
+
+    // The user pairs again (B). B cannot see meeting A's recording.
+    let token_b = pair_token(&e.server);
+    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token_b.clone())).is_empty());
+    assert!(!Journal::load(&d).unwrap().finalized);
+    assert!(e.deliveries.lock().unwrap().is_empty());
+
+    // With meeting A's own (valid) credential it completes.
+    e.rt.block_on(async {
+        sqlx::query("UPDATE meeting_devices SET expires_at = now() + interval '1 hour'")
+            .execute(&e.state.db)
+            .await
+            .unwrap();
+    });
+    let per_meeting = std::collections::HashMap::from([(id.clone(), token_a.clone())]);
+    let done =
+        cap_meeting_recorder::recover_all(&root, |j| per_meeting.get(&j.meeting_id).cloned());
+    assert_eq!(done, vec![id]);
+    assert!(!delivered(&e).transcript.segments.is_empty());
+    e.rt.block_on(e.state.db.close());
+}
+
+/// Review finding 2: a refused chunk is quarantined (kept), and only then is
+/// the gap accepted.
+#[test]
+fn a_conflicting_chunk_is_quarantined_not_deleted() {
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let id = crashed_recording(&e, &d, &e.token, 5);
+    // Different bytes already occupy slot 0 on the server.
+    let client = Client::new(&e.server, &e.token).unwrap();
+    let mut other = b"OggS\0\x02".to_vec();
+    other.extend([9u8; 64]);
+    let seg0 = cap_meeting_recorder::ffmpeg::Segment {
+        seq: 0,
+        file: "x.ogg".into(),
+        start_ms: 0,
+        end_ms: 2_000,
+    };
+    assert_eq!(
+        client.upload(&id, &seg0, other),
+        UploadOutcome::Acknowledged
+    );
+    let token = e.token.clone();
+    assert_eq!(
+        cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())),
+        vec![id]
+    );
+    let j = Journal::load(&d).unwrap();
+    assert_eq!(j.quarantined, vec![0]);
+    assert!(
+        d.join("seg_000000.ogg").is_file(),
+        "quarantined audio stays on disk"
+    );
+    assert!(delivered(&e).meeting.partial);
     e.rt.block_on(e.state.db.close());
 }
