@@ -1,0 +1,4 @@
+opus segments: 4
+vp8 segments with keyframes: 3
+vp8 segments WITHOUT keyframe flag: 1
+libopenh264 not in Ubuntu ffmpeg (Windows CI covers it)

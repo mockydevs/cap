@@ -201,7 +201,7 @@ jobs:
           # Meeting video: VP8 + Opus WebM segments.
           "$ff" -hide_banner -loglevel error -f lavfi -i "testsrc=size=320x240:rate=15:duration=3" \
             -f lavfi -i "sine=duration=3" -map 0:v -c:v libvpx -deadline realtime -cpu-used 8 \
-            -b:v 1500k -map 1:a -c:a libopus -b:a 48k -f segment -segment_time 1 \
+            -b:v 1500k -force_key_frames "expr:gte(t,n_forced*1)" -map 1:a -c:a libopus -b:a 48k -f segment -segment_time 1 \
             -segment_format webm "$d/vid_%06d.webm"
           (( $(find "$d" -name "vid_*.webm" | wc -l) >= 2 ))
           # Screen recorder on Windows: OpenH264 + AAC fragmented MP4 (capture.rs).
