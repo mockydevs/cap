@@ -13,13 +13,18 @@ import {
 } from "./shared.js";
 
 let rec = null; // current recording session
-const SAVE_FAILURE = "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
+const SAVE_FAILURE =
+  "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
 
 function reportSaveFailure(r) {
   r.saveFailed = true;
-  return chrome.runtime.sendMessage({
-    type: "offscreen-save-failed", meetingId: r.meetingId, error: SAVE_FAILURE,
-  }).catch(() => {});
+  return chrome.runtime
+    .sendMessage({
+      type: "offscreen-save-failed",
+      meetingId: r.meetingId,
+      error: SAVE_FAILURE,
+    })
+    .catch(() => {});
 }
 
 async function loadDetector() {
@@ -190,7 +195,9 @@ function tick() {
     });
   } else if (decision === 2) {
     // Failed saves already publish retry state to the service worker.
-    void stop(STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped").catch(() => {});
+    void stop(
+      STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped",
+    ).catch(() => {});
   }
   if (now % 10_000 < 500) drain();
 }
@@ -204,7 +211,9 @@ function signal(code) {
 function runStop(r) {
   r.attemptIsRetry = !!r.attemptStarted;
   r.attemptStarted = true;
-  r.stopTask = stopSession(r).finally(() => { r.stopTask = null; });
+  r.stopTask = stopSession(r).finally(() => {
+    r.stopTask = null;
+  });
   return r.stopTask;
 }
 
@@ -217,9 +226,14 @@ function stop(reason) {
     if (reason === "user_stopped" && r.saveFailed && !r.attemptIsRetry) {
       // The warning can arrive before initial shutdown has settled. Queue
       // one retry behind that attempt; repeated gestures share this promise.
-      r.retryTask = r.stopTask.catch(() => {}).then(() => {
-        if (rec === r) return runStop(r);
-      }).finally(() => { r.retryTask = null; });
+      r.retryTask = r.stopTask
+        .catch(() => {})
+        .then(() => {
+          if (rec === r) return runStop(r);
+        })
+        .finally(() => {
+          r.retryTask = null;
+        });
       return r.retryTask;
     }
     return r.stopTask;
@@ -231,7 +245,8 @@ async function stopSession(r) {
   r.stopping = true;
   clearInterval(r.tickTimer);
   const saved = r.chunker.stop().then(
-    (result) => ({ result }), (error) => ({ error }),
+    (result) => ({ result }),
+    (error) => ({ error }),
   );
   // Release capture even when storage is full. The chunker retains failed
   // bytes in this offscreen document and Stop can retry saving them.
@@ -273,7 +288,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         await stop(msg.reason ?? "user_stopped");
         return { ok: true };
       case "status":
-        return { recording: !!rec && !rec.stopping, pendingSave: !!rec?.stopping, meetingId: rec?.meetingId ?? null };
+        return {
+          recording: !!rec && !rec.stopping,
+          pendingSave: !!rec?.stopping,
+          meetingId: rec?.meetingId ?? null,
+        };
       default:
         return { ok: false };
     }
