@@ -558,8 +558,10 @@ async fn every_request_is_checked_with_calari_and_fails_closed() {
     );
     h.calari.lock().unwrap().status_role = "admin".into();
 
-    // Offboarded in Calari: the very next request ends the session.
+    // Offboarded in Calari (its exact answer: role "none", not active): the very next
+    // request ends the session.
     h.calari.lock().unwrap().active = false;
+    h.calari.lock().unwrap().status_role = "none".into();
     let (s, hd, _) = h
         .get(&format!("/meetings/{id}/parts/0"), Some(&cookie))
         .await;

@@ -357,6 +357,8 @@ pub struct LoginExchangeRequest {
 pub enum StaffRole {
     Admin,
     Staff,
+    /// Calari's status answer for someone who may not use Cap.
+    None,
 }
 
 /// The Calari staff member a sign-in code belongs to.
