@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createChunker } from "../src/chunker.js";
 
-function harness({ stopDelayMs }) {
+function harness({ stopDelayMs, saveChunk }) {
   let clock = 0;
   let timers = [];
   const chunks = [];
@@ -47,6 +47,7 @@ function harness({ stopDelayMs }) {
     },
     makeRecorder,
     onChunk: async (c) => {
+      if (saveChunk) await saveChunk(c);
       await new Promise((r) => setImmediate(r)); // e.g. hashing / IndexedDB
       chunks.push({ seq: c.seq, startMs: c.startMs, durationMs: c.durationMs });
     },
@@ -76,4 +77,34 @@ test("a stop right after start still yields one chunk with a positive duration",
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0].startMs, 0);
   assert.ok(chunks[0].durationMs >= 1);
+});
+
+
+test("stop waits for an earlier chunk still being saved", async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const { chunker, chunks, advance } = harness({
+    stopDelayMs: 0,
+    saveChunk: (c) => c.seq === 0 ? held : undefined,
+  });
+  await advance(30_100);
+  let stopped = false;
+  const stop = chunker.stop().then(() => { stopped = true; });
+  await advance(10);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stopped, false);
+  assert.deepEqual(chunks.map((c) => c.seq), [1]);
+  release();
+  await stop;
+  assert.deepEqual(chunks.map((c) => c.seq).sort(), [0, 1]);
+});
+
+test("stop reports failed chunk persistence instead of claiming success", async () => {
+  const { chunker, advance } = harness({
+    stopDelayMs: 0,
+    saveChunk: () => { throw new Error("storage full"); },
+  });
+  const stopped = assert.rejects(chunker.stop(), /storage full/);
+  await advance(10);
+  await stopped;
 });

@@ -20,7 +20,8 @@ const set = (o) => chrome.storage.local.set(o);
 
 async function device() {
   const d = await get("device");
-  if (!d || new Date(d.expiresAt) <= new Date()) return null;
+  const expiresAt = Date.parse(d?.expiresAt);
+  if (!d || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
   return d;
 }
 
@@ -61,6 +62,7 @@ async function pair({ code, deviceName, verifier }) {
       pairingKind: res.pairing_kind,
     },
   });
+  void recover().catch(() => {});
   return {
     clientName: res.client_display_name,
     pairingKind: res.pairing_kind,
@@ -116,7 +118,7 @@ async function signInWithCalari({ mode }) {
 
 async function startRecording({ tabId, streamId, mode }) {
   const d = await device();
-  if (!d) throw new Error("Pair Cap with a Calari client first.");
+  if (!d) throw new Error("Sign in with Calari and choose a client first.");
   if (await get("active")) throw new Error("Cap is already recording.");
   const server = await get("server");
   const tab = await chrome.tabs.get(tabId);
@@ -130,6 +132,12 @@ async function startRecording({ tabId, streamId, mode }) {
       capture_mode: mode === "video" ? "video" : "audio",
       meeting_url: isMeetingUrl(tab.url) ? tab.url : null,
     },
+  }).catch(async (error) => {
+    if (error instanceof ApiError && error.status === 401) {
+      await chrome.storage.local.remove("device");
+      throw new Error("Your Calari sign-in expired. Sign in again to start recording.");
+    }
+    throw error;
   });
   await ensureOffscreen();
   const res = await toOffscreen({
@@ -179,33 +187,26 @@ async function dropUnfinished(meetingId) {
 /// this browser does not have or holds as quarantined; audio still waiting
 /// to upload keeps the meeting open, because the server refuses chunks after
 /// finalize. Returns "done", "retry" or "reauth".
+async function adoptMeeting(m) {
+  // A new pairing can resume only its own client's recording; the server
+  // authorizes adoption and preserves the meeting's original binding.
+  const current = await device();
+  if (!current || current.token === m.token || (await get("server")) !== m.server)
+    return false;
+  try {
+    await api(m.server, current.token, `/v1/meetings/${m.meetingId}/adopt`, { method: "POST" });
+    m.token = current.token;
+    await saveUnfinished(m);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function settle(m) {
   let outcome = await drainMeeting(m.server, m.token, m.meetingId);
-  if (outcome === "reauth") {
-    // The meeting's own credential expired. If Cap has since been paired
-    // again, the server lets that pairing take the meeting over, but only
-    // for the same client, and the meeting keeps its original binding.
-    const current = await device();
-    if (
-      current &&
-      current.token !== m.token &&
-      (await get("server")) === m.server
-    ) {
-      try {
-        await api(
-          m.server,
-          current.token,
-          `/v1/meetings/${m.meetingId}/adopt`,
-          { method: "POST" },
-        );
-        m.token = current.token;
-        await saveUnfinished(m);
-        outcome = await drainMeeting(m.server, m.token, m.meetingId);
-      } catch {
-        return "reauth";
-      }
-    }
-  }
+  if (outcome === "reauth" && await adoptMeeting(m))
+    outcome = await drainMeeting(m.server, m.token, m.meetingId);
   if (outcome !== "done") return outcome;
   const body = {
     last_seq: Math.max(0, m.lastSeq),
@@ -219,7 +220,12 @@ async function settle(m) {
     return "done";
   } catch (e) {
     if (!(e instanceof ApiError)) return "retry";
-    if (e.status === 401 || e.status === 404) return "reauth";
+    if (e.status === 401 || e.status === 404) {
+      // Even if every chunk was uploaded, an expired credential still needs
+      // adoption before finalization. No local audio needs to remain for this.
+      if (await adoptMeeting(m)) return settle(m);
+      return "reauth";
+    }
     if (e.body?.error === "no_audio") return "done";
     if (
       e.body?.error === "missing_chunks" &&
@@ -240,8 +246,6 @@ async function settle(m) {
 
 async function stopped({ meetingId, reason, lastSeq }) {
   const active = await get("active");
-  await chrome.storage.local.remove("active");
-  badge("", null);
   if (!active || active.meetingId !== meetingId) return;
   const m = {
     meetingId,
@@ -252,6 +256,8 @@ async function stopped({ meetingId, reason, lastSeq }) {
     endedAt: new Date().toISOString(),
   };
   await saveUnfinished(m);
+  await chrome.storage.local.remove("active");
+  badge("", null);
   const outcome = await settle(m).catch(() => "retry");
   if (outcome === "done") await dropUnfinished(meetingId);
   chrome.notifications.create(`stopped:${meetingId}`, {
@@ -387,15 +393,18 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     pair: () => pair({ code: msg.code, deviceName: msg.deviceName }),
     signin: () => signInWithCalari(msg),
     start: () => startRecording(msg),
-    stop: async () => (
-      await toOffscreen({ type: "stop", reason: "user_stopped" }),
-      { ok: true }
-    ),
+    stop: async () => {
+      const result = await toOffscreen({ type: "stop", reason: "user_stopped" });
+      if (!result?.ok)
+        throw new Error(result?.error || "Could not stop recording. Try again.");
+      return { ok: true };
+    },
     status: async () => ({
       device: await device(),
       active: (await get("active")) ?? null,
       server: await get("server"),
       pendingMode: await get("pendingMode"),
+      unfinishedCount: Object.keys(await unfinished()).length,
     }),
     "connect-calendar": () => syncCalendar(true),
     "offscreen-stopped": () => stopped(msg),

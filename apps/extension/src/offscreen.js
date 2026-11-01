@@ -8,7 +8,6 @@ import {
   SIGNAL,
   STOP_REASONS,
   drainMeeting,
-  pendingChunks,
   putChunk,
   sha256Hex,
 } from "./shared.js";
@@ -189,42 +188,27 @@ function signal(code) {
 
 async function stop(reason) {
   const r = rec;
-  if (!r || r.stopping) return;
+  if (!r) return;
+  if (r.stopping)
+    throw new Error("Recording has stopped; waiting for audio to save. Check available browser storage if this persists.");
   r.stopping = true;
   clearInterval(r.tickTimer);
   // Stopping capture never waits on the network.
-  const { lastSeq } = await Promise.race([
-    r.chunker.stop(),
-    new Promise((res) => setTimeout(() => res({ lastSeq: -1 }), 5_000)),
-  ]);
+  const saved = r.chunker.stop();
+  // Release capture immediately, while IndexedDB finishes saving every chunk.
   for (const t of [...r.tab.getTracks(), ...(r.mic?.getTracks() ?? [])])
     t.stop();
   await r.ctx.close().catch(() => {});
+  const { lastSeq } = await saved;
   rec = null;
-  // Reply to Stop now; uploading continues without holding anything up.
-  void finishUploads(r, reason, lastSeq);
-}
+  // The service worker persists unfinished state before attempting delivery.
+  // Do not leave the UI showing Recording while network retries run.
 
-async function finishUploads(r, reason, lastSeq) {
-  // Up to a minute here; anything left stays in IndexedDB and the service
-  // worker keeps retrying it before finalizing.
-  const deadline = Date.now() + 60_000;
-  let outcome = "retry";
-  while (Date.now() < deadline) {
-    outcome = await drainMeeting(r.server, r.token, r.meetingId);
-    if (outcome !== "retry") break;
-    await new Promise((res) => setTimeout(res, 3_000));
-  }
-  const highest = Math.max(
-    lastSeq,
-    ...(await pendingChunks(r.meetingId)).map((c) => c.seq),
-  );
   chrome.runtime.sendMessage({
     type: "offscreen-stopped",
     meetingId: r.meetingId,
     reason,
-    lastSeq: highest,
-    uploads: outcome,
+    lastSeq,
   });
 }
 

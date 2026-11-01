@@ -21,6 +21,8 @@ export function createChunker({
   let seq = startSeq;
   let current = null;
   let timer = null;
+  const pending = new Set();
+  let saveError = null;
 
   function begin(startMs) {
     const entry = {
@@ -42,11 +44,15 @@ export function createChunker({
             durationMs: Math.max(1, entry.endMs - entry.startMs),
             parts: entry.parts,
           });
+        } catch (error) {
+          saveError ??= error;
         } finally {
+          pending.delete(entry.done);
           resolve();
         }
       };
     });
+    pending.add(entry.done);
     entry.recorder.start();
     current = entry;
     timer = setTimer(rollover, chunkMs);
@@ -72,7 +78,8 @@ export function createChunker({
       clearTimer(timer);
       const last = current;
       end(last, elapsed());
-      await last.done;
+      await Promise.all([...pending]);
+      if (saveError) throw saveError;
       return { lastSeq: last.seq };
     },
   };

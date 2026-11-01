@@ -8,6 +8,12 @@ function show(err) {
 
 async function render() {
   const s = await send({ type: "status" });
+  if (!s.ok) return show(s.error || "Could not read recorder status. Reopen Cap.");
+  $("uploadStatus").hidden = !s.unfinishedCount;
+  $("reconnectBtn").hidden = !s.unfinishedCount || !!s.active;
+  $("uploadStatus").textContent = s.unfinishedCount
+    ? "Your recording is saved. Cap is retrying delivery. If sign-in expired, sign in with the same client to resume."
+    : "";
   $("pair").hidden = !!s.device;
   $("ready").hidden = !s.device || !!s.active;
   $("recording").hidden = !s.active;
@@ -35,6 +41,8 @@ $("signinBtn").onclick = async () => {
     );
   render();
 };
+
+$("reconnectBtn").onclick = $("signinBtn").onclick;
 
 $("pairBtn").onclick = async () => {
   show(null);
@@ -70,9 +78,14 @@ $("startBtn").onclick = async () => {
 };
 
 $("stopBtn").onclick = async () => {
-  await send({ type: "stop" });
-  setTimeout(render, 500);
+  show(null);
+  const result = await send({ type: "stop" });
+  if (!result.ok) return show(result.error);
+  render();
 };
 
 $("optionsBtn").onclick = () => chrome.runtime.openOptionsPage();
 render();
+
+// Keep stop/upload and expiry status current while the popup remains open.
+setInterval(() => render().catch((e) => show(String(e.message ?? e))), 1000);
