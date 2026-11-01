@@ -1,0 +1,16 @@
+head=d2f60efa416c614e4475744c390534a6f875e5be (docs-only over 3cd3c26)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running tests/library.rs (target/debug/deps/library-377dc226389c8c1c)
+
+running 7 tests
+test a_sign_in_without_a_cap_role_is_refused ... ok
+test idle_sessions_expire_and_sign_out_needs_the_form_token ... ok
+test every_request_is_checked_with_calari_and_fails_closed ... ok
+test a_callback_link_only_works_in_the_browser_that_started_it ... ok
+test an_idle_cookie_starts_a_fresh_sign_in ... ok
+test staff_sign_in_through_calari_and_browse_meetings ... ok
+test sign_in_codes_and_states_are_single_use_and_bound ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+exit=0
