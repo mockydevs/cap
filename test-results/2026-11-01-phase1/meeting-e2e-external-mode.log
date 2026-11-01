@@ -1,0 +1,14 @@
+== setup
+health: {'database': True, 'status': 'ok', 'transcription': 'local-whisper'}
+== waiting for a pairing code from Calari in /tmp/claude-1000/-home-don-code-cap/f3f9f78c-5e41-4350-b453-b746857c0f74/scratchpad/code (Cap at http://127.0.0.1:8790)
+pairing code: CS**-****
+== upload two speech chunks
+== wait for transcription and signed delivery
+meeting: {"state": "delivered", "delivery": {"event_id": "337342b3-f192-529b-b19c-c61448d8de0f", "status": "delivered", "attempts": 1, "receipt_id": "ext-receipt-1"}, "failure": null}
+== stored audio is SSE-KMS encrypted
+  000000-1e1967776b4148cf.ogg aws:kms
+  000001-06c4fb3de20adfca.ogg aws:kms
+  000000-1e1967776b4148cf.ogg aws:kms
+  000001-06c4fb3de20adfca.ogg aws:kms
+PASS
+== server log lines: 3
