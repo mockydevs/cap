@@ -150,6 +150,8 @@ jobs:
           grep -Fq '&mut p,' vendor/glib/src/variant_iter.rs
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit Rust meeting workspace dependencies
+        run: cargo audit --file Cargo.lock
       - name: Audit Rust dependencies
         run: |
           # The exact upstream fix is backported in vendor/glib and verified
@@ -225,6 +227,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - run: docker build -f crates/cap-server/Dockerfile -t cap-server:ci .
+      - name: Scan Rust server image for fixable vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: cap-server:ci
+          scanners: vuln
+          vuln-type: os,library
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
 
   desktop-platform-check:
     strategy:
