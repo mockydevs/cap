@@ -218,7 +218,7 @@ async fn check_status(state: &AppState, tenant_id: &str, user_id: &str) -> Statu
     }
     match res.json::<LoginStatusResponse>().await {
         Ok(s) if s.tenant_id == tenant_id && s.user_id == user_id => {
-            if s.active {
+            if s.active && s.role != StaffRole::None {
                 Status::Active(s)
             } else {
                 Status::Revoked
@@ -390,6 +390,7 @@ pub async fn callback(
         }
     };
     if staff.tenant_id != integration.tenant_id
+        || staff.role == StaffRole::None
         || !cap_meeting_protocol::valid_external_id(&staff.user_id)
     {
         return failed("That account does not belong to this Cap workspace.");

@@ -37,6 +37,8 @@ struct FakeCalari {
     status_broken: bool,
     /// Role Calari's status endpoint reports ("admin" or "staff").
     status_role: String,
+    /// Role the exchange endpoint reports.
+    exchange_role: String,
     tenant: String,
     exchanges: usize,
     status_calls: usize,
@@ -83,7 +85,7 @@ async fn spawn_calari(shared: Shared) -> String {
                         Some((challenge, redirect)) if challenge == pkce_s256(&req.code_verifier) && redirect == req.redirect_uri => (
                             StatusCode::OK,
                             json!({"tenant_id": c.tenant, "user_id": STAFF, "email": "Clare@Calari.Example",
-                                   "display_name": "Clare <b>", "role": "admin"})
+                                   "display_name": "Clare <b>", "role": c.exchange_role})
                             .to_string(),
                         ),
                         _ => (StatusCode::BAD_REQUEST, json!({"error": "invalid_grant"}).to_string()),
@@ -142,6 +144,7 @@ impl H {
             active: true,
             tenant: TENANT.into(),
             status_role: "admin".into(),
+            exchange_role: "admin".into(),
             ..Default::default()
         }));
         let base = spawn_calari(calari.clone()).await;
@@ -451,6 +454,26 @@ async fn sign_in_codes_and_states_are_single_use_and_bound() {
 /// Review P1 (login CSRF): an attacker who starts a sign-in and hands the
 /// unused callback link to someone else cannot sign them in, and the link
 /// is not spoiled for the browser that really started it.
+#[tokio::test]
+async fn a_sign_in_without_a_cap_role_is_refused() {
+    let Some(h) = H::new().await else { return };
+    h.calari.lock().unwrap().exchange_role = "none".into();
+    let (login_cookie, q) = h.begin_login(None).await;
+    let code = h.issue_code(&q);
+    let (s, hd, _) = h.callback(&code, &q["state"], Some(&login_cookie)).await;
+    assert_ne!(s, StatusCode::SEE_OTHER);
+    assert!(hd
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .all(|c| !c.to_str().unwrap().starts_with("cap_web=")));
+    let saved: i64 = sqlx::query_scalar("SELECT count(*) FROM cap_web_sessions")
+        .fetch_one(&h.state.db)
+        .await
+        .unwrap();
+    assert_eq!(saved, 0);
+    h.drop_db().await;
+}
+
 #[tokio::test]
 async fn a_callback_link_only_works_in_the_browser_that_started_it() {
     let Some(h) = H::new().await else { return };
