@@ -26,6 +26,8 @@ globalThis.chrome = {
     async sendMessage() { return offscreenReply; },
   },
   notifications: { onButtonClicked: event() },
+  action: { setBadgeText() {}, setBadgeBackgroundColor() {} },
+  offscreen: { async hasDocument() { return false; } },
   tabs: { async get() { return { title: "Synthetic", url: "http://127.0.0.1:8844/" }; }, onRemoved: event(), onUpdated: event() },
   commands: { onCommand: event() }, alarms: { onAlarm: event() },
 };
@@ -152,4 +154,37 @@ test("a delayed stop from another meeting cannot clear the current recording", a
   assert.equal((await send({ type: "offscreen-stopped", meetingId: "old-synthetic", lastSeq: 0 })).ok, true);
   assert.equal(store.active.meetingId, "new-synthetic");
   assert.equal(store.unfinished, undefined);
+});
+
+
+test("crash with acknowledged chunks refreshes unknown sequence after renewed pairing", async () => {
+  store.server = "https://meetings.calari.tech";
+  store.active = { meetingId: "synthetic", server: store.server, token: "old-test-only" };
+  fetchHandler = (url, options) => {
+    if (url.endsWith("/redeem")) return new Response(JSON.stringify({ device_token: "new-test-only", expires_at: "2099-01-01" }));
+    if (url.endsWith("/adopt")) return new Response("{}");
+    if (url.endsWith("/synthetic")) return options.headers.authorization === "Bearer old-test-only"
+      ? new Response("{}", { status: 401 })
+      : new Response(JSON.stringify({ received_chunks: 3, missing_chunks: [] }));
+    assert.ok(url.endsWith("/finalize"));
+    assert.equal(options.headers.authorization, "Bearer new-test-only");
+    assert.equal(store.unfinished.synthetic.lastSeq, 2);
+    assert.equal(JSON.parse(options.body).last_seq, 2);
+    return new Response("{}");
+  };
+  assert.equal((await send({ type: "pair", code: "TEST-CODE" })).ok, true);
+  for (let n = 0; n < 30 && (store.active || store.unfinished?.synthetic); n++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.active, undefined);
+  assert.equal(store.unfinished.synthetic, undefined);
+  assert.deepEqual(requests.map((r) => r.url.split("/").at(-1)), ["redeem", "synthetic", "adopt", "synthetic", "finalize"]);
+});
+
+test("crash recovery never finalizes a persisted unsaved-audio marker", async () => {
+  store.server = "https://meetings.calari.tech";
+  store.active = { meetingId: "synthetic", server: store.server, token: "old-test-only", pendingSave: true };
+  assert.equal((await send({ type: "pair", code: "TEST-CODE" })).ok, true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(store.active.pendingSave);
+  assert.deepEqual(requests.map((r) => r.url.split("/").at(-1)), ["redeem"]);
 });

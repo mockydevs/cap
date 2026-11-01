@@ -22,7 +22,19 @@ export function createChunker({
   let current = null;
   let timer = null;
   const pending = new Set();
-  let saveError = null;
+  const failed = new Map();
+  let stopped = false;
+  let stopTask = null;
+
+  async function save(chunk) {
+    try {
+      await onChunk(chunk);
+      failed.delete(chunk.seq);
+    } catch (error) {
+      // Keep the exact bytes and timing until a later Stop retries storage.
+      failed.set(chunk.seq, { chunk, error });
+    }
+  }
 
   function begin(startMs) {
     const entry = {
@@ -37,19 +49,14 @@ export function createChunker({
         if (e.data && e.data.size) entry.parts.push(e.data);
       };
       entry.recorder.onstop = async () => {
-        try {
-          await onChunk({
-            seq: entry.seq,
-            startMs: entry.startMs,
-            durationMs: Math.max(1, entry.endMs - entry.startMs),
-            parts: entry.parts,
-          });
-        } catch (error) {
-          saveError ??= error;
-        } finally {
-          pending.delete(entry.done);
-          resolve();
-        }
+        await save({
+          seq: entry.seq,
+          startMs: entry.startMs,
+          durationMs: Math.max(1, entry.endMs - entry.startMs),
+          parts: entry.parts,
+        });
+        pending.delete(entry.done);
+        resolve();
       };
     });
     pending.add(entry.done);
@@ -73,14 +80,23 @@ export function createChunker({
   begin(elapsed());
 
   return {
-    /// Stops recording; resolves once the final chunk has been handed over.
-    async stop() {
-      clearTimer(timer);
-      const last = current;
-      end(last, elapsed());
-      await Promise.all([...pending]);
-      if (saveError) throw saveError;
-      return { lastSeq: last.seq };
+    // A retry never restarts capture or allocates another sequence number.
+    stop() {
+      if (stopTask) return stopTask;
+      const retry = stopped;
+      if (!stopped) {
+        stopped = true;
+        clearTimer(timer);
+        end(current, elapsed());
+      }
+      stopTask = (async () => {
+        await Promise.all([...pending]);
+        if (retry)
+          await Promise.all([...failed.values()].map(({ chunk }) => save(chunk)));
+        if (failed.size) throw failed.values().next().value.error;
+        return { lastSeq: current.seq };
+      })().finally(() => { stopTask = null; });
+      return stopTask;
     },
   };
 }

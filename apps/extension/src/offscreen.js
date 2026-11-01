@@ -175,7 +175,8 @@ function tick() {
       meetingId: r.meetingId,
     });
   } else if (decision === 2) {
-    stop(STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped");
+    // Failed saves already publish retry state to the service worker.
+    void stop(STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped").catch(() => {});
   }
   if (now % 10_000 < 500) drain();
 }
@@ -189,17 +190,32 @@ function signal(code) {
 async function stop(reason) {
   const r = rec;
   if (!r) return;
-  if (r.stopping)
-    throw new Error("Recording has stopped; waiting for audio to save. Check available browser storage if this persists.");
+  if (r.saving) throw new Error("Audio is still being saved. Please wait.");
+  r.saving = true;
   r.stopping = true;
   clearInterval(r.tickTimer);
-  // Stopping capture never waits on the network.
-  const saved = r.chunker.stop();
-  // Release capture immediately, while IndexedDB finishes saving every chunk.
+  const saved = r.chunker.stop().then(
+    (result) => ({ result }), (error) => ({ error }),
+  );
+  // Release capture even when storage is full. The chunker retains failed
+  // bytes in this offscreen document and Stop can retry saving them.
   for (const t of [...r.tab.getTracks(), ...(r.mic?.getTracks() ?? [])])
     t.stop();
   await r.ctx.close().catch(() => {});
-  const { lastSeq } = await saved;
+  let lastSeq;
+  try {
+    const outcome = await saved;
+    if (outcome.error) throw outcome.error;
+    ({ lastSeq } = outcome.result);
+  } catch {
+    const message = "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
+    await chrome.runtime.sendMessage({
+      type: "offscreen-save-failed", meetingId: r.meetingId, error: message,
+    }).catch(() => {});
+    throw new Error(message);
+  } finally {
+    r.saving = false;
+  }
   rec = null;
   // The service worker persists unfinished state before attempting delivery.
   // Do not leave the UI showing Recording while network retries run.
@@ -226,7 +242,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         await stop(msg.reason ?? "user_stopped");
         return { ok: true };
       case "status":
-        return { recording: !!rec, meetingId: rec?.meetingId ?? null };
+        return { recording: !!rec && !rec.stopping, pendingSave: !!rec?.stopping, meetingId: rec?.meetingId ?? null };
       default:
         return { ok: false };
     }

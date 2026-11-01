@@ -108,3 +108,29 @@ test("stop reports failed chunk persistence instead of claiming success", async 
   await advance(10);
   await stopped;
 });
+
+
+test("quota failure retains earlier and final chunks for Stop retry without recapture", async () => {
+  let full = true;
+  const attempts = [];
+  const { chunker, chunks, advance } = harness({ stopDelayMs: 0, saveChunk: (chunk) => {
+    attempts.push(chunk);
+    if (full) throw new Error("quota full");
+  } });
+  await advance(65_000);
+  const rejected = assert.rejects(chunker.stop(), /quota full/);
+  await advance(10);
+  await rejected;
+  assert.equal(chunks.length, 0);
+  const originals = attempts.slice();
+  full = false;
+  assert.deepEqual(await chunker.stop(), { lastSeq: 2 });
+  assert.deepEqual(chunks, [
+    { seq: 0, startMs: 0, durationMs: 30_000 },
+    { seq: 1, startMs: 30_000, durationMs: 30_000 },
+    { seq: 2, startMs: 60_000, durationMs: 5_000 },
+  ]);
+  assert.deepEqual(attempts.slice(3), originals);
+  assert.deepEqual(await chunker.stop(), { lastSeq: 2 });
+  assert.equal(attempts.length, 6);
+});

@@ -203,11 +203,33 @@ async function adoptMeeting(m) {
   }
 }
 
+async function refreshLastSeq(m) {
+  let view;
+  try {
+    view = await api(m.server, m.token, `/v1/meetings/${m.meetingId}`);
+  } catch (error) {
+    if (error instanceof ApiError && [401, 404].includes(error.status) && await adoptMeeting(m))
+      return refreshLastSeq(m);
+    throw error;
+  }
+  if (!Number.isInteger(view?.received_chunks) || !Array.isArray(view?.missing_chunks))
+    throw new Error("Could not recover the recording's final chunk number.");
+  m.lastSeq = Math.max(0, view.received_chunks + view.missing_chunks.length - 1);
+  await saveUnfinished(m);
+}
+
 async function settle(m) {
   let outcome = await drainMeeting(m.server, m.token, m.meetingId);
   if (outcome === "reauth" && await adoptMeeting(m))
     outcome = await drainMeeting(m.server, m.token, m.meetingId);
   if (outcome !== "done") return outcome;
+  if (!Number.isInteger(m.lastSeq) || m.lastSeq < 0) {
+    try {
+      await refreshLastSeq(m);
+    } catch (error) {
+      return error instanceof ApiError && [401, 404].includes(error.status) ? "reauth" : "retry";
+    }
+  }
   const body = {
     last_seq: Math.max(0, m.lastSeq),
     stop_reason: m.reason,
@@ -281,7 +303,9 @@ async function recover() {
     const s = (await chrome.offscreen.hasDocument())
       ? await toOffscreen({ type: "status" }).catch(() => null)
       : null;
-    if (s?.recording) return;
+    // Never finalize across an unsaved chunk. If Chrome was closed while
+    // saving failed, retain the failure marker instead of accepting a gap.
+    if (s?.recording || s?.pendingSave || active.pendingSave) return;
     const chunks = await pendingChunks(active.meetingId);
     await saveUnfinished({
       meetingId: active.meetingId,
@@ -294,19 +318,6 @@ async function recover() {
     badge("", null);
   }
   for (const m of Object.values(await unfinished())) {
-    if (m.lastSeq < 0) {
-      // Find the highest chunk the server has seen if this browser kept none.
-      const view = await api(
-        m.server,
-        m.token,
-        `/v1/meetings/${m.meetingId}`,
-      ).catch(() => null);
-      if (view)
-        m.lastSeq = Math.max(
-          0,
-          view.received_chunks + view.missing_chunks.length - 1,
-        );
-    }
     const outcome = await settle(m).catch(() => "retry");
     if (outcome === "done") await dropUnfinished(m.meetingId);
   }
@@ -394,6 +405,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     signin: () => signInWithCalari(msg),
     start: () => startRecording(msg),
     stop: async () => {
+      const active = await get("active");
+      if (active) await set({ active: { ...active, pendingSave: true } });
       const result = await toOffscreen({ type: "stop", reason: "user_stopped" });
       if (!result?.ok)
         throw new Error(result?.error || "Could not stop recording. Try again.");
@@ -408,6 +421,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     }),
     "connect-calendar": () => syncCalendar(true),
     "offscreen-stopped": () => stopped(msg),
+    "offscreen-save-failed": async () => {
+      const active = await get("active");
+      if (active?.meetingId !== msg.meetingId) return;
+      await set({ active: { ...active, pendingSave: true, saveError: msg.error } });
+      badge("!", "#c62828");
+    },
     "offscreen-warn": () => warn(msg),
     "offscreen-notice": () =>
       chrome.notifications.create({
