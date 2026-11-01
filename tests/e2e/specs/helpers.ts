@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
 
 export type LegacyTestUser = {
@@ -26,7 +26,7 @@ export async function seedLegacySession(
   };
   const fixture = execFileSync(
     process.execPath,
-    [fileURLToPath(new URL("../seed-legacy-session.mjs", import.meta.url))],
+    [resolve(__dirname, "../seed-legacy-session.mjs")],
     { input: JSON.stringify(user), encoding: "utf8" },
   );
   const { token } = JSON.parse(fixture) as { token: string };
