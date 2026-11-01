@@ -465,6 +465,9 @@ async fn homepage(Extension(catalog): Extension<Arc<Catalog>>) -> Html<String> {
                 @if let Some(sha256) = &artifact.sha256 {
                     details { summary { "Verify SHA-256" } code { (sha256) } }
                 }
+                @if artifact.platform == Platform::Windows && artifact.status == Status::Available {
+                    p class="platform-note" { "Windows installer is currently unsigned." }
+                }
             }
         }
     };

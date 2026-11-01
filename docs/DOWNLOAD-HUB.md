@@ -41,3 +41,7 @@ Publish a complete immutable directory/manifest atomically and restart the servi
 ## Automatic updater status
 
 The separate signed updater publication contract is pending desktop payload-format verification. This installer-hub release deliberately returns404 for `/downloads/latest.json`; `/api/downloads` labels updates `not_published` and Debian updates `manual`. It does not claim an app is up-to-date or fall back to private GitHub URLs. Direct installers are independent of automatic updater readiness. A future verified updater catalog will be separate from `manifest.json`; do not add unknown fields, payload archives or signature entries to the installer manifest.
+
+## Current platform signing status
+
+The current Windows installer has no Authenticode certificate. Its available download card states “Windows installer is currently unsigned.” Windows may show a SmartScreen warning. A Tauri updater `.sig` is separate update-integrity verification and does not make a Windows installer Authenticode-signed or SmartScreen-trusted. macOS installers remain signing-pending/unavailable until their signing gates pass. Automatic updates remain unpublished in this hub; use the direct installer/manual update path for now.

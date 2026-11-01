@@ -358,6 +358,12 @@ h1 > span {
   min-height: 38px;
   overflow-wrap: anywhere;
 }
+.platform-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
 .download-card .button {
   width: 100%;
   gap: 10px;

@@ -341,3 +341,44 @@ async fn oversized_or_unknown_schema_manifest_fails_before_any_download_is_expos
     .unwrap();
     assert!(Catalog::load(Some(&fixture.0)).await.is_err());
 }
+
+#[tokio::test]
+async fn available_windows_installer_discloses_unsigned_status_without_inventing_mac_readiness() {
+    let fixture = Fixture::new();
+    let mut entry = fixture.available();
+    std::fs::rename(
+        fixture.0.join("Cap_0.0.0-test_amd64.deb"),
+        fixture.0.join("Cap_0.0.0-test_setup.exe"),
+    )
+    .unwrap();
+    entry["platform"] = json!("windows-x86_64");
+    entry["filename"] = json!("Cap_0.0.0-test_setup.exe");
+    fixture.manifest(json!([entry]));
+    let app = downloads::router::<()>(Arc::new(fixture.catalog().await), None);
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let body = String::from_utf8(
+        to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(body.contains("Windows installer is currently unsigned."));
+    assert!(body.contains("Signing pending"));
+    let app = downloads::router::<()>(Arc::new(Catalog::default()), None);
+    let response = app
+        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let body = String::from_utf8(
+        to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(!body.contains("Windows installer is currently unsigned."));
+}
