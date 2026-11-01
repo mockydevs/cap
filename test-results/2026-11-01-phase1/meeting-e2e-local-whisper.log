@@ -1,10 +1,10 @@
 == setup
 health: {'database': True, 'status': 'ok', 'transcription': 'local-whisper'}
 == pairing (Calari side, signed)
-pairing code issued: TF**-****
+pairing code issued: HR**-****
 == upload two speech chunks
 == wait for transcription and signed delivery
-delivered in 3.0s, signature verified: True
+delivered in 1.0s, signature verified: True
 transcript provider/model: cap-whisper ggml-tiny.en
   [     0 -   1680 ms] Thanks for joining.
   [  1680 -   5040 ms] Today we will review the launch plan for the new website.

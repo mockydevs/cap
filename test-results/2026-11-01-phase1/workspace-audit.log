@@ -1,0 +1,15 @@
+$ cargo tree -i rsa --target all -e all
+warning: nothing to print.
+
+To find dependencies that require specific target platforms, try to use option `--target all` first, and then narrow your search scope accordingly.
+$ cargo tree -i sqlx-mysql --target all -e all
+warning: nothing to print.
+
+To find dependencies that require specific target platforms, try to use option `--target all` first, and then narrow your search scope accordingly.
+$ cargo audit (root Cargo.lock)
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1395 security advisories (from /home/don/.cargo/advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (364 crate dependencies)
+exit=0
+cargo audit exit=0

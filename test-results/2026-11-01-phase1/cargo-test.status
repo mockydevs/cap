@@ -6,3 +6,4 @@ extension node tests exit=0
 desktop (Debian container, CI apt list): cargo check/fmt/test exit=0, 10 passed
 docker build (local-whisper) exit=0; docker healthcheck healthy (docker-health.log)
 real Whisper e2e (server image + LocalStack KMS + signed delivery): see meeting-e2e-local-whisper.log
+cargo audit (root lock) exit=0; one documented exception RUSTSEC-2023-0071 (rsa never compiled); workspace-audit.log

@@ -14,8 +14,8 @@ local-whisper = ["dep:whisper-rs"]
 
 [dependencies]
 anyhow = "1"
-aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls", "credentials-process"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls"] }
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "default-https-client", "credentials-process"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "default-https-client"] }
 axum = { version = "0.8", features = ["macros"] }
 base64 = "0.22"
 cap-meeting-protocol = { path = "../meeting-protocol" }

@@ -1,0 +1,10 @@
+# cargo-audit configuration for the Rust workspace (root Cargo.lock).
+[advisories]
+# RUSTSEC-2023-0071 (rsa, Marvin timing attack, no fixed release).
+# `rsa` is listed in Cargo.lock only because sqlx declares its MySQL driver
+# (sqlx-mysql -> rsa) as an optional dependency, and Cargo lockfiles record
+# optional dependencies whether or not they are enabled. Cap enables only the
+# Postgres driver; `cargo tree -i rsa --target all -e all` prints nothing, so
+# rsa is never compiled into any binary. Re-check if a MySQL feature is ever
+# enabled. Evidence: test-results/2026-11-01-phase1/workspace-audit.log
+ignore = ["RUSTSEC-2023-0071"]

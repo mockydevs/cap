@@ -5,6 +5,9 @@
 FROM rust:1.95-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends cmake clang libclang-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
+# Keep builds from starving a shared host; override with --build-arg.
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 COPY Cargo.toml Cargo.lock clippy.toml ./
 COPY crates crates
 RUN cargo build --release -p cap-server --features local-whisper
