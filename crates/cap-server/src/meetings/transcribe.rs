@@ -405,6 +405,13 @@ mod local {
             let threads = self.threads as i32;
             let language = self.language.clone();
             let prompt = input.prompt.map(str::to_owned);
+            // Inference gets at most twice the audio length plus two minutes
+            // (never more than 20 minutes), then is aborted, so one stuck run
+            // cannot hold the shared CPU indefinitely.
+            let budget = std::time::Duration::from_millis(
+                (input.duration_ms.saturating_mul(2) + 120_000).min(20 * 60_000),
+            );
+            let deadline = std::time::Instant::now() + budget;
             let segments = tokio::task::spawn_blocking(move || -> Result<Vec<ChunkSegment>> {
                 let mut state = ctx.create_state().map_err(|e| anyhow::anyhow!("{e}"))?;
                 let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
@@ -417,9 +424,16 @@ mod local {
                 if let Some(p) = prompt.as_deref() {
                     params.set_initial_prompt(p);
                 }
-                state
-                    .full(params, &pcm)
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                params.set_abort_callback_safe(move || std::time::Instant::now() > deadline);
+                if let Err(e) = state.full(params, &pcm) {
+                    if std::time::Instant::now() > deadline {
+                        anyhow::bail!(
+                            "transcription took longer than {} s and was stopped",
+                            budget.as_secs()
+                        );
+                    }
+                    anyhow::bail!("{e}");
+                }
                 let mut out = Vec::new();
                 for seg in state.as_iter() {
                     let text = seg.to_str_lossy().map_err(|e| anyhow::anyhow!("{e}"))?;

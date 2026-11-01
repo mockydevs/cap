@@ -682,3 +682,69 @@ pub async fn meeting_event(
     }
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// Lets a new pairing finish a meeting whose original device credential has
+/// expired or been revoked (for example Clare re-paired after the 12-hour
+/// token ran out mid-upload). Only a pairing for the same tenant, the same
+/// kind and the same client may take over, and only while the meeting still
+/// accepts audio. The meeting keeps its original pairing, so the delivery
+/// is still bound to the client and receipt Calari authorised.
+pub async fn adopt_meeting(
+    State(state): State<AppState>,
+    device: Device,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let not_found = || ApiError::new(StatusCode::NOT_FOUND, "meeting_not_found");
+    let mut tx = state.db.begin().await?;
+    let m = sqlx::query(
+        "SELECT m.state, m.device_token_hash, p.tenant_id, p.pairing_kind, p.client_id,
+                (d.revoked_at IS NULL AND d.expires_at > now()) AS owner_active
+         FROM meeting_sessions m
+         JOIN meeting_pairings p ON p.id = m.pairing_id
+         JOIN meeting_devices d ON d.token_hash = m.device_token_hash
+         WHERE m.id = $1 FOR UPDATE OF m",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(not_found)?;
+    let mine = sqlx::query(
+        "SELECT tenant_id, pairing_kind, client_id FROM meeting_pairings WHERE id = $1",
+    )
+    .bind(device.pairing_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let same_binding = m.get::<String, _>("tenant_id") == mine.get::<String, _>("tenant_id")
+        && m.get::<String, _>("pairing_kind") == mine.get::<String, _>("pairing_kind")
+        && m.get::<Option<Uuid>, _>("client_id") == mine.get::<Option<Uuid>, _>("client_id");
+    if !same_binding {
+        // Indistinguishable from a meeting that does not exist.
+        return Err(not_found());
+    }
+    if m.get::<String, _>("device_token_hash") != device.token_hash {
+        if m.get::<bool, _>("owner_active") {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "meeting_owned_by_active_device",
+            ));
+        }
+        if !MeetingState::parse(m.get("state")).is_some_and(MeetingState::accepts_chunks) {
+            return Err(ApiError::new(StatusCode::CONFLICT, "meeting_not_recording"));
+        }
+        sqlx::query(
+            "UPDATE meeting_sessions SET device_token_hash = $2, updated_at = now() WHERE id = $1",
+        )
+        .bind(id)
+        .bind(&device.token_hash)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("INSERT INTO meeting_events (meeting_id, kind, at, detail) VALUES ($1, 'adopted', now(), $2)")
+            .bind(id)
+            .bind(format!("taken over by a re-paired {} device", device.kind.as_str()))
+            .execute(&mut *tx)
+            .await?;
+        tracing::info!(meeting = %id, "meeting adopted by re-paired device");
+    }
+    tx.commit().await?;
+    Ok(Json(view(&state, &device, id).await?))
+}

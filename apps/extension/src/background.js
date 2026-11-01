@@ -131,7 +131,32 @@ async function dropUnfinished(meetingId) {
 /// to upload keeps the meeting open, because the server refuses chunks after
 /// finalize. Returns "done", "retry" or "reauth".
 async function settle(m) {
-  const outcome = await drainMeeting(m.server, m.token, m.meetingId);
+  let outcome = await drainMeeting(m.server, m.token, m.meetingId);
+  if (outcome === "reauth") {
+    // The meeting's own credential expired. If Cap has since been paired
+    // again, the server lets that pairing take the meeting over, but only
+    // for the same client, and the meeting keeps its original binding.
+    const current = await device();
+    if (
+      current &&
+      current.token !== m.token &&
+      (await get("server")) === m.server
+    ) {
+      try {
+        await api(
+          m.server,
+          current.token,
+          `/v1/meetings/${m.meetingId}/adopt`,
+          { method: "POST" },
+        );
+        m.token = current.token;
+        await saveUnfinished(m);
+        outcome = await drainMeeting(m.server, m.token, m.meetingId);
+      } catch {
+        return "reauth";
+      }
+    }
+  }
   if (outcome !== "done") return outcome;
   const body = {
     last_seq: Math.max(0, m.lastSeq),

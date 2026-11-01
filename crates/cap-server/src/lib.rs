@@ -85,6 +85,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/meetings/{id}/finalize", post(api::finalize_meeting))
         .route("/v1/meetings/{id}/events", post(api::meeting_event))
+        .route("/v1/meetings/{id}/adopt", post(api::adopt_meeting))
         .layer(DefaultBodyLimit::max(256 * 1024));
     if let Some(dir) = &state.cfg.site_dir {
         app = app.fallback_service(tower_http::services::ServeDir::new(dir));

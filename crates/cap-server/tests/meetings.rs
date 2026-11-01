@@ -784,15 +784,26 @@ async fn internal_team_meetings_carry_no_client() {
 /// longer change the meeting.
 #[tokio::test]
 async fn an_expired_worker_lease_is_fenced_out() {
-    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else { return };
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
     let t = h.device(client_pairing()).await;
     let id = h.meeting(&t, "k").await;
     h.chunk(&t, &id, 0, &ogg(0)).await;
     h.finalize(&t, &id, 0, false).await;
     let now = Utc::now();
-    let a = worker::claim(&h.state, now).await.unwrap().expect("worker A claims");
-    assert!(worker::claim(&h.state, now).await.unwrap().is_none(), "a live lease is exclusive");
-    let b = worker::claim(&h.state, now + chrono::Duration::minutes(16)).await.unwrap().expect("worker B takes over");
+    let a = worker::claim(&h.state, now)
+        .await
+        .unwrap()
+        .expect("worker A claims");
+    assert!(
+        worker::claim(&h.state, now).await.unwrap().is_none(),
+        "a live lease is exclusive"
+    );
+    let b = worker::claim(&h.state, now + chrono::Duration::minutes(16))
+        .await
+        .unwrap()
+        .expect("worker B takes over");
     assert_ne!(a.token, b.token);
 
     // The stale worker wakes up and tries to work: nothing changes.
@@ -804,7 +815,11 @@ async fn an_expired_worker_lease_is_fenced_out() {
             .await
             .unwrap();
     assert_eq!(state, "finalized");
-    assert_eq!(token, Some(b.token), "the stale worker did not clear the new lease");
+    assert_eq!(
+        token,
+        Some(b.token),
+        "the stale worker did not clear the new lease"
+    );
     assert!(a.renew(&h.state).await.is_err());
     assert!(h.calari.lock().unwrap().received.is_empty());
 
@@ -819,9 +834,14 @@ async fn an_expired_worker_lease_is_fenced_out() {
 /// finalized (or swept as abandoned) is refused, never silently dropped.
 #[tokio::test]
 async fn an_upload_racing_finalize_or_abandon_is_refused() {
-    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else { return };
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
     let mut slow = h.state.clone();
-    slow.store = cap_server::store::ObjectStore::Delayed(Box::new(h.state.store.clone()), Duration::from_millis(800));
+    slow.store = cap_server::store::ObjectStore::Delayed(
+        Box::new(h.state.store.clone()),
+        Duration::from_millis(800),
+    );
     let put = |token: &str, id: &str, seq: u32| {
         let bytes = ogg(seq as u8);
         Request::put(format!("/v1/meetings/{id}/chunks/{seq}"))
@@ -834,25 +854,42 @@ async fn an_upload_racing_finalize_or_abandon_is_refused() {
     };
     for race_with_abandon in [false, true] {
         let t = h.device(client_pairing()).await;
-        let id = h.meeting(&t, if race_with_abandon { "abandon" } else { "finalize" }).await;
+        let id = h
+            .meeting(
+                &t,
+                if race_with_abandon {
+                    "abandon"
+                } else {
+                    "finalize"
+                },
+            )
+            .await;
         assert_eq!(h.chunk(&t, &id, 0, &ogg(0)).await.0, StatusCode::CREATED);
         let upload = router(slow.clone()).oneshot(put(&t, &id, 1));
         let transition = async {
             tokio::time::sleep(Duration::from_millis(200)).await;
             if race_with_abandon {
-                worker::run_once(&h.state, Utc::now() + chrono::Duration::hours(2)).await.unwrap();
+                worker::run_once(&h.state, Utc::now() + chrono::Duration::hours(2))
+                    .await
+                    .unwrap();
             } else {
                 assert_eq!(h.finalize(&t, &id, 0, false).await.0, StatusCode::ACCEPTED);
             }
         };
         let (res, ()) = tokio::join!(upload, transition);
         let res = res.unwrap();
-        assert_eq!(res.status(), StatusCode::CONFLICT, "abandon={race_with_abandon}");
-        let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1::uuid AND seq = 1")
-            .bind(&id)
-            .fetch_one(&h.state.db)
-            .await
-            .unwrap();
+        assert_eq!(
+            res.status(),
+            StatusCode::CONFLICT,
+            "abandon={race_with_abandon}"
+        );
+        let stored: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1::uuid AND seq = 1",
+        )
+        .bind(&id)
+        .fetch_one(&h.state.db)
+        .await
+        .unwrap();
         assert_eq!(stored, 0);
     }
     h.drop_db().await;
@@ -869,7 +906,15 @@ async fn overlong_compressed_audio_is_rejected_while_decoding() {
     let make = |seconds: u32| {
         let path = format!("/tmp/cap-decode-{}.ogg", Uuid::new_v4());
         let ok = std::process::Command::new(&ffmpeg)
-            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", &format!("anullsrc=r=48000:cl=mono:d={seconds}")])
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                &format!("anullsrc=r=48000:cl=mono:d={seconds}"),
+            ])
             .args(["-c:a", "libopus", "-b:a", "8k", &path])
             .stdin(std::process::Stdio::null())
             .status()
@@ -884,8 +929,94 @@ async fn overlong_compressed_audio_is_rejected_while_decoding() {
     // Twenty minutes of audio in a small file that claims to be 30 seconds.
     let long = make(1_200);
     assert!(long.len() < 2 << 20, "compressed size {}", long.len());
-    let err = decode_pcm16k(&ffmpeg, &long, 30_000 + DECODE_SLACK_MS).await.unwrap_err();
+    let err = decode_pcm16k(&ffmpeg, &long, 30_000 + DECODE_SLACK_MS)
+        .await
+        .unwrap_err();
     assert!(err.to_string().contains("more than"), "{err}");
-    let ok = decode_pcm16k(&ffmpeg, &make(5), 5_000 + DECODE_SLACK_MS).await.unwrap();
-    assert!((70_000..=90_000).contains(&ok.len()), "{} samples", ok.len());
+    let ok = decode_pcm16k(&ffmpeg, &make(5), 5_000 + DECODE_SLACK_MS)
+        .await
+        .unwrap();
+    assert!(
+        (70_000..=90_000).contains(&ok.len()),
+        "{} samples",
+        ok.len()
+    );
+}
+
+/// Capture re-review: a real same-client re-pairing can take over a meeting
+/// whose credential expired; nothing else can.
+#[tokio::test]
+async fn only_a_same_client_re_pairing_can_adopt_an_expired_meeting() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let a = h.device(client_pairing()).await;
+    let id = h.meeting(&a, "k").await;
+    h.chunk(&a, &id, 0, &ogg(0)).await;
+    let adopt = |token: &str| {
+        json_req(
+            "POST",
+            &format!("/v1/meetings/{id}/adopt"),
+            Some(token),
+            &json!({}),
+        )
+    };
+
+    let b = h.device(client_pairing()).await; // same client, new pairing
+    assert_eq!(
+        h.call(adopt(&b)).await.1["error"],
+        "meeting_owned_by_active_device"
+    );
+
+    sqlx::query(
+        "UPDATE meeting_devices SET expires_at = now() - interval '1 second' WHERE token_hash = $1",
+    )
+    .bind(ids::sha256_hex(a.as_bytes()))
+    .execute(&h.state.db)
+    .await
+    .unwrap();
+    let mut other = client_pairing();
+    other["client_id"] = json!("00000000-0000-4000-8000-0000000000dd");
+    let y = h.device(other).await;
+    assert_eq!(
+        h.call(adopt(&y)).await.0,
+        StatusCode::NOT_FOUND,
+        "another client cannot take it"
+    );
+    let internal = h
+        .device(json!({"request_id": Uuid::new_v4().to_string(), "tenant_id": TENANT, "pairing_kind": "internal_team", "ttl_seconds": 300}))
+        .await;
+    assert_eq!(
+        h.call(adopt(&internal)).await.0,
+        StatusCode::NOT_FOUND,
+        "nor an internal pairing"
+    );
+
+    let (s, v) = h.call(adopt(&b)).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["received_chunks"], 1);
+    assert_eq!(h.chunk(&b, &id, 1, &ogg(1)).await.0, StatusCode::CREATED);
+    assert_eq!(h.finalize(&b, &id, 1, false).await.0, StatusCode::ACCEPTED);
+    assert_eq!(
+        h.call(adopt(&b)).await.0,
+        StatusCode::OK,
+        "idempotent for the owner"
+    );
+    h.drain(Utc::now()).await;
+    let payload: DeliveryPayload =
+        serde_json::from_slice(&h.calari.lock().unwrap().received[0].1).unwrap();
+    assert_eq!(payload.client_id.as_deref(), Some(CLIENT));
+    let original_pairing: Uuid = sqlx::query_scalar(
+        "SELECT p.id FROM meeting_pairings p JOIN meeting_devices d ON d.pairing_id = p.id WHERE d.token_hash = $1",
+    )
+    .bind(ids::sha256_hex(a.as_bytes()))
+    .fetch_one(&h.state.db)
+    .await
+    .unwrap();
+    assert_eq!(
+        payload.pairing_id,
+        original_pairing.to_string(),
+        "binding is unchanged"
+    );
+    h.drop_db().await;
 }

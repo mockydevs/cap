@@ -315,8 +315,16 @@ pub fn recover_in_background(app: &AppHandle) {
     let Ok(root) = meetings_dir(app) else { return };
     let emitter = app.clone();
     std::thread::spawn(move || {
-        let done = cap_meeting_recorder::recover_all(&root, token_for_meeting);
-        for id in done {
+        let done = cap_meeting_recorder::recover_all(&root, |j| {
+            // The meeting's own credential first, then the current pairing,
+            // which the server lets take over only for the same client.
+            let mut tokens: Vec<String> = token_for_meeting(j).into_iter().collect();
+            if let Some(current) = device_token().filter(|t| !tokens.contains(t)) {
+                tokens.push(current);
+            }
+            tokens
+        });
+        for cap_meeting_recorder::Recovered { meeting_id: id, .. } in done {
             forget_meeting_token(&id);
             let _ = emitter.emit("meeting-event", Event::Finalized { meeting_id: id });
         }

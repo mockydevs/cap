@@ -96,13 +96,14 @@ Failed attempts are rate limited per source address and globally (`429`).
 
 ## 3. Meetings (device token, `Authorization: Bearer …`)
 
-| Method + path                        | Purpose                                                                                        |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `POST /v1/meetings`                  | create; idempotent on `idempotency_key` per token                                              |
-| `PUT /v1/meetings/{id}/chunks/{seq}` | upload one standalone audio chunk; `x-chunk-sha256`, `x-chunk-start-ms`, `x-chunk-duration-ms` |
-| `POST /v1/meetings/{id}/events`      | lifecycle audit: idle warning, keep-recording, signal                                          |
-| `POST /v1/meetings/{id}/finalize`    | `{last_seq, stop_reason, ended_at}`; `409` lists missing chunks to resend                      |
-| `GET /v1/meetings/{id}`              | status, missing chunks, delivery receipt                                                       |
+| Method + path                        | Purpose                                                                                                                                                                                                                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/meetings`                  | create; idempotent on `idempotency_key` per token                                                                                                                                                                                   |
+| `PUT /v1/meetings/{id}/chunks/{seq}` | upload one standalone audio chunk; `x-chunk-sha256`, `x-chunk-start-ms`, `x-chunk-duration-ms`                                                                                                                                      |
+| `POST /v1/meetings/{id}/events`      | lifecycle audit: idle warning, keep-recording, signal                                                                                                                                                                               |
+| `POST /v1/meetings/{id}/finalize`    | `{last_seq, stop_reason, ended_at}`; `409` lists missing chunks to resend                                                                                                                                                           |
+| `GET /v1/meetings/{id}`              | status, missing chunks, delivery receipt                                                                                                                                                                                            |
+| `POST /v1/meetings/{id}/adopt`       | a re-paired device takes over a meeting whose original credential expired or was revoked; only for the same tenant, pairing kind and client, while still recording; the original pairing (and so the delivery binding) is unchanged |
 
 `POST /v1/meetings` takes `capture_mode`: `audio` (default) or `video`. Both are
 transcribed; video also keeps the picture in Cap's private storage.

@@ -9,7 +9,7 @@ use cap_meeting_protocol::{
     signing, CaptureMode, CreateMeetingRequest, DeliveryPayload, StopReason,
 };
 use cap_meeting_recorder::{
-    ffmpeg::Input, Client, Event, Journal, Session, StartOptions, UploadOutcome,
+    ffmpeg::Input, Client, Event, Journal, Recovered, Session, StartOptions, UploadOutcome,
 };
 use cap_server::config::{Config, Integration, Secret, StorageConfig, TranscriptionConfig};
 use std::{
@@ -105,11 +105,23 @@ fn env() -> Option<Env> {
 
 /// Pairs like Calari would, then redeems like the desktop app.
 fn pair_token(server: &str) -> String {
+    pair(server, None).0
+}
+
+/// Returns (device token, pairing id). `client` = None pairs an internal
+/// team meeting; Some(id) pairs for that client from a staff page.
+fn pair(server: &str, client: Option<&str>) -> (String, String) {
     let http = reqwest::blocking::Client::new();
-    let body = serde_json::to_vec(&serde_json::json!({
-        "request_id": uuid::Uuid::new_v4().to_string(), "tenant_id": TENANT, "pairing_kind": "internal_team", "ttl_seconds": 300
-    }))
-    .unwrap();
+    let request = match client {
+        None => serde_json::json!({
+            "request_id": uuid::Uuid::new_v4().to_string(), "tenant_id": TENANT, "pairing_kind": "internal_team", "ttl_seconds": 300
+        }),
+        Some(c) => serde_json::json!({
+            "request_id": uuid::Uuid::new_v4().to_string(), "tenant_id": TENANT, "pairing_kind": "staff_client",
+            "client_id": c, "ttl_seconds": 300
+        }),
+    };
+    let body = serde_json::to_vec(&request).unwrap();
     let ts = chrono::Utc::now().timestamp();
     let nonce = signing::new_nonce();
     let p: serde_json::Value = http
@@ -133,7 +145,10 @@ fn pair_token(server: &str) -> String {
         .unwrap()
         .json()
         .unwrap();
-    r["device_token"].as_str().unwrap().to_owned()
+    (
+        r["device_token"].as_str().unwrap().to_owned(),
+        p["pairing_id"].as_str().unwrap().to_owned(),
+    )
 }
 
 /// A fresh parent folder per test, so recovery only sees this test's meetings.
@@ -251,6 +266,10 @@ fn crashed_recording(e: &Env, dir: &Path, token: &str, seconds: u32) -> String {
     m.id
 }
 
+fn ids(done: Vec<Recovered>) -> Vec<String> {
+    done.into_iter().map(|r| r.meeting_id).collect()
+}
+
 fn segment_files(dir: &Path) -> usize {
     std::fs::read_dir(dir)
         .unwrap()
@@ -323,10 +342,14 @@ fn user_stop_closes_the_last_segment_and_uploads_it() {
     );
     let p = delivered(&e);
     assert_eq!(p.meeting.stop_reason, StopReason::UserStopped);
-    let last = p.transcript.segments.last().unwrap();
-    assert!(
-        last.end_ms >= 4_000,
-        "the final partial segment was included: {last:?}"
+    // Every segment FFmpeg wrote, including the final partial one, arrived.
+    let files = segment_files(&d);
+    assert!(files >= 2, "{files} segment files");
+    assert_eq!(
+        p.transcript.segments.len(),
+        files,
+        "{:?}",
+        p.transcript.segments
     );
     e.rt.block_on(e.state.db.close());
 }
@@ -409,8 +432,8 @@ fn a_crashed_session_is_recovered_as_interrupted() {
     let (root, d) = dir();
     let id = crashed_recording(&e, &d, &e.token, 5);
     let token = e.token.clone();
-    let done = cap_meeting_recorder::recover_all(&root, |_| Some(token.clone()));
-    assert_eq!(done, vec![id]);
+    let done = cap_meeting_recorder::recover_all(&root, |_| vec![token.clone()]);
+    assert_eq!(ids(done), vec![id]);
     let p = delivered(&e);
     assert_eq!(p.meeting.stop_reason, StopReason::Interrupted);
     assert!(p.meeting.partial);
@@ -480,7 +503,7 @@ fn an_outage_keeps_audio_until_the_server_is_back() {
     j.server = "http://127.0.0.1:9".into(); // nothing listens here
     j.save(&d).unwrap();
     let token = e.token.clone();
-    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())).is_empty());
+    assert!(cap_meeting_recorder::recover_all(&root, |_| vec![token.clone()]).is_empty());
     let after = Journal::load(&d).unwrap();
     assert!(after.uploaded.is_empty() && !after.finalized);
     let files = segment_files(&d);
@@ -488,7 +511,9 @@ fn an_outage_keeps_audio_until_the_server_is_back() {
     j.server = real;
     j.save(&d).unwrap();
     assert_eq!(
-        cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())),
+        ids(cap_meeting_recorder::recover_all(&root, |_| vec![
+            token.clone()
+        ])),
         vec![id]
     );
     let p = delivered(&e);
@@ -497,45 +522,56 @@ fn an_outage_keeps_audio_until_the_server_is_back() {
     e.rt.block_on(e.state.db.close());
 }
 
-/// Review finding 2: an expired or replaced credential is not an upload, and
-/// each meeting recovers with its own credential after re-pairing A→B.
+/// Review finding 2 (and re-review): an expired credential is not an upload,
+/// a pairing for another client cannot take the meeting, and a real new
+/// pairing for the same client finishes it with the original binding.
 #[test]
-fn expired_or_replaced_credentials_never_lose_audio() {
+fn a_same_client_re_pairing_finishes_an_expired_meeting() {
     let Some(e) = env() else { return };
     let (root, d) = dir();
-    let token_a = e.token.clone();
+    let client_x = "00000000-0000-4000-8000-0000000000c1";
+    let (token_a, pairing_a) = pair(&e.server, Some(client_x));
     let id = crashed_recording(&e, &d, &token_a, 5);
+    // Twelve hours pass: A's credential expires (time is simulated; the
+    // recovery below uses real pairings only).
     e.rt.block_on(async {
         sqlx::query("UPDATE meeting_devices SET expires_at = now() - interval '1 second'")
             .execute(&e.state.db)
             .await
             .unwrap();
     });
-    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token_a.clone())).is_empty());
+    assert!(cap_meeting_recorder::recover_all(&root, |_| vec![token_a.clone()]).is_empty());
     let j = Journal::load(&d).unwrap();
     assert!(
         j.uploaded.is_empty() && j.quarantined.is_empty() && !j.finalized,
         "{j:?}"
     );
 
-    // The user pairs again (B). B cannot see meeting A's recording.
-    let token_b = pair_token(&e.server);
-    assert!(cap_meeting_recorder::recover_all(&root, |_| Some(token_b.clone())).is_empty());
+    // Paired again, but for a different client: may not take the meeting.
+    let (token_y, _) = pair(&e.server, Some("00000000-0000-4000-8000-0000000000c2"));
+    assert!(
+        cap_meeting_recorder::recover_all(&root, |_| vec![token_a.clone(), token_y.clone()])
+            .is_empty()
+    );
     assert!(!Journal::load(&d).unwrap().finalized);
     assert!(e.deliveries.lock().unwrap().is_empty());
 
-    // With meeting A's own (valid) credential it completes.
-    e.rt.block_on(async {
-        sqlx::query("UPDATE meeting_devices SET expires_at = now() + interval '1 hour'")
-            .execute(&e.state.db)
-            .await
-            .unwrap();
-    });
-    let per_meeting = std::collections::HashMap::from([(id.clone(), token_a.clone())]);
-    let done =
-        cap_meeting_recorder::recover_all(&root, |j| per_meeting.get(&j.meeting_id).cloned());
-    assert_eq!(done, vec![id]);
-    assert!(!delivered(&e).transcript.segments.is_empty());
+    // Paired again for the same client: takes over and finishes.
+    let (token_b, _) = pair(&e.server, Some(client_x));
+    let done = cap_meeting_recorder::recover_all(&root, |_| vec![token_a.clone(), token_b.clone()]);
+    assert_eq!(
+        done,
+        vec![Recovered {
+            meeting_id: id,
+            token: token_b
+        }]
+    );
+    let p = delivered(&e);
+    assert_eq!(p.client_id.as_deref(), Some(client_x));
+    assert_eq!(
+        p.pairing_id, pairing_a,
+        "the delivery keeps the pairing Calari authorised"
+    );
     e.rt.block_on(e.state.db.close());
 }
 
@@ -562,7 +598,9 @@ fn a_conflicting_chunk_is_quarantined_not_deleted() {
     );
     let token = e.token.clone();
     assert_eq!(
-        cap_meeting_recorder::recover_all(&root, |_| Some(token.clone())),
+        ids(cap_meeting_recorder::recover_all(&root, |_| vec![
+            token.clone()
+        ])),
         vec![id]
     );
     let j = Journal::load(&d).unwrap();

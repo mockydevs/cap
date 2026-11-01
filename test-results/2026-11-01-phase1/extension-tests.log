@@ -1,7 +1,7 @@
-✔ chunks are contiguous even when onstop fires after the next chunk starts (2.282934ms)
-✔ a stop right after start still yields one chunk with a positive duration (0.434585ms)
-✔ only a confirmed upload is an acknowledgement (0.39118ms)
-✔ gaps are accepted only for audio that is gone or quarantined (0.097153ms)
+✔ chunks are contiguous even when onstop fires after the next chunk starts (2.399753ms)
+✔ a stop right after start still yields one chunk with a positive duration (0.449213ms)
+✔ only a confirmed upload is an acknowledgement (0.413207ms)
+✔ gaps are accepted only for audio that is gone or quarantined (0.10474ms)
 ℹ tests 4
 ℹ suites 0
 ℹ pass 4
@@ -9,4 +9,4 @@
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 37.188245
+ℹ duration_ms 37.205563

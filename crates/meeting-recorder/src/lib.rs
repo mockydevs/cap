@@ -167,6 +167,23 @@ impl Client {
         }
     }
 
+    /// Asks the server to let this (re-paired, same-client) credential finish
+    /// a meeting whose original credential expired.
+    pub fn adopt(&self, id: &str) -> Result<()> {
+        let (status, body) = self.send(
+            self.http
+                .post(format!("{}/v1/meetings/{id}/adopt", self.server)),
+        )?;
+        match status {
+            200 => Ok(()),
+            401 | 404 => Err(Error::Reauthorize),
+            s => Err(Error::Http(format!(
+                "taking over the meeting returned {s} {}",
+                body.get("error").and_then(|v| v.as_str()).unwrap_or("")
+            ))),
+        }
+    }
+
     pub fn finalize(
         &self,
         id: &str,
@@ -343,11 +360,22 @@ pub fn finalize(
     }
 }
 
-/// Resumes meetings left unfinished by a crash: uploads what is on disk and
-/// finalizes it with its recorded stop reason (or `interrupted`). Each
-/// meeting uses its own credential (`token_for`), never just the current
-/// pairing. Returns the meeting ids it finished.
-pub fn recover_all(root: &Path, token_for: impl Fn(&Journal) -> Option<String>) -> Vec<String> {
+/// A meeting [`recover_all`] finished, and the credential that finished it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recovered {
+    pub meeting_id: String,
+    pub token: String,
+}
+
+/// Resumes meetings left unfinished by a crash, an outage or an expired
+/// credential: uploads what is on disk and finalizes it with its recorded
+/// stop reason (or `interrupted`).
+///
+/// `tokens_for` lists credentials to try for a meeting, its own first. If
+/// the meeting's own credential is refused (expired, revoked), a later one
+/// from a re-pairing for the same client asks the server to take the meeting
+/// over first; the server only allows that for the same tenant and client.
+pub fn recover_all(root: &Path, tokens_for: impl Fn(&Journal) -> Vec<String>) -> Vec<Recovered> {
     let mut done = Vec::new();
     let Ok(entries) = std::fs::read_dir(root) else {
         return done;
@@ -358,15 +386,30 @@ pub fn recover_all(root: &Path, token_for: impl Fn(&Journal) -> Option<String>) 
         if j.finalized {
             continue;
         }
-        let Some(token) = token_for(&j) else { continue };
-        let Ok(client) = Client::new(&j.server, &token) else {
-            continue;
-        };
         let reason = j.stop_reason.unwrap_or(StopReason::Interrupted);
         let id = j.meeting_id.clone();
+        let server = j.server.clone();
+        let tokens = tokens_for(&j);
         let journal = Mutex::new(j);
-        if finalize(&client, &dir, &journal, reason).is_ok() {
-            done.push(id);
+        for (n, token) in tokens.iter().enumerate() {
+            let Ok(client) = Client::new(&server, token) else {
+                break;
+            };
+            if n > 0 && client.adopt(&id).is_err() {
+                continue;
+            }
+            match finalize(&client, &dir, &journal, reason) {
+                Ok(()) => {
+                    done.push(Recovered {
+                        meeting_id: id.clone(),
+                        token: token.clone(),
+                    });
+                    break;
+                }
+                Err(Error::Reauthorize) => continue,
+                // Offline or server busy: leave it for the next attempt.
+                Err(_) => break,
+            }
         }
     }
     done

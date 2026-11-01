@@ -1,17 +1,15 @@
 == setup
 health: {'database': True, 'status': 'ok', 'transcription': 'local-whisper'}
 == pairing (Calari side, signed)
-pairing code issued: V7**-****
+pairing code issued: TF**-****
 == upload two speech chunks
 == wait for transcription and signed delivery
-delivered in 1.0s, signature verified: True
+delivered in 3.0s, signature verified: True
 transcript provider/model: cap-whisper ggml-tiny.en
   [     0 -   1680 ms] Thanks for joining.
   [  1680 -   5040 ms] Today we will review the launch plan for the new website.
   [  5397 -  11003 ms] Please send the product photos by Friday and I will update the client portal.
 == stored audio is SSE-KMS encrypted
-  000000-1e1967776b4148cf.ogg aws:kms
-  000001-06c4fb3de20adfca.ogg aws:kms
   000000-1e1967776b4148cf.ogg aws:kms
   000001-06c4fb3de20adfca.ogg aws:kms
 PASS
