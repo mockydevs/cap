@@ -13,6 +13,7 @@ export function createChunker({
   clearTimer,
   makeRecorder,
   onChunk,
+  onSaveError,
   startSeq = 0,
   baseOffsetMs = 0,
 }) {
@@ -25,6 +26,7 @@ export function createChunker({
   const failed = new Map();
   let stopped = false;
   let stopTask = null;
+  let stopAttempted = false;
 
   async function save(chunk) {
     try {
@@ -33,6 +35,7 @@ export function createChunker({
     } catch (error) {
       // Keep the exact bytes and timing until a later Stop retries storage.
       failed.set(chunk.seq, { chunk, error });
+      return error;
     }
   }
 
@@ -49,7 +52,7 @@ export function createChunker({
         if (e.data && e.data.size) entry.parts.push(e.data);
       };
       entry.recorder.onstop = async () => {
-        await save({
+        const error = await save({
           seq: entry.seq,
           startMs: entry.startMs,
           durationMs: Math.max(1, entry.endMs - entry.startMs),
@@ -57,6 +60,12 @@ export function createChunker({
         });
         pending.delete(entry.done);
         resolve();
+        if (error && !stopped) {
+          // Bound retained audio immediately, before notifying the owner.
+          // The owner may call Stop, but this callback must never await it.
+          halt();
+          onSaveError?.(error);
+        }
       };
     });
     pending.add(entry.done);
@@ -77,18 +86,22 @@ export function createChunker({
     end(previous, at);
   }
 
+  function halt() {
+    if (stopped) return;
+    stopped = true;
+    clearTimer(timer);
+    end(current, elapsed());
+  }
+
   begin(elapsed());
 
   return {
     // A retry never restarts capture or allocates another sequence number.
     stop() {
       if (stopTask) return stopTask;
-      const retry = stopped;
-      if (!stopped) {
-        stopped = true;
-        clearTimer(timer);
-        end(current, elapsed());
-      }
+      const retry = stopAttempted;
+      stopAttempted = true;
+      halt();
       stopTask = (async () => {
         await Promise.all([...pending]);
         if (retry)

@@ -134,13 +134,12 @@ test("quota failure retains earlier and final chunks for Stop retry without reca
   assert.equal(chunks.length, 0);
   const originals = attempts.slice();
   full = false;
-  assert.deepEqual(await chunker.stop(), { lastSeq: 2 });
+  assert.deepEqual(await chunker.stop(), { lastSeq: 1 });
   assert.deepEqual(chunks, [
     { seq: 0, startMs: 0, durationMs: 30_000 },
-    { seq: 1, startMs: 30_000, durationMs: 30_000 },
-    { seq: 2, startMs: 60_000, durationMs: 5_000 },
+    { seq: 1, startMs: 30_000, durationMs: 1 },
   ]);
-  assert.deepEqual(attempts.slice(3), originals);
-  assert.deepEqual(await chunker.stop(), { lastSeq: 2 });
-  assert.equal(attempts.length, 6);
+  assert.deepEqual(attempts.slice(2), originals);
+  assert.deepEqual(await chunker.stop(), { lastSeq: 1 });
+  assert.equal(attempts.length, 4);
 });

@@ -13,6 +13,13 @@ import {
 } from "./shared.js";
 
 let rec = null; // current recording session
+const SAVE_FAILURE = "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
+
+function reportSaveFailure(r) {
+  return chrome.runtime.sendMessage({
+    type: "offscreen-save-failed", meetingId: r.meetingId, error: SAVE_FAILURE,
+  }).catch(() => {});
+}
 
 async function loadDetector() {
   const bytes = await (
@@ -105,6 +112,12 @@ async function start(msg) {
       }),
     startSeq: msg.nextSeq ?? 0,
     baseOffsetMs: msg.offsetMs ?? 0,
+    onSaveError: () => {
+      // Chunker has already stopped rolling over and resolved this save.
+      // Do not await Stop from inside the persistence callback.
+      void reportSaveFailure(r);
+      void stop("interrupted").catch(() => {});
+    },
     onChunk: async ({ seq, startMs, durationMs, parts }) => {
       const blob = new Blob(parts, { type: mime.split(";")[0] });
       if (blob.size === 0) {
@@ -176,9 +189,7 @@ function tick() {
     });
   } else if (decision === 2) {
     // Failed saves already publish retry state to the service worker.
-    void stop(
-      STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped",
-    ).catch(() => {});
+    void stop(STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped").catch(() => {});
   }
   if (now % 10_000 < 500) drain();
 }
@@ -189,16 +200,20 @@ function signal(code) {
   tick();
 }
 
-async function stop(reason) {
+function stop(reason) {
   const r = rec;
-  if (!r) return;
-  if (r.saving) throw new Error("Audio is still being saved. Please wait.");
-  r.saving = true;
+  if (!r) return Promise.resolve();
+  if (r.stopTask) return r.stopTask;
+  r.stopReason ??= reason;
+  r.stopTask = stopSession(r).finally(() => { r.stopTask = null; });
+  return r.stopTask;
+}
+
+async function stopSession(r) {
   r.stopping = true;
   clearInterval(r.tickTimer);
   const saved = r.chunker.stop().then(
-    (result) => ({ result }),
-    (error) => ({ error }),
+    (result) => ({ result }), (error) => ({ error }),
   );
   // Release capture even when storage is full. The chunker retains failed
   // bytes in this offscreen document and Stop can retry saving them.
@@ -211,18 +226,8 @@ async function stop(reason) {
     if (outcome.error) throw outcome.error;
     ({ lastSeq } = outcome.result);
   } catch {
-    const message =
-      "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
-    await chrome.runtime
-      .sendMessage({
-        type: "offscreen-save-failed",
-        meetingId: r.meetingId,
-        error: message,
-      })
-      .catch(() => {});
-    throw new Error(message);
-  } finally {
-    r.saving = false;
+    await reportSaveFailure(r);
+    throw new Error(SAVE_FAILURE);
   }
   rec = null;
   // The service worker persists unfinished state before attempting delivery.
@@ -231,7 +236,7 @@ async function stop(reason) {
   chrome.runtime.sendMessage({
     type: "offscreen-stopped",
     meetingId: r.meetingId,
-    reason,
+    reason: r.stopReason,
     lastSeq,
   });
 }
@@ -250,11 +255,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         await stop(msg.reason ?? "user_stopped");
         return { ok: true };
       case "status":
-        return {
-          recording: !!rec && !rec.stopping,
-          pendingSave: !!rec?.stopping,
-          meetingId: rec?.meetingId ?? null,
-        };
+        return { recording: !!rec && !rec.stopping, pendingSave: !!rec?.stopping, meetingId: rec?.meetingId ?? null };
       default:
         return { ok: false };
     }
