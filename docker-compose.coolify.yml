@@ -21,6 +21,46 @@ x-limits: &default-limits
   cpus: ${DEFAULT_CPUS:-0.5}
 
 services:
+  # Additive meeting pipeline; the existing web app and recording workers stay available.
+  cap-server:
+    build:
+      context: .
+      dockerfile: crates/cap-server/Dockerfile
+    expose: ["8787"]
+    labels:
+      - "traefik.docker.network=coolify"
+    restart: unless-stopped
+    mem_limit: ${MEETING_SERVER_MEM_LIMIT:-2g}
+    cpus: ${MEETING_SERVER_CPUS:-2.0}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    volumes:
+      - ${CAP_WHISPER_MODEL_DIRECTORY:?Set the absolute host directory containing verified Whisper models}:/models:ro
+    environment:
+      CAP_ENV: production
+      CAP_SERVER_BIND: 0.0.0.0:8787
+      CAP_SERVER_PUBLIC_URL: ${CAP_SERVER_PUBLIC_URL:?Set the public HTTPS meeting service URL}
+      DATABASE_URL: ${DATABASE_URL:?Use the existing private Cap PostgreSQL connection}
+      AWS_REGION: ${AWS_REGION:?Set AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:?Use the existing private Cap bucket}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+      AWS_KMS_KEY_ARN: ${AWS_KMS_KEY_ARN:-}
+      CAP_MEETING_INTEGRATIONS: ${CAP_MEETING_INTEGRATIONS:?Set tenant-bound signed delivery configuration as a secret}
+      MEETING_TRANSCRIPTION_PROVIDER: local-whisper
+      MEETING_WHISPER_MODEL_PATH: /models/ggml-base.en.bin
+      MEETING_WHISPER_THREADS: ${MEETING_WHISPER_THREADS:-2}
+      MEETING_WHISPER_LANGUAGE: ${MEETING_WHISPER_LANGUAGE:-en}
+      TRUSTED_PROXY_HOP_COUNT: ${TRUSTED_PROXY_HOP_COUNT:?Set the verified number of proxy hops}
+      RUST_LOG: info
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [cap-internal]
+
   web:
     build:
       context: .
