@@ -169,7 +169,7 @@ mod fixtures {
         );
         let res = LoginExchangeResponse {
             tenant_id: "00000000-0000-4000-8000-000000000001".into(),
-            user_id: "00000000-0000-4000-8000-0000000000a1".into(),
+            user_id: "clx8n2k0q0000abcd1234efgh".into(),
             email: "clare@calari.example".into(),
             display_name: "Clare".into(),
             role: StaffRole::Admin,

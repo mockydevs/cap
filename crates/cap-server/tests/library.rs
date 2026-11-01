@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 const SECRET: [u8; 32] = [11; 32];
 const TENANT: &str = "00000000-0000-4000-8000-000000000001";
-const STAFF: &str = "00000000-0000-4000-8000-0000000000a1";
+const STAFF: &str = "clx8n2k0q0000abcd1234efgh";
 
 #[derive(Default)]
 struct FakeCalari {

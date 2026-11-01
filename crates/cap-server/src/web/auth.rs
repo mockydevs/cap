@@ -115,8 +115,8 @@ impl FromRequestParts<AppState> for WebUser {
         };
         // Every protected request asks Calari first; there is no cached allow.
         {
-            let user_id: uuid::Uuid = row.get("calari_user_id");
-            match check_status(state, &user.tenant_id, &user_id.to_string()).await {
+            let user_id: String = row.get("calari_user_id");
+            match check_status(state, &user.tenant_id, &user_id).await {
                 Status::Active(s) => {
                     user.email = s.email.trim().to_lowercase();
                     user.name = cap_meeting_protocol::clean_text(&s.display_name, 100)
@@ -390,7 +390,7 @@ pub async fn callback(
         }
     };
     if staff.tenant_id != integration.tenant_id
-        || cap_meeting_protocol::ids::parse_uuid(&staff.user_id).is_none()
+        || !cap_meeting_protocol::valid_external_id(&staff.user_id)
     {
         return failed("That account does not belong to this Cap workspace.");
     }
@@ -401,7 +401,7 @@ pub async fn callback(
     let token = random_token(43);
     let saved = sqlx::query(
         "INSERT INTO cap_web_sessions (token_hash, tenant_id, calari_user_id, email, display_name, role, expires_at, verified_at)
-         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, now())",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())",
     )
     .bind(sha256_hex(token.as_bytes()))
     .bind(&staff.tenant_id)
