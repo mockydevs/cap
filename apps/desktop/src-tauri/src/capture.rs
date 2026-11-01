@@ -23,19 +23,26 @@ pub fn capabilities() -> Result<Capabilities, String> {
             kind: SourceKind::Monitor,
         });
     }
-    for window in Window::all().map_err(|e| e.to_string())? {
-        let is_minimized = window.is_minimized().map_err(|e| e.to_string())?;
-        let title = window.title().map_err(|e| e.to_string())?;
+    // Windows are optional: some desktops cannot list them, and that must
+    // not hide the screens. A window that cannot be read is skipped.
+    for window in Window::all().unwrap_or_default() {
+        let (Ok(is_minimized), Ok(title)) = (window.is_minimized(), window.title()) else {
+            continue;
+        };
         if is_minimized || title.trim().is_empty() {
             continue;
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let id = window.id().map_err(|e| e.to_string())?;
-            let x = window.x().map_err(|e| e.to_string())?;
-            let y = window.y().map_err(|e| e.to_string())?;
-            let width = window.width().map_err(|e| e.to_string())?;
-            let height = window.height().map_err(|e| e.to_string())?;
+            let (Ok(id), Ok(x), Ok(y), Ok(width), Ok(height)) = (
+                window.id(),
+                window.x(),
+                window.y(),
+                window.width(),
+                window.height(),
+            ) else {
+                continue;
+            };
             sources.push(CaptureSource {
                 id: format!("window:{id}:{x}:{y}:{width}:{height}"),
                 name: title,
@@ -93,6 +100,9 @@ pub struct CaptureProcess {
     pub video: Child,
     pub system_audio_helper: Option<Child>,
     pub system_audio_fifo: Option<std::path::PathBuf>,
+    /// Windows system audio (WASAPI loopback). Stops when dropped, after
+    /// FFmpeg has exited.
+    pub _loopback: Option<cap_meeting_recorder::system_audio::Loopback>,
 }
 
 /// What a platform's `platform_input` implementation optionally spawns as a
@@ -100,6 +110,7 @@ pub struct CaptureProcess {
 /// `-f avfoundation`/`gdigrab`/`x11grab` cannot itself produce. Only the
 /// macOS branch (system audio, no microphone) ever returns `Some`.
 type AudioHelper = Option<(Child, std::path::PathBuf)>;
+type Loopback = Option<cap_meeting_recorder::system_audio::Loopback>;
 
 pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, String> {
     if !(1..=60).contains(&options.frame_rate) || !(1..=51).contains(&options.quality) {
@@ -114,9 +125,9 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, 
     }
     width = width.min(options.width).max(2) & !1;
     height = height.min(options.height).max(2) & !1;
-    let mut command = Command::new("ffmpeg");
+    let mut command = Command::new(crate::ffmpeg_path());
     command.arg("-hide_banner").arg("-nostdin").arg("-y");
-    let audio_helper = platform_input(&mut command, x, y, width, height, options)?;
+    let (audio_helper, loopback) = platform_input(&mut command, x, y, width, height, options)?;
     command.args([
         "-map",
         "0:v:0",
@@ -169,6 +180,7 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, 
         video,
         system_audio_helper,
         system_audio_fifo,
+        _loopback: loopback,
     })
 }
 
@@ -180,7 +192,7 @@ fn platform_input(
     w: u32,
     h: u32,
     o: &CaptureOptions,
-) -> Result<AudioHelper, String> {
+) -> Result<(AudioHelper, Loopback), String> {
     c.args([
         "-f",
         "gdigrab",
@@ -200,9 +212,23 @@ fn platform_input(
     if let Some(mic) = &o.microphone_id {
         c.args(["-f", "dshow", "-i", &format!("audio={mic}")]);
     } else if o.system_audio {
-        c.args(["-f", "dshow", "-i", "audio=virtual-audio-capturer"]);
+        // The computer's own sound via WASAPI loopback (no extra driver).
+        let loopback = cap_meeting_recorder::system_audio::Loopback::start()?;
+        c.args([
+            "-thread_queue_size",
+            "1024",
+            "-f",
+            "f32le",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-i",
+            loopback.path(),
+        ]);
+        return Ok((None, Some(loopback)));
     }
-    Ok(None)
+    Ok((None, None))
 }
 
 #[cfg(target_os = "macos")]
@@ -213,7 +239,7 @@ fn platform_input(
     _w: u32,
     _h: u32,
     o: &CaptureOptions,
-) -> Result<AudioHelper, String> {
+) -> Result<(AudioHelper, Loopback), String> {
     let index = o
         .video_source_id
         .split(':')
@@ -231,7 +257,7 @@ fn platform_input(
     ]);
     if let Some(mic) = &o.microphone_id {
         c.args(["-f", "avfoundation", "-i", &format!("none:{mic}")]);
-        return Ok(None);
+        return Ok((None, None));
     }
     if o.system_audio {
         // *** UNVERIFIED — see macos/sck-audio-capture.swift's header comment. ***
@@ -256,9 +282,9 @@ fn platform_input(
             "-i",
             &fifo.to_string_lossy(),
         ]);
-        return Ok(Some((helper, fifo)));
+        return Ok((Some((helper, fifo)), None));
     }
-    Ok(None)
+    Ok((None, None))
 }
 
 /// Creates the named pipe the ScreenCaptureKit helper writes to and ffmpeg
@@ -350,7 +376,7 @@ fn platform_input(
     w: u32,
     h: u32,
     o: &CaptureOptions,
-) -> Result<AudioHelper, String> {
+) -> Result<(AudioHelper, Loopback), String> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("DISPLAY").is_none() {
         return Err(
             "Wayland requires an xdg-desktop-portal PipeWire stream; start Cap with portal access"
@@ -375,7 +401,7 @@ fn platform_input(
     } else if o.system_audio {
         c.args(["-f", "pulse", "-i", "@DEFAULT_MONITOR@"]);
     }
-    Ok(None)
+    Ok((None, None))
 }
 
 #[cfg(test)]

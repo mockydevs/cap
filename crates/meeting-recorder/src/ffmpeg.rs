@@ -21,8 +21,12 @@ pub enum Input {
     WindowsDshow { device: String },
     /// AVFoundation audio device index or name (`:0`).
     MacAvfoundation { device: String },
-    /// Raw f32le 48 kHz stereo from the ScreenCaptureKit helper's pipe.
-    MacSystemAudioPipe { path: String },
+    /// Raw f32le 48 kHz stereo from a pipe (the macOS ScreenCaptureKit
+    /// helper, or Windows loopback once it is running).
+    PcmPipe { path: String },
+    /// The computer's own sound on Windows via WASAPI loopback. The session
+    /// starts the capture and swaps this for a [`Input::PcmPipe`].
+    WindowsLoopback,
     /// X11 screen area for video mode.
     LinuxX11 {
         display: String,
@@ -69,12 +73,22 @@ impl Input {
                 "-i".into(),
                 format!("none:{device}"),
             ],
-            Input::MacSystemAudioPipe { path } => {
-                v(&["-f", "f32le", "-ar", "48000", "-ac", "2", "-i"])
-                    .into_iter()
-                    .chain([path.clone()])
-                    .collect()
-            }
+            Input::PcmPipe { path } => v(&[
+                "-thread_queue_size",
+                "1024",
+                "-f",
+                "f32le",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-i",
+            ])
+            .into_iter()
+            .chain([path.clone()])
+            .collect(),
+            // Replaced before FFmpeg starts; silence keeps the mix valid if not.
+            Input::WindowsLoopback => v(&["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]),
             Input::LinuxX11 {
                 display,
                 x,

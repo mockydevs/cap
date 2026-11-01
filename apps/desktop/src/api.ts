@@ -42,16 +42,8 @@ export const desktop = {
   resume: () => invoke<void>("resume_recording"),
   stop: () => invoke<Project>("stop_recording"),
   remove: (projectId: string) => invoke<void>("delete_project", { projectId }),
-  login: (serverUrl: string, email: string, password: string) =>
-    invoke<{ displayName: string }>("login", { serverUrl, email, password }),
-  googleLogin: (serverUrl: string) =>
-    invoke<{ displayName: string }>("google_login", { serverUrl }),
-  logout: () => invoke<void>("logout"),
-  upload: (projectId: string) =>
-    invoke<Project>("upload_project", { projectId }),
   reveal: (projectId: string) => invoke<void>("reveal_project", { projectId }),
-  openExtensionStore: (browser: "chrome" | "edge" | "firefox") =>
-    invoke<void>("open_extension_store", { browser }),
+  installUpdate: () => invoke<void>("install_update"),
 };
 
 export type PairInfo = {
@@ -89,8 +81,7 @@ export type MeetingOptions = {
 };
 
 export const meeting = {
-  pair: (serverUrl: string, code: string) =>
-    invoke<PairInfo>("meeting_pair", { serverUrl, code }),
+  pair: (code: string) => invoke<PairInfo>("meeting_pair", { code }),
   device: () => invoke<PairInfo | null>("meeting_device"),
   unpair: () => invoke<void>("meeting_unpair"),
   start: (options: MeetingOptions) =>
@@ -99,6 +90,5 @@ export const meeting = {
   stop: () => invoke<void>("meeting_signal", { action: "stop" }),
   recording: () => invoke<string | null>("meeting_recording"),
   pendingLink: () => invoke<NoteTakerLink | null>("meeting_pending_link"),
-  knownServer: () => invoke<string | null>("meeting_known_server"),
   audioDevices: () => invoke<AudioDevices>("meeting_audio_devices"),
 };

@@ -16,6 +16,17 @@ serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 
+[target.'cfg(windows)'.dependencies]
+# WASAPI loopback: the computer's own sound without "Stereo Mix".
+wasapi = "0.26"
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_Pipes",
+] }
+
 [lints]
 workspace = true
 

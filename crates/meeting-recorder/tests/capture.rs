@@ -321,6 +321,159 @@ fn source_ending_stops_finalizes_and_delivers_every_segment() {
     e.rt.block_on(e.state.db.close());
 }
 
+/// The raw-PCM pipe path used for Windows loopback (and the macOS helper):
+/// a paced writer that goes quiet must not stall FFmpeg's mix with the
+/// microphone. Linux FIFO here; the Windows named pipe and WASAPI capture
+/// themselves need a Windows machine.
+#[cfg(unix)]
+#[test]
+fn a_paced_system_audio_pipe_mixes_with_the_microphone() {
+    use cap_meeting_recorder::system_audio::{Pacer, FRAME_BYTES};
+    use std::io::Write;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let fifo = root.join("system-audio.pcm");
+    assert!(std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap()
+        .success());
+    let done = Arc::new(AtomicBool::new(false));
+    let writer = {
+        let fifo = fifo.clone();
+        let done = done.clone();
+        std::thread::spawn(move || {
+            // Blocks until FFmpeg opens the pipe, like the Windows writer.
+            let mut out = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+            let start = Instant::now();
+            let mut pacer = Pacer::new(start);
+            let mut n = 0u64;
+            while !done.load(Ordering::SeqCst) {
+                // 2 s of "the other side talking", then nothing playing.
+                let talking = start.elapsed() < Duration::from_secs(2);
+                let captured = if talking { 480 } else { 0 };
+                let plan = pacer.plan(Instant::now(), captured);
+                let mut buf = Vec::with_capacity((plan.keep + plan.silence) as usize * FRAME_BYTES);
+                for _ in 0..plan.keep {
+                    let v = ((n as f32) * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.3;
+                    n += 1;
+                    buf.extend(v.to_le_bytes());
+                    buf.extend(v.to_le_bytes());
+                }
+                buf.resize(buf.len() + plan.silence as usize * FRAME_BYTES, 0);
+                if out.write_all(&buf).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        })
+    };
+    let (mut session, events) = start_with(
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
+        &d,
+        vec![
+            Input::Synthetic {
+                seconds: 60,
+                silent: false,
+            },
+            Input::PcmPipe {
+                path: fifo.to_string_lossy().into_owned(),
+            },
+        ],
+        CaptureMode::Audio,
+        DetectorConfig::default(),
+    );
+    std::thread::sleep(Duration::from_secs(7));
+    let stopped_at = Instant::now();
+    session.stop();
+    assert!(
+        stopped_at.elapsed() < Duration::from_secs(5),
+        "stop waited on the pipe"
+    );
+    done.store(true, Ordering::SeqCst);
+    let _ = writer.join();
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
+    let evs = events.lock().unwrap().clone();
+    assert!(
+        evs.contains(&Event::Stopped {
+            reason: StopReason::UserStopped
+        }),
+        "{evs:?}"
+    );
+    let p = delivered(&e);
+    // 2-second segments over ~7 s: the mix kept running after the pipe went quiet.
+    assert!(
+        p.transcript.segments.len() >= 3,
+        "{:?}",
+        p.transcript.segments
+    );
+    e.rt.block_on(e.state.db.close());
+}
+
+/// Real PulseAudio capture with the inputs the app picks on Linux: the
+/// default microphone plus the speakers' monitor. Needs a running PulseAudio
+/// (or PipeWire-Pulse) with something playing on both; see
+/// `scripts/desktop/pulse-capture-smoke.sh`.
+#[test]
+fn linux_records_the_microphone_and_the_speakers_through_pulse() {
+    use cap_meeting_recorder::devices::{self, InputChoice, Platform};
+    if std::env::var("CAP_TEST_PULSE").as_deref() != Ok("1") {
+        eprintln!("SKIPPED: set CAP_TEST_PULSE=1 with PulseAudio running");
+        return;
+    }
+    let Some(e) = env() else { return };
+    let found = devices::list_audio_devices(&e.ffmpeg, Platform::Linux);
+    assert!(
+        found.iter().any(|d| d.loopback),
+        "no monitor source: {found:?}"
+    );
+    assert!(devices::system_audio_available(Platform::Linux, &found));
+    let inputs = devices::resolve_inputs(
+        Platform::Linux,
+        &InputChoice {
+            mode: CaptureMode::Audio,
+            microphone_id: None,
+            system_audio: true,
+            screen: None,
+            x11_display: None,
+        },
+        &found,
+    )
+    .unwrap();
+    assert_eq!(
+        inputs,
+        vec![
+            Input::LinuxPulse {
+                source: "default".into()
+            },
+            Input::LinuxMonitor
+        ]
+    );
+    let (_, d) = dir();
+    let (mut session, events) = start_with(
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
+        &d,
+        inputs,
+        CaptureMode::Audio,
+        DetectorConfig::default(),
+    );
+    std::thread::sleep(Duration::from_secs(7));
+    session.stop();
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
+    let evs = events.lock().unwrap().clone();
+    assert!(
+        evs.contains(&Event::Stopped {
+            reason: StopReason::UserStopped
+        }),
+        "{evs:?}"
+    );
+    assert!(delivered(&e).transcript.segments.len() >= 3);
+    e.rt.block_on(e.state.db.close());
+}
+
 #[test]
 fn user_stop_closes_the_last_segment_and_uploads_it() {
     let Some(e) = env() else { return };

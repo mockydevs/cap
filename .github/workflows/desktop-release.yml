@@ -1,9 +1,28 @@
 name: Desktop release
 
+# Builds, checks and signs the desktop installers, then uploads them with a
+# download manifest as workflow artifacts. It never publishes a GitHub
+# release: the release owner reviews the artifacts and copies them to the
+# download server.
+#
+#   gh workflow run desktop-release.yml --ref <branch> [-f include_mac=true]
+#
+# Secrets (Linux + Windows): TAURI_SIGNING_PRIVATE_KEY,
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD (the updater signing key).
+# Variables: CAP_DEFAULT_SERVER_URL (https://meetings.calari.tech),
+#   TAURI_UPDATER_PUBKEY (public half of the updater key),
+#   CAP_UPDATER_ENDPOINT (https://<host>/<path>/latest.json).
+# macOS lane only (off by default, Mac signing is deferred): APPLE_CERTIFICATE,
+#   APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID,
+#   APPLE_PASSWORD, APPLE_TEAM_ID.
+
 on:
   workflow_dispatch:
-  push:
-    tags: ["desktop-v*"]
+    inputs:
+      include_mac:
+        description: Also build signed macOS DMGs (needs the Apple secrets)
+        type: boolean
+        default: false
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -12,10 +31,18 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  CAP_DEFAULT_SERVER_URL: ${{ vars.CAP_DEFAULT_SERVER_URL }}
+  TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+  CAP_UPDATER_ENDPOINT: ${{ vars.CAP_UPDATER_ENDPOINT }}
+
 jobs:
   preflight:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      download_base: ${{ steps.check.outputs.download_base }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -25,52 +52,60 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      INCLUDE_MAC: ${{ inputs.include_mac }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - name: Validate release tag and signing configuration
+      - name: Check release settings
+        id: check
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
-            version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
-            expected="desktop-v${version}"
-            if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
-              echo "Release tag $GITHUB_REF_NAME does not match desktop version $expected" >&2
-              exit 1
-            fi
-          fi
-
+          version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Bad version $version" >&2; exit 1; }
           missing=()
-          for name in \
-            TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
-            APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
-            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+            CAP_DEFAULT_SERVER_URL TAURI_UPDATER_PUBKEY CAP_UPDATER_ENDPOINT; do
             [[ -n "${!name:-}" ]] || missing+=("$name")
           done
+          if [[ "$INCLUDE_MAC" == true ]]; then
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+              APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              [[ -n "${!name:-}" ]] || missing+=("$name")
+            done
+          fi
           if (( ${#missing[@]} )); then
-            printf 'Missing required release secret: %s\n' "${missing[@]}" >&2
+            printf 'Missing required release setting: %s\n' "${missing[@]}" >&2
             exit 1
           fi
+          if [[ ! "$CAP_DEFAULT_SERVER_URL" =~ ^https://[A-Za-z0-9.-]+$ || "$CAP_DEFAULT_SERVER_URL" =~ localhost|^https://127\. ]]; then
+            echo "CAP_DEFAULT_SERVER_URL must be the production https origin" >&2; exit 1
+          fi
+          if [[ ! "$CAP_UPDATER_ENDPOINT" =~ ^(https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*)latest\.json$ ]]; then
+            echo "CAP_UPDATER_ENDPOINT must be https://<host>/<path>/latest.json" >&2; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "download_base=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
 
-  build:
+  linux:
     needs: preflight
-    permissions:
-      contents: write
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-15
-            args: --target aarch64-apple-darwin --bundles dmg
-          - platform: macos-15-intel
-            args: --target x86_64-apple-darwin --bundles dmg
-          - platform: ubuntu-24.04
-            args: --bundles deb
-          - platform: windows-2022
-            args: --bundles nsis
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cap
+          POSTGRES_PASSWORD: cap
+          POSTGRES_DB: cap_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cap -d cap_test" --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      CAP_TEST_DATABASE_URL: postgres://cap:cap@127.0.0.1:5432/cap_test
+      CAP_TEST_FFMPEG: ffmpeg
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -79,15 +114,162 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22, cache: pnpm }
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          targets: ${{ contains(matrix.args, '--target') && (contains(matrix.args, 'aarch64') && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
-      - if: startsWith(matrix.platform, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev libgbm-dev
+        with: { toolchain: 1.95.0 }
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libpipewire-0.3-dev libgbm-dev libclang-dev ffmpeg pulseaudio pulseaudio-utils
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @cap/desktop typecheck
-      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+      - name: Recorder pipeline tests (real FFmpeg, server, mock Calari)
+        run: cargo test -p cap-meeting-recorder --locked
+      - name: Microphone + speaker capture through PulseAudio (synthetic audio)
+        run: scripts/desktop/pulse-capture-smoke.sh
+      - name: Build the signed .deb
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 -I scripts/desktop/release-config.py > "$RUNNER_TEMP/tauri.release.json"
+          pnpm --filter @cap/desktop tauri build --bundles deb --config "$RUNNER_TEMP/tauri.release.json"
+      - name: Collect and check the .deb
+        run: |
+          set -euo pipefail
+          out=dist/desktop; mkdir -p "$out"
+          name="cap-desktop_${VERSION}_linux-x86_64.deb"
+          src="apps/desktop/src-tauri/target/release/bundle/deb/Cap_${VERSION}_amd64.deb"
+          cp "$src" "$out/$name"
+          cp "$src.sig" "$out/$name.sig"
+          deb="$out/$name"
+          [[ "$(dpkg-deb -f "$deb" Package)" == cap ]]
+          [[ "$(dpkg-deb -f "$deb" Version)" == "$VERSION" ]]
+          [[ "$(dpkg-deb -f "$deb" Architecture)" == amd64 ]]
+          dpkg-deb -f "$deb" Depends | grep -qw ffmpeg
+          tmp="$(mktemp -d)"; dpkg-deb -x "$deb" "$tmp"
+          file "$tmp/usr/bin/cap-desktop" | grep -q "ELF 64-bit LSB pie executable, x86-64"
+          strings "$tmp/usr/bin/cap-desktop" | grep -qF "$CAP_DEFAULT_SERVER_URL"
+          docker run --rm -v "$PWD/$deb:/tmp/cap.deb:ro" ubuntu:24.04 bash -euc '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq && apt-get install -y -qq /tmp/cap.deb >/dev/null
+            test -x /usr/bin/cap-desktop && command -v ffmpeg
+            if ldd /usr/bin/cap-desktop | grep "not found"; then exit 1; fi
+            ffmpeg -hide_banner -devices | grep -q " pulse"
+            apt-get remove -y -qq cap >/dev/null && test ! -e /usr/bin/cap-desktop'
+          dpkg-deb -I "$deb" > "$out/$name.info.txt"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-linux
+          path: dist/desktop/
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    needs: preflight
+    runs-on: windows-2022
+    timeout-minutes: 75
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with: { toolchain: 1.95.0 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cap/desktop typecheck
+      - name: Fetch the pinned FFmpeg (checksum verified)
+        run: python -I scripts/desktop/fetch-windows-ffmpeg.py
+      - name: FFmpeg smoke test (synthetic audio into Opus segments)
+        run: |
+          set -euo pipefail
+          ff=apps/desktop/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe
+          "$ff" -hide_banner -version | head -1
+          "$ff" -hide_banner -devices 2>&1 | grep -E " dshow| gdigrab"
+          "$ff" -hide_banner -encoders 2>&1 | grep -E "libopus|libvpx"
+          d="$RUNNER_TEMP/seg"; mkdir -p "$d"
+          "$ff" -hide_banner -loglevel error -f lavfi -i "sine=frequency=440:duration=3" \
+            -c:a libopus -b:a 48k -f segment -segment_time 1 "$d/seg_%06d.ogg"
+          (( $(find "$d" -name "seg_*.ogg" | wc -l) >= 3 ))
+          # Lists devices on a machine with none; must not crash.
+          "$ff" -hide_banner -list_devices true -f dshow -i dummy 2>&1 | tail -3 || true
+      - name: Recorder unit tests on Windows (loopback pipe, pacing, devices)
+        run: cargo test -p cap-meeting-recorder --lib --locked
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+      - name: Build the signed installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python -I scripts/desktop/release-config.py > "$RUNNER_TEMP/tauri.release.json"
+          pnpm --filter @cap/desktop tauri build --bundles nsis --config "$RUNNER_TEMP/tauri.release.json"
+      - name: Collect, install and check the installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = 'dist/desktop'; New-Item -ItemType Directory -Force $out | Out-Null
+          $name = "cap-desktop_$($env:VERSION)_windows-x86_64-setup.exe"
+          $src = "apps/desktop/src-tauri/target/release/bundle/nsis/Cap_$($env:VERSION)_x64-setup.exe"
+          Copy-Item $src "$out/$name"
+          Copy-Item "$src.sig" "$out/$name.sig"
+          python -I scripts/desktop/check-pe.py "$out/$name"
+          if ($LASTEXITCODE -ne 0) { throw 'installer is not an x86-64 Windows program' }
+          $p = Start-Process -FilePath "$out/$name" -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit $($p.ExitCode)" }
+          $dir = Join-Path $env:LOCALAPPDATA 'Cap'
+          foreach ($f in 'cap-desktop.exe', 'ffmpeg.exe', 'ffmpeg/NOTICE.txt', 'ffmpeg/LICENSE.txt', 'uninstall.exe') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "installed app is missing $f" }
+          }
+          python -I scripts/desktop/check-pe.py (Join-Path $dir 'cap-desktop.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'installed app is not an x86-64 Windows program' }
+          & (Join-Path $dir 'ffmpeg.exe') -hide_banner -version | Select-Object -First 1
+          Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Set-Content "$out/$name.files.txt"
+          Start-Process -FilePath (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
+          Start-Sleep -Seconds 5
+          if (Test-Path (Join-Path $dir 'cap-desktop.exe')) { throw 'uninstall left the app behind' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-windows
+          path: dist/desktop/
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    # Mac signing is deferred. This lane runs only on request and never marks
+    # a DMG as available in the manifest.
+    if: inputs.include_mac
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, target: aarch64-apple-darwin, arch: aarch64 }
+          - {
+              runner: macos-15-intel,
+              target: x86_64-apple-darwin,
+              arch: x86_64,
+            }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with: { toolchain: 1.95.0, targets: "${{ matrix.target }}" }
+      - run: pnpm install --frozen-lockfile
+      - name: Build the signed, notarized DMG
+        env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -96,10 +278,51 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          python3 -I scripts/desktop/release-config.py > "$RUNNER_TEMP/tauri.release.json"
+          pnpm --filter @cap/desktop tauri build --target "${{ matrix.target }}" --bundles dmg --config "$RUNNER_TEMP/tauri.release.json"
+          mkdir -p dist/desktop
+          cp apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg \
+            "dist/desktop/cap-desktop_${VERSION}_macos-${{ matrix.arch }}.dmg"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          projectPath: apps/desktop
-          tagName: desktop-v__VERSION__
-          releaseName: Cap Desktop v__VERSION__
-          releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-rc') }}
-          args: ${{ matrix.args }}
+          name: desktop-macos-${{ matrix.arch }}-unreviewed
+          path: dist/desktop/
+          if-no-files-found: error
+          retention-days: 14
+
+  manifest:
+    needs: [preflight, linux, windows]
+    if: always() && needs.preflight.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - if: needs.linux.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: desktop-linux, path: dist/desktop }
+      - if: needs.windows.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: desktop-windows, path: dist/desktop }
+      - name: Write the manifest, updater index and checksums
+        env:
+          DOWNLOAD_BASE: ${{ needs.preflight.outputs.download_base }}
+          LINUX: ${{ needs.linux.result == 'success' && 'available' || 'pending' }}
+          WINDOWS: ${{ needs.windows.result == 'success' && 'available' || 'pending' }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/desktop
+          python3 -I scripts/desktop/release-manifest.py --dir dist/desktop \
+            --version "$VERSION" --commit "$GITHUB_SHA" --download-base "$DOWNLOAD_BASE" \
+            --linux "$LINUX" --windows "$WINDOWS"
+          ls -la dist/desktop
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cap-desktop-${{ env.VERSION }}
+          path: dist/desktop/
+          if-no-files-found: error
+          retention-days: 30

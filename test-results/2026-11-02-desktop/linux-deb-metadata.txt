@@ -1,0 +1,35 @@
+Local build (updater artifacts off: no signing key on this machine). CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech
+== sha256
+ff53fc316513e81f69868464c1faaf93d38848abae51bfaca31fa1daecba6d2b  Cap_0.2.0-beta.6_amd64.deb
+== dpkg -I
+ new Debian package, version 2.0.
+ size 7959548 bytes: control archive=482 bytes.
+     223 bytes,     9 lines      control
+     384 bytes,     5 lines      md5sums
+ Package: cap
+ Version: 0.2.0-beta.6
+ Architecture: amd64
+ Installed-Size: 22817
+ Maintainer: mocky
+ Priority: optional
+ Depends: ffmpeg, libwebkit2gtk-4.1-0, libgtk-3-0
+ Description: Crash-safe cross-platform Cap recorder
+  (none)
+== contents
+drwxr-xr-x 0 usr
+drwxr-xr-x 0 usr/share
+drwxr-xr-x 0 usr/share/icons
+drwxr-xr-x 0 usr/share/icons/hicolor
+drwxr-xr-x 0 usr/share/icons/hicolor/32x32
+drwxr-xr-x 0 usr/share/icons/hicolor/32x32/apps
+-rw-r--r-- 104 usr/share/icons/hicolor/32x32/apps/cap-desktop.png
+drwxr-xr-x 0 usr/share/icons/hicolor/256x256@2
+drwxr-xr-x 0 usr/share/icons/hicolor/256x256@2/apps
+-rw-r--r-- 665 usr/share/icons/hicolor/256x256@2/apps/cap-desktop.png
+drwxr-xr-x 0 usr/share/icons/hicolor/128x128
+drwxr-xr-x 0 usr/share/icons/hicolor/128x128/apps
+-rw-r--r-- 299 usr/share/icons/hicolor/128x128/apps/cap-desktop.png
+drwxr-xr-x 0 usr/share/applications
+-rw-r--r-- 207 usr/share/applications/Cap.desktop
+drwxr-xr-x 0 usr/bin
+-rwxr-xr-x 23310864 usr/bin/cap-desktop

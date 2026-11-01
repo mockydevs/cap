@@ -1,0 +1,14 @@
+install=0
+Status: install ok installed
+Version: 0.2.0-beta.6
+Depends: ffmpeg, libwebkit2gtk-4.1-0, libgtk-3-0
+/usr/bin/cap-desktop
+/usr/bin/ffmpeg
+missing shared libraries: 0
+ DE pulse           Pulse audio output
+ D  x11grab         X11 screen capture, using XCB
+remove=0
+removed-clean
+== binary
+cap-desktop: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/l
+server url in binary: 1

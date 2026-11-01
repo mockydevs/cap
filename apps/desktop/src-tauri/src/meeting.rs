@@ -19,6 +19,7 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const KEYRING_SERVICE: &str = "cap-desktop";
+/// Older builds stored the server here; it is only ever deleted now.
 const KEY_SERVER: &str = "meeting-server-url";
 const KEY_TOKEN: &str = "meeting-device-token";
 
@@ -76,12 +77,8 @@ fn device_token() -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn meeting_pair(
-    app: AppHandle,
-    server_url: String,
-    code: String,
-) -> Result<PairInfo, String> {
-    let server = crate::checked_server_url(&server_url)?;
+pub async fn meeting_pair(app: AppHandle, code: String) -> Result<PairInfo, String> {
+    let server = crate::meeting_server()?;
     let res = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
@@ -103,9 +100,6 @@ pub async fn meeting_pair(
         s => return Err(format!("The Cap server returned {s}.")),
     }
     let body: RedeemPairingResponse = res.json().await.map_err(|e| e.to_string())?;
-    entry(KEY_SERVER)?
-        .set_password(&server)
-        .map_err(|e| e.to_string())?;
     entry(KEY_TOKEN)?
         .set_password(&body.device_token)
         .map_err(|e| e.to_string())?;
@@ -173,7 +167,7 @@ pub struct AudioDevices {
 pub async fn meeting_audio_devices() -> Result<AudioDevices, String> {
     let platform = Platform::current();
     let found = tauri::async_runtime::spawn_blocking(move || {
-        devices::list_audio_devices("ffmpeg", platform)
+        devices::list_audio_devices(&crate::ffmpeg_path(), platform)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -203,10 +197,11 @@ pub async fn meeting_start(
     {
         return Err("A meeting is already being recorded.".into());
     }
-    load_info(&app).ok_or("Pair Cap with a Calari client first.")?;
-    let server = entry(KEY_SERVER)?
-        .get_password()
-        .map_err(|_| "Pair Cap with a Calari client first.")?;
+    let info = load_info(&app).ok_or("Pair Cap with a Calari client first.")?;
+    let server = crate::meeting_server()?;
+    if info.server_url != server {
+        return Err("Pair Cap with a Calari client again.".into());
+    }
     let token = device_token().ok_or("Pair Cap with a Calari client first.")?;
     let client = Client::new(&server, &token).map_err(|e| e.to_string())?;
     let platform = Platform::current();
@@ -222,7 +217,7 @@ pub async fn meeting_start(
         x11_display: std::env::var("DISPLAY").ok(),
     };
     let list = tauri::async_runtime::spawn_blocking(move || {
-        let found = devices::list_audio_devices("ffmpeg", platform);
+        let found = devices::list_audio_devices(&crate::ffmpeg_path(), platform);
         devices::resolve_inputs(platform, &choice, &found)
     })
     .await
@@ -248,7 +243,7 @@ pub async fn meeting_start(
         Session::start(StartOptions {
             client,
             dir,
-            ffmpeg: "ffmpeg".into(),
+            ffmpeg: crate::ffmpeg_path(),
             inputs: list,
             title: options.title,
             mode: options.mode,
@@ -273,6 +268,14 @@ pub async fn meeting_start(
         .map_err(|e| e.to_string())?;
     *state.0.lock().map_err(|e| e.to_string())? = Some(session);
     Ok(id)
+}
+
+pub fn is_recording(state: &MeetingState) -> bool {
+    state
+        .0
+        .lock()
+        .map(|s| s.as_ref().is_some_and(Session::is_running))
+        .unwrap_or(true)
 }
 
 /// `keep` answers the inactivity warning; `stop` ends the recording.
@@ -392,17 +395,6 @@ pub fn handle_link(app: &AppHandle, raw: &str) {
 #[tauri::command]
 pub fn meeting_pending_link(state: State<'_, PendingLink>) -> Option<NoteTakerLink> {
     state.0.lock().ok().and_then(|mut s| s.take())
-}
-
-/// The server a note-taker link pairs with: one the user already uses, or the
-/// build's default. Never one taken from the link.
-#[tauri::command]
-pub fn meeting_known_server() -> Option<String> {
-    entry(KEY_SERVER)
-        .ok()
-        .and_then(|e| e.get_password().ok())
-        .or_else(|| entry("server-url").ok().and_then(|e| e.get_password().ok()))
-        .or_else(|| option_env!("CAP_DEFAULT_SERVER_URL").map(str::to_owned))
 }
 
 #[cfg(test)]

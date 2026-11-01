@@ -50,7 +50,7 @@ pub fn load_all(root: &Path) -> Result<Vec<Project>, String> {
         }
         projects.push(project);
     }
-    projects.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    projects.sort_by_key(|p| std::cmp::Reverse(p.created_at));
     Ok(projects)
 }
 

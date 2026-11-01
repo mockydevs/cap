@@ -133,10 +133,16 @@ pub fn parse_avfoundation(text: &str) -> Vec<AudioDevice> {
 pub fn parse_pulse_sources(text: &str) -> Vec<AudioDevice> {
     text.lines()
         .filter_map(|line| {
-            // Device lines look like "* <id> [<description>]".
+            // Device lines look like "* <id> [<description>]"; FFmpeg 6.1+
+            // adds the media type after it: "... [<description>] (audio)".
             let line = line.trim_start_matches(['*', ' ']);
             let (id, rest) = line.split_once(" [")?;
-            let name = rest.strip_suffix(']')?.trim().to_owned();
+            let (name, after) = rest.rsplit_once(']')?;
+            let after = after.trim();
+            if !(after.is_empty() || (after.starts_with('(') && after.ends_with(')'))) {
+                return None;
+            }
+            let name = name.trim().to_owned();
             if id.is_empty() || id.contains(' ') {
                 return None;
             }
@@ -193,7 +199,11 @@ pub fn system_audio_available(platform: Platform, devices: &[AudioDevice]) -> bo
     match platform {
         // PulseAudio/PipeWire always offer the default output's monitor.
         Platform::Linux => true,
-        Platform::Windows => devices.iter().any(|d| d.loopback),
+        // WASAPI loopback; Session::start reports a missing output device.
+        Platform::Windows => {
+            let _ = devices;
+            true
+        }
         // Needs the ScreenCaptureKit helper, which is not verified yet.
         Platform::Mac => false,
     }
@@ -249,12 +259,8 @@ pub fn resolve_inputs(
             };
             inputs.push(Input::WindowsDshow { device: mic });
             if choice.system_audio {
-                let lb = devices.iter().find(|d| d.loopback).ok_or(
-                    "Windows has no device that records the computer's sound. Enable \"Stereo Mix\" or install a loopback device such as virtual-audio-capturer, or turn off \"Include other people's audio\".",
-                )?;
-                inputs.push(Input::WindowsDshow {
-                    device: lb.id.clone(),
-                });
+                // Native loopback: no "Stereo Mix" or virtual driver needed.
+                inputs.push(Input::WindowsLoopback);
             }
         }
         Platform::Mac => {
@@ -321,6 +327,13 @@ dummy: Immediate exit requested"#;
         let pulse = parse_pulse_sources(PULSE);
         assert_eq!(pulse.len(), 2);
         assert!(!pulse[0].loopback && pulse[1].loopback);
+        // FFmpeg 6.1+ (Ubuntu 24.04) appends the media type.
+        let newer = parse_pulse_sources(
+            "Auto-detected sources for pulse:\n* alsa_input.usb-mic.analog-stereo [USB Mic] (audio)\n  speakers.monitor [Monitor of Null Output] (none)\n",
+        );
+        assert_eq!(newer.len(), 2, "{newer:?}");
+        assert_eq!(newer[0].name, "USB Mic");
+        assert!(!newer[0].loopback && newer[1].loopback);
     }
 
     fn audio(system: bool, mic: Option<&str>) -> InputChoice {
@@ -332,31 +345,25 @@ dummy: Immediate exit requested"#;
     }
 
     #[test]
-    fn windows_defaults_to_the_first_microphone_and_needs_a_loopback_device() {
+    fn windows_records_the_first_microphone_plus_native_loopback() {
         let devs = parse_dshow(DSHOW);
+        let mic = Input::WindowsDshow {
+            device: "Microphone Array (Realtek(R) Audio)".into(),
+        };
         assert_eq!(
             resolve_inputs(Platform::Windows, &audio(true, None), &devs).unwrap(),
-            vec![
-                Input::WindowsDshow {
-                    device: "Microphone Array (Realtek(R) Audio)".into()
-                },
-                Input::WindowsDshow {
-                    device: "Stereo Mix (Realtek(R) Audio)".into()
-                },
-            ]
+            vec![mic.clone(), Input::WindowsLoopback]
         );
+        // No "Stereo Mix" needed any more.
         let mic_only: Vec<_> = devs.iter().filter(|d| !d.loopback).cloned().collect();
-        assert!(!system_audio_available(Platform::Windows, &mic_only));
-        assert!(
-            resolve_inputs(Platform::Windows, &audio(true, None), &mic_only)
-                .unwrap_err()
-                .contains("Stereo Mix")
+        assert!(system_audio_available(Platform::Windows, &mic_only));
+        assert_eq!(
+            resolve_inputs(Platform::Windows, &audio(true, None), &mic_only).unwrap(),
+            vec![mic.clone(), Input::WindowsLoopback]
         );
         assert_eq!(
-            resolve_inputs(Platform::Windows, &audio(false, None), &mic_only)
-                .unwrap()
-                .len(),
-            1
+            resolve_inputs(Platform::Windows, &audio(false, None), &mic_only).unwrap(),
+            vec![mic]
         );
         assert!(resolve_inputs(Platform::Windows, &audio(false, None), &[])
             .unwrap_err()
