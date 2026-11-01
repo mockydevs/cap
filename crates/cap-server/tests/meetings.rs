@@ -1020,3 +1020,55 @@ async fn only_a_same_client_re_pairing_can_adopt_an_expired_meeting() {
     );
     h.drop_db().await;
 }
+
+/// "Sign in with Calari": a pairing created with a PKCE challenge only
+/// redeems with the matching verifier.
+#[tokio::test]
+async fn pkce_bound_pairings_need_the_verifier() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    let mut body = client_pairing();
+    body["pkce_challenge"] = json!(cap_meeting_protocol::pkce_s256(verifier));
+    body["pkce_method"] = json!("S256");
+    let (s, p) = h.pair(&body).await;
+    assert_eq!(s, StatusCode::CREATED, "{p}");
+    let code = p["code"].as_str().unwrap();
+    let redeem = |verifier: Option<&str>| {
+        let mut b = json!({"code": code, "device_name": "Chrome", "device_kind": "extension"});
+        if let Some(v) = verifier {
+            b["code_verifier"] = json!(v);
+        }
+        json_req("POST", "/v1/pairings/redeem", None, &b)
+    };
+    assert_eq!(
+        h.call(redeem(None)).await.1["error"],
+        "pairing_invalid",
+        "missing verifier"
+    );
+    assert_eq!(
+        h.call(redeem(Some(
+            "wrong-verifier-wrong-verifier-wrong-verifier-x"
+        )))
+        .await
+        .1["error"],
+        "pairing_invalid"
+    );
+    let (s, r) = h.call(redeem(Some(verifier))).await;
+    assert_eq!(s, StatusCode::OK, "{r}");
+    assert_eq!(r["client_id"], CLIENT);
+
+    let mut bad = client_pairing();
+    bad["pkce_challenge"] = json!("too-short");
+    bad["pkce_method"] = json!("S256");
+    assert_eq!(h.pair(&bad).await.0, StatusCode::BAD_REQUEST);
+
+    // Pairings without a challenge (desktop, "Add note taker") are unchanged.
+    let (_, plain) = h.pair(&client_pairing()).await;
+    assert_eq!(
+        h.redeem(plain["code"].as_str().unwrap()).await.0,
+        StatusCode::OK
+    );
+    h.drop_db().await;
+}

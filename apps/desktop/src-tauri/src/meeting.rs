@@ -91,6 +91,7 @@ pub async fn meeting_pair(
             code,
             device_name: "Cap desktop".into(),
             device_kind: DeviceKind::Desktop,
+            code_verifier: None,
         })
         .send()
         .await

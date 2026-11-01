@@ -133,8 +133,8 @@ pub async fn create_pairing(
         .as_deref()
         .and_then(|n| cap_meeting_protocol::clean_text(n, 120));
     let inserted = sqlx::query(
-        "INSERT INTO meeting_pairings (id, key_id, request_id, request_sha256, tenant_id, pairing_kind, client_id, intake_receipt_id, client_display_name, code_hash, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        "INSERT INTO meeting_pairings (id, key_id, request_id, request_sha256, tenant_id, pairing_kind, client_id, intake_receipt_id, client_display_name, code_hash, expires_at, pkce_challenge)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (key_id, request_id) DO NOTHING",
     )
     .bind(id)
@@ -148,6 +148,7 @@ pub async fn create_pairing(
     .bind(display)
     .bind(ids::sha256_hex(normalized.as_bytes()))
     .bind(expires_at)
+    .bind(&req.pkce_challenge)
     .execute(&state.db)
     .await?
     .rows_affected();
@@ -242,10 +243,19 @@ pub async fn redeem_pairing(
     let Some(p) = sqlx::query(
         "UPDATE meeting_pairings SET redeemed_at = $2
          WHERE code_hash = $1 AND redeemed_at IS NULL AND expires_at > $2
+           AND (pkce_challenge IS NULL OR pkce_challenge = $3)
          RETURNING id, tenant_id, pairing_kind, client_id, client_display_name",
     )
     .bind(ids::sha256_hex(code.as_bytes()))
     .bind(now)
+    // A pairing from "Sign in with Calari" needs its PKCE verifier; a wrong
+    // or missing one looks exactly like a wrong code.
+    .bind(
+        req.code_verifier
+            .as_deref()
+            .filter(|v| cap_meeting_protocol::valid_pkce_verifier(v))
+            .map(cap_meeting_protocol::pkce_s256),
+    )
     .fetch_optional(&mut *tx)
     .await?
     else {

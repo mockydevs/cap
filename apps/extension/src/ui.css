@@ -101,3 +101,11 @@ button.stop {
 [hidden] {
   display: none !important;
 }
+details {
+  margin-top: 12px;
+}
+summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 8px;
+}

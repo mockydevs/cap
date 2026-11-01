@@ -26,8 +26,10 @@ extension keeps a thin JS layer for `chrome.*`, `MediaRecorder` and
 1. Calari's server asks Cap for a pairing code after Clare finishes `/intake`
    (or from a client page, or for an internal meeting). The code is shown with
    an **Add note taker** button (`cap://pair?code=…&mode=audio|video`).
-2. The desktop app opens from that button and asks to start; or Clare types
-   the code into the desktop app or the Chrome extension.
+2. The desktop app opens from that button and asks to start, or Clare types
+   the code into it. In Chrome, staff click **Sign in with Calari** in the
+   extension: they sign in on Calari's own page with their portal account and
+   pick the client or an internal meeting; no separate Cap password exists.
 3. The device records 30-second standalone chunks and uploads each one as it
    finishes. Chunks stay on disk (desktop) or in IndexedDB (extension) until
    the server confirms them.

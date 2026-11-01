@@ -3,6 +3,7 @@
 // toolbar click or keyboard shortcut), so a scheduled meeting gets a
 // reminder with one click to start, never a silent recording.
 
+import { CALARI_ORIGIN, CAP_SERVER, CONNECT_PATH } from "./config.js";
 import {
   ApiError,
   MARKER,
@@ -40,13 +41,15 @@ function badge(text, color) {
   if (color) chrome.action.setBadgeBackgroundColor({ color });
 }
 
-async function pair({ server, code, deviceName }) {
+async function pair({ code, deviceName, verifier }) {
+  const server = CAP_SERVER;
   const res = await api(server, null, "/v1/pairings/redeem", {
     method: "POST",
     json: {
       code,
       device_name: deviceName || "Chrome",
       device_kind: "extension",
+      ...(verifier ? { code_verifier: verifier } : {}),
     },
   });
   await set({
@@ -63,6 +66,52 @@ async function pair({ server, code, deviceName }) {
     pairingKind: res.pairing_kind,
     expiresAt: res.expires_at,
   };
+}
+
+function b64url(bytes) {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+// "Sign in with Calari": the person signs in on Calari's own page (portal
+// username or email and password) and chooses the client or an internal
+// meeting there. Calari hands back a pairing code bound to this sign-in by
+// PKCE, so the code alone is useless to anyone who sees it. Portal
+// credentials never pass through the extension or Cap.
+async function signInWithCalari({ mode }) {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+    ),
+  );
+  const state = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const redirect = chrome.identity.getRedirectURL("calari");
+  const url = new URL(CONNECT_PATH, CALARI_ORIGIN);
+  url.search = new URLSearchParams({
+    redirect_uri: redirect,
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    mode: mode === "video" ? "video" : "audio",
+  }).toString();
+  const result = await chrome.identity.launchWebAuthFlow({
+    url: url.href,
+    interactive: true,
+  });
+  const back = new URL(result);
+  const expected = new URL(redirect);
+  if (back.origin !== expected.origin || back.pathname !== expected.pathname)
+    throw new Error("Unexpected sign-in response.");
+  if (back.searchParams.get("state") !== state)
+    throw new Error("The sign-in response did not match. Try again.");
+  const code = back.searchParams.get("code");
+  if (!code)
+    throw new Error(
+      back.searchParams.get("error_description") || "Sign-in was cancelled.",
+    );
+  return pair({ code, deviceName: "Chrome extension", verifier });
 }
 
 async function startRecording({ tabId, streamId, mode }) {
@@ -335,7 +384,8 @@ async function remind(eventId) {
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.target === "offscreen") return;
   const handlers = {
-    pair: () => pair(msg),
+    pair: () => pair({ code: msg.code, deviceName: msg.deviceName }),
+    signin: () => signInWithCalari(msg),
     start: () => startRecording(msg),
     stop: async () => (
       await toOffscreen({ type: "stop", reason: "user_stopped" }),

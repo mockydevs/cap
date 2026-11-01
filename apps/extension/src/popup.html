@@ -7,16 +7,23 @@
     <h1>Cap meeting recorder</h1>
 
     <section id="pair" hidden>
-      <p>Enter the code shown on the Calari intake receipt or client page.</p>
-      <label
-        >Cap server
-        <input id="server" type="url" placeholder="https://cap.example.com"
-      /></label>
-      <label
-        >Pairing code
-        <input id="code" type="text" autocomplete="off" placeholder="XXXX-XXXX"
-      /></label>
-      <button id="pairBtn">Connect</button>
+      <p>
+        Sign in with your Calari portal account (username or email) and choose
+        the client or an internal meeting.
+      </p>
+      <button id="signinBtn">Sign in with Calari</button>
+      <details>
+        <summary>Have a pairing code?</summary>
+        <label
+          >Pairing code
+          <input
+            id="code"
+            type="text"
+            autocomplete="off"
+            placeholder="XXXX-XXXX"
+        /></label>
+        <button id="pairBtn" class="secondary">Connect with code</button>
+      </details>
     </section>
 
     <section id="ready" hidden>

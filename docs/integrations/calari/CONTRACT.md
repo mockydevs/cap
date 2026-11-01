@@ -83,9 +83,26 @@ same pairing and code while it is unexpired and unredeemed. The same
 `request_id` with a different body is `409 request_conflict`; it can never return
 another client's pairing. Cap stores only the code's SHA-256.
 
+## 1b. Extension sign-in through Calari
+
+The extension never asks for a password and never uses a separate Cap
+account. Staff sign in with their existing Calari portal account:
+
+1. The extension (ID `edoidpfmflnlhjkmaimdamkmokaphcba`) opens
+   `https://calarisolutions.com/portal/recorder/connect?redirect_uri=https://edoidpfmflnlhjkmaimdamkmokaphcba.chromiumapp.org/calari&state=…&code_challenge=…&code_challenge_method=S256&mode=audio|video`
+   with `chrome.identity.launchWebAuthFlow`.
+2. Calari signs the person in (portal username or email and password, or an
+   existing portal session), lets them pick the client they may act for, or
+   an internal meeting with fresh staff authority, and creates the pairing
+   with `pkce_challenge`/`pkce_method`.
+3. Calari redirects to exactly that `redirect_uri` with `code` and the same
+   `state`. The extension checks `state` and redeems with `code_verifier`.
+
+Desktop pairings and "Add note taker" links keep working without PKCE.
+
 ## 2. Redeeming a code (desktop/extension → Cap)
 
-`POST /v1/pairings/redeem` `{"code": "7KQ2-M9XD", "device_name": "Clare's laptop", "device_kind": "desktop"}`
+`POST /v1/pairings/redeem` `{"code": "7KQ2-M9XD", "device_name": "Clare's laptop", "device_kind": "desktop"}` (plus `code_verifier` for PKCE-bound pairings; a wrong or missing verifier is the same `404 pairing_invalid`)
 
 Returns `200` with `device_token` (opaque, shown once, stored as SHA-256),
 `tenant_id`, `pairing_kind`, `client_id` (null for internal meetings),

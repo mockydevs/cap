@@ -125,9 +125,25 @@ mod fixtures {
             intake_receipt_id: Some("00000000-0000-4000-8000-000000000003".into()),
             client_display_name: Some("Acme Ltd".into()),
             ttl_seconds: 600,
+            pkce_challenge: None,
+            pkce_method: None,
         };
         assert!(req.validate().is_ok());
         check("pairing.request.json", &serde_json::to_value(&req).unwrap());
+        // From the extension's "Sign in with Calari" flow (RFC 7636 example verifier).
+        let ext = CreatePairingRequest {
+            request_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d".into(),
+            pkce_challenge: Some(types::pkce_s256(
+                "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+            )),
+            pkce_method: Some("S256".into()),
+            ..req.clone()
+        };
+        assert!(ext.validate().is_ok());
+        check(
+            "pairing.request.extension.json",
+            &serde_json::to_value(&ext).unwrap(),
+        );
         let res = CreatePairingResponse {
             pairing_id: "8d4e2f10-6a3b-4c7d-9e8f-1a2b3c4d5e6f".into(),
             code: "7KQ2-M9XD".into(),

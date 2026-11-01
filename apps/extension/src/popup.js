@@ -11,7 +11,6 @@ async function render() {
   $("pair").hidden = !!s.device;
   $("ready").hidden = !s.device || !!s.active;
   $("recording").hidden = !s.active;
-  if (s.server) $("server").value = s.server;
   if (s.device) {
     const who =
       s.device.pairingKind === "internal_team"
@@ -25,22 +24,22 @@ async function render() {
       true;
 }
 
+$("signinBtn").onclick = async () => {
+  show(null);
+  const r = await send({ type: "signin", mode: "audio" });
+  if (!r.ok)
+    return show(
+      r.error.includes("404")
+        ? "That sign-in expired or was already used. Try again."
+        : r.error,
+    );
+  render();
+};
+
 $("pairBtn").onclick = async () => {
   show(null);
-  let server;
-  try {
-    server = new URL($("server").value.trim()).origin;
-  } catch {
-    return show("Enter the Cap server address.");
-  }
-  // Ask for access to this one server only, at the moment it is needed.
-  const granted = await chrome.permissions.request({
-    origins: [`${server}/*`],
-  });
-  if (!granted) return show("Cap needs permission to reach that server.");
   const r = await send({
     type: "pair",
-    server,
     code: $("code").value,
     deviceName: "Chrome extension",
   });

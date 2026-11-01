@@ -75,6 +75,15 @@ pub struct CreatePairingRequest {
     #[serde(default)]
     pub client_display_name: Option<String>,
     pub ttl_seconds: u32,
+    /// Set when the pairing comes from the extension's "Sign in with
+    /// Calari" flow: `base64url(sha256(code_verifier))`. The code then only
+    /// redeems together with the verifier, so a code seen in transit is
+    /// useless on its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pkce_challenge: Option<String>,
+    /// Must be "S256" when `pkce_challenge` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pkce_method: Option<String>,
 }
 
 impl CreatePairingRequest {
@@ -89,6 +98,13 @@ impl CreatePairingRequest {
         }
         if !(PAIRING_TTL_MIN_SECONDS..=PAIRING_TTL_MAX_SECONDS).contains(&self.ttl_seconds) {
             return Err("ttl_seconds must be 60-900");
+        }
+        match (&self.pkce_challenge, self.pkce_method.as_deref()) {
+            (None, None) => {}
+            (Some(c), Some("S256")) if valid_pkce_challenge(c) => {}
+            _ => {
+                return Err("pkce_challenge must be 43 base64url characters with pkce_method S256")
+            }
         }
         if let Some(name) = &self.client_display_name {
             if clean_text(name, 120).is_none() {
@@ -150,6 +166,30 @@ pub struct RedeemPairingRequest {
     pub code: String,
     pub device_name: String,
     pub device_kind: DeviceKind,
+    /// The PKCE verifier, for pairings created with a challenge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_verifier: Option<String>,
+}
+
+/// RFC 7636 S256 challenge for a verifier.
+pub fn pkce_s256(verifier: &str) -> String {
+    use base64::Engine;
+    use sha2::Digest;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(sha2::Sha256::digest(verifier.as_bytes()))
+}
+
+/// RFC 7636 verifier: 43-128 characters of `[A-Za-z0-9-._~]`.
+pub fn valid_pkce_verifier(v: &str) -> bool {
+    (43..=128).contains(&v.len())
+        && v.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~'))
+}
+
+pub fn valid_pkce_challenge(c: &str) -> bool {
+    c.len() == 43
+        && c.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -481,7 +521,32 @@ mod tests {
             intake_receipt_id: Some("7a8b9c0d-1e2f-4a3b-8c5d-6e7f8a9b0c1d".into()),
             client_display_name: Some("Acme".into()),
             ttl_seconds: 600,
+            pkce_challenge: None,
+            pkce_method: None,
         }
+    }
+
+    #[test]
+    fn pkce_fields() {
+        // RFC 7636 appendix B example.
+        assert_eq!(
+            pkce_s256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
+        assert!(valid_pkce_verifier(
+            "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        ));
+        assert!(!valid_pkce_verifier("short"));
+        let mut p = pairing(PairingKind::StaffClient);
+        p.pkce_challenge = Some(pkce_s256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
+        assert!(p.validate().is_err(), "method required");
+        p.pkce_method = Some("S256".into());
+        assert!(p.validate().is_ok());
+        p.pkce_method = Some("plain".into());
+        assert!(p.validate().is_err());
+        p.pkce_challenge = Some("not-a-challenge".into());
+        p.pkce_method = Some("S256".into());
+        assert!(p.validate().is_err());
     }
 
     #[test]

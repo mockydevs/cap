@@ -1,5 +1,5 @@
-All review fixes incl. expired-grant take-over (Claude, 2026-11-01T21:04:06Z)
-cargo test --workspace exit=0 passed=71 failed=0
+Extension Calari sign-in (PKCE) + all review fixes (Claude, 2026-11-01T21:27:01Z)
+cargo test --workspace exit=0 passed=73 failed=0
 cargo clippy --workspace --all-targets -D warnings exit=0
 cargo fmt --all --check exit=0
 extension node tests exit=0
