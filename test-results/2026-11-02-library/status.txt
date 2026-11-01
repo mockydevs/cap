@@ -1,0 +1,6 @@
+Meetings library with Calari sign-in (Claude, 2026-11-01T21:47:01Z)
+cargo test --workspace exit=0 passed=79 failed=0
+cargo clippy --workspace --all-targets -D warnings exit=0
+cargo fmt --all --check exit=0
+cargo audit exit=0
+browser check: browser-check.md

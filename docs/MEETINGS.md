@@ -85,6 +85,24 @@ Setup needed once: a Google OAuth client of type **Chrome extension** for the
 extension's ID, with the `calendar.events.readonly` scope, placed in
 `apps/extension/manifest.json` (`oauth2.client_id`).
 
+## Meetings library
+
+Calari staff open `https://meetings.calari.tech/meetings` and sign in with
+their Calari portal account; Cap has no passwords, sign-up or user admin of its
+own. The list shows every meeting for the Calari tenant with search across
+titles, clients and transcripts; a meeting page has the player (its 30-second
+parts play back to back) and the transcript, where each timestamp jumps the
+player to that point.
+
+Access is checked with Calari: sessions last at most 1 hour idle and 8 hours
+in total, and Cap re-confirms the person is still active staff at least every
+60 seconds. If Calari says no, the session ends; if Calari cannot be reached,
+Cap refuses access rather than trusting an old answer. Contract:
+`library-signin-contract.md` in the shared Calari handoff folder; Calari's
+authorize, exchange and status endpoints are configured per integration
+(`login_authorize_url`, `login_exchange_url`, `login_status_url`). Until they
+exist, `/login` says sign-in is not set up and deliveries carry no Cap link.
+
 ## Running the server
 
 ```bash

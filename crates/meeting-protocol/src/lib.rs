@@ -156,6 +156,51 @@ mod fixtures {
         );
     }
 
+    #[test]
+    fn login_exchange_fixtures_match_types() {
+        let req = LoginExchangeRequest {
+            code: "one-time-code-from-calari".into(),
+            code_verifier: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk".into(),
+            redirect_uri: "https://meetings.calari.tech/auth/calari/callback".into(),
+        };
+        check(
+            "login.exchange.request.json",
+            &serde_json::to_value(&req).unwrap(),
+        );
+        let res = LoginExchangeResponse {
+            tenant_id: "00000000-0000-4000-8000-000000000001".into(),
+            user_id: "00000000-0000-4000-8000-0000000000a1".into(),
+            email: "clare@calari.example".into(),
+            display_name: "Clare".into(),
+            role: StaffRole::Admin,
+        };
+        let value = serde_json::to_value(&res).unwrap();
+        check("login.exchange.response.json", &value);
+        check(
+            "login.status.request.json",
+            &serde_json::to_value(LoginStatusRequest {
+                user_id: res.user_id.clone(),
+            })
+            .unwrap(),
+        );
+        let status = LoginStatusResponse {
+            tenant_id: res.tenant_id.clone(),
+            user_id: res.user_id.clone(),
+            email: res.email.clone(),
+            display_name: res.display_name.clone(),
+            role: StaffRole::Admin,
+            active: true,
+        };
+        check(
+            "login.status.response.json",
+            &serde_json::to_value(&status).unwrap(),
+        );
+        assert_eq!(
+            serde_json::from_value::<LoginExchangeResponse>(value).unwrap(),
+            res
+        );
+    }
+
     /// Shows a receiver exactly what to sign, with a throwaway secret, so the
     /// Calari side can unit-test its verifier against Cap's output.
     #[test]

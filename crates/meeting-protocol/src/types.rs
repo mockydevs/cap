@@ -342,6 +342,50 @@ pub struct ApiError {
     pub missing_chunks: Option<Vec<u32>>,
 }
 
+// ---- Library sign-in (Cap → Calari, signed purpose `login`) ----
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LoginExchangeRequest {
+    pub code: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StaffRole {
+    Admin,
+    Staff,
+}
+
+/// The Calari staff member a sign-in code belongs to.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LoginExchangeResponse {
+    pub tenant_id: String,
+    pub user_id: String,
+    pub email: String,
+    pub display_name: String,
+    pub role: StaffRole,
+}
+
+/// Cap asks whether a signed-in staff member may still use Cap.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LoginStatusRequest {
+    pub user_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LoginStatusResponse {
+    pub tenant_id: String,
+    pub user_id: String,
+    pub email: String,
+    pub display_name: String,
+    pub role: StaffRole,
+    pub active: bool,
+}
+
 // ---- Delivery (Cap → Calari) ----
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

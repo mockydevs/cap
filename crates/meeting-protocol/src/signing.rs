@@ -36,6 +36,8 @@ pub enum Purpose {
     Pairing,
     /// Cap meeting service → Calari: deliver a finished meeting.
     Delivery,
+    /// Cap → Calari: exchange a one-time sign-in code for the staff member.
+    Login,
 }
 
 impl Purpose {
@@ -43,6 +45,7 @@ impl Purpose {
         match self {
             Purpose::Pairing => "pairing",
             Purpose::Delivery => "delivery",
+            Purpose::Login => "login",
         }
     }
 }

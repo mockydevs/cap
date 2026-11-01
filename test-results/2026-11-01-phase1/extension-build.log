@@ -1,0 +1,4 @@
+    Finished `release-wasm` profile [optimized] target(s) in 0.05s
+/home/don/code/cap/target/extension/unpacked
+/home/don/code/cap/target/extension/cap-extension.zip
+extension build exit=0 (head 8be99fd, release config: CAP_SERVER=https://meetings.calari.tech, CALARI_ORIGIN=https://calarisolutions.com)

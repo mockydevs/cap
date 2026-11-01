@@ -526,8 +526,11 @@ async fn frozen_delivery(
                 .and_then(|s| StopReason::parse(&s))
                 .unwrap_or(StopReason::Interrupted),
             partial: m.get("partial"),
-            // No user-facing meeting page exists in Cap yet.
-            cap_url: None,
+            // The signed-in meeting page, when library sign-in is set up.
+            cap_url: integration
+                .login_authorize_url
+                .as_ref()
+                .map(|_| format!("{}/meetings/{id}", state.cfg.public_base_url)),
             meeting_url: m.get("meeting_url"),
         },
         transcript: DeliveredTranscript {

@@ -16,6 +16,12 @@ pub struct Integration {
     pub tenant_id: String,
     pub secret: Vec<u8>,
     pub delivery_url: String,
+    /// Calari's staff sign-in page for the meetings library.
+    pub login_authorize_url: Option<String>,
+    /// Calari endpoint that exchanges a one-time sign-in code (signed, purpose `login`).
+    pub login_exchange_url: Option<String>,
+    /// Calari endpoint that confirms a staff member is still active.
+    pub login_status_url: Option<String>,
 }
 
 impl std::fmt::Debug for Integration {
@@ -25,6 +31,9 @@ impl std::fmt::Debug for Integration {
             .field("tenant_id", &self.tenant_id)
             .field("secret", &"<redacted>")
             .field("delivery_url", &self.delivery_url)
+            .field("login_authorize_url", &self.login_authorize_url)
+            .field("login_exchange_url", &self.login_exchange_url)
+            .field("login_status_url", &self.login_status_url)
             .finish()
     }
 }
@@ -99,6 +108,12 @@ struct RawIntegration {
     /// base64url without padding, exactly 32 decoded bytes.
     secret: String,
     delivery_url: String,
+    #[serde(default)]
+    login_authorize_url: Option<String>,
+    #[serde(default)]
+    login_exchange_url: Option<String>,
+    #[serde(default)]
+    login_status_url: Option<String>,
 }
 
 fn var(name: &str) -> Option<String> {
@@ -148,6 +163,9 @@ impl Config {
                 tenant_id: r.tenant_id,
                 secret,
                 delivery_url: r.delivery_url,
+                login_authorize_url: r.login_authorize_url,
+                login_exchange_url: r.login_exchange_url,
+                login_status_url: r.login_status_url,
             });
         }
 
@@ -227,6 +245,19 @@ impl Config {
             if !scheme_ok {
                 bail!("integration {} delivery_url must be https", i.key_id);
             }
+            match (&i.login_authorize_url, &i.login_exchange_url, &i.login_status_url) {
+                (None, None, None) => {}
+                (Some(a), Some(x), Some(st)) => {
+                    let ok = |u: &str| u.starts_with("https://") || (!self.production && u.starts_with("http://"));
+                    if !ok(a) || !ok(x) || !ok(st) {
+                        bail!("integration {} login URLs must be https", i.key_id);
+                    }
+                }
+                _ => bail!(
+                    "integration {} needs login_authorize_url, login_exchange_url and login_status_url together",
+                    i.key_id
+                ),
+            }
         }
         if !self.production {
             return Ok(());
@@ -280,6 +311,13 @@ impl Config {
         self.integrations.iter().find(|i| i.key_id == key_id)
     }
 
+    /// The integration that provides library sign-in, if any.
+    pub fn login_integration(&self) -> Option<&Integration> {
+        self.integrations
+            .iter()
+            .find(|i| i.login_authorize_url.is_some())
+    }
+
     pub fn integration_for_tenant(&self, tenant_id: &str) -> Option<&Integration> {
         self.integrations.iter().find(|i| i.tenant_id == tenant_id)
     }
@@ -316,6 +354,9 @@ pub(crate) mod tests {
                 tenant_id: "calari".into(),
                 secret: vec![7; 32],
                 delivery_url: "https://calari.example/api/meetings".into(),
+                login_authorize_url: None,
+                login_exchange_url: None,
+                login_status_url: None,
             }],
             transcription: TranscriptionConfig::OpenAiCompatible {
                 base_url: "https://whisper.example/v1".into(),
@@ -355,6 +396,14 @@ pub(crate) mod tests {
             Box::new(|c| {
                 let dup = c.integrations[0].clone();
                 c.integrations.push(dup)
+            }),
+            Box::new(|c| {
+                c.integrations[0].login_authorize_url = Some("https://calari.example/a".into())
+            }),
+            Box::new(|c| {
+                c.integrations[0].login_authorize_url = Some("http://calari.example/a".into());
+                c.integrations[0].login_exchange_url = Some("https://calari.example/x".into());
+                c.integrations[0].login_status_url = Some("https://calari.example/s".into());
             }),
         ];
         for (i, mutate) in cases.iter().enumerate() {

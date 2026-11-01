@@ -107,6 +107,27 @@ impl ObjectStore {
         Ok(())
     }
 
+    /// A short-lived URL the browser can fetch the object from directly, or
+    /// `None` for the local store (the server then streams the bytes).
+    pub async fn presign_get(&self, key: &str, ttl: std::time::Duration) -> Result<Option<String>> {
+        match self {
+            ObjectStore::Delayed(inner, _) => Box::pin(inner.presign_get(key, ttl)).await,
+            ObjectStore::Filesystem { .. } => Ok(None),
+            ObjectStore::S3 { client, bucket, .. } => {
+                let cfg = aws_sdk_s3::presigning::PresigningConfig::expires_in(ttl)
+                    .context("presigning config")?;
+                let req = client
+                    .get_object()
+                    .bucket(bucket)
+                    .key(key)
+                    .presigned(cfg)
+                    .await
+                    .context("presigning S3 GetObject")?;
+                Ok(Some(req.uri().to_string()))
+            }
+        }
+    }
+
     pub async fn get(&self, key: &str) -> Result<Vec<u8>> {
         match self {
             ObjectStore::Delayed(inner, _) => Box::pin(inner.get(key)).await,
