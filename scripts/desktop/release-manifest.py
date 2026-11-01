@@ -1,4 +1,4 @@
-"""Write the desktop download manifest, updater index and checksums.
+"""Write the desktop download manifest, updater catalog and checksums.
 
     python -I scripts/desktop/release-manifest.py --dir DIR --version V \
         --commit SHA --download-base https://meetings.calari.tech/downloads/ \
@@ -7,8 +7,11 @@
 DIR holds the installers the release workflow built and checked in this run
 (and their .sig files). Only files listed here can be marked "available";
 macOS stays "signing_pending" until signing exists. Writes into DIR:
-  cap-desktop-manifest.json  (download hub contract, schema_version 1)
-  latest.json                (Tauri updater index; only available, signed files)
+  cap-desktop-manifest.json  download hub v1: only schema_version + artifacts;
+                             a pending entry is just platform + status
+  updater-manifest.json      Tauri updater payload + signature per platform key
+                             (the hub serves latest.json from it)
+  cap-desktop-receipt.json   provenance: version, commit, download base
   SHA256SUMS
 """
 
@@ -54,6 +57,10 @@ def sha256(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def write(path: pathlib.Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="ascii")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", required=True, type=pathlib.Path)
@@ -77,8 +84,7 @@ def main() -> None:
     for platform, (suffix, updater_key) in PLATFORMS.items():
         filename = f"cap-desktop_{args.version}_{suffix}"
         status = wanted.get(platform, "signing_pending")
-        entry = {"platform": platform, "version": args.version, "filename": None,
-                 "bytes": None, "sha256": None, "status": status}
+        entry = {"platform": platform, "status": status}
         if status == "available":
             path = args.dir / filename
             sig = args.dir / f"{filename}.sig"
@@ -87,30 +93,33 @@ def main() -> None:
             if not regular_file(sig):
                 fail(f"{filename}.sig is missing: updater signing is required")
             digest = sha256(path)
-            entry.update(filename=filename, bytes=path.stat().st_size, sha256=digest)
+            entry = {"platform": platform, "version": args.version, "filename": filename,
+                     "bytes": path.stat().st_size, "sha256": digest, "status": status}
+            sig_digest = sha256(sig)
             sums.append(f"{digest}  {filename}")
+            sums.append(f"{sig_digest}  {sig.name}")
             updater[updater_key] = {
-                "signature": sig.read_text(encoding="ascii").strip(),
-                "url": f"{base}{filename}",
+                "payload": {"filename": filename, "bytes": entry["bytes"], "sha256": digest},
+                "signature": {"filename": sig.name, "bytes": sig.stat().st_size,
+                              "sha256": sig_digest},
             }
         artifacts.append(entry)
 
-    manifest = {"schema_version": 1, "version": args.version, "commit": args.commit,
-                "artifacts": artifacts}
-    (args.dir / "cap-desktop-manifest.json").write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="ascii")
+    manifest = {"schema_version": 1, "artifacts": artifacts}
+    write(args.dir / "cap-desktop-manifest.json", manifest)
     (args.dir / "SHA256SUMS").write_text("\n".join(sums) + ("\n" if sums else ""),
                                          encoding="ascii")
     if updater:
-        latest = {
-            "version": args.version,
-            "notes": f"Cap {args.version}",
-            "pub_date": datetime.datetime.now(datetime.timezone.utc)
-            .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-            "platforms": updater,
-        }
-        (args.dir / "latest.json").write_text(json.dumps(latest, indent=2) + "\n",
-                                              encoding="ascii")
+        write(args.dir / "updater-manifest.json",
+              {"schema_version": 1, "version": args.version, "platforms": updater})
+    write(args.dir / "cap-desktop-receipt.json", {
+        "version": args.version,
+        "commit": args.commit,
+        "download_base": base,
+        "generated_at": datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "statuses": {a["platform"]: a["status"] for a in artifacts},
+    })
     print(json.dumps(manifest, indent=2))
 
 

@@ -37,15 +37,23 @@ The `cap-desktop-<version>` artifact holds:
 
 - `cap-desktop_<version>_linux-x86_64.deb` and `.sig`
 - `cap-desktop_<version>_windows-x86_64-setup.exe` and `.sig`
-- `cap-desktop-manifest.json`: schema 1, one entry per platform with
-  filename, bytes, SHA-256 and status (`available`, `pending`,
-  `signing_pending`)
-- `latest.json`: the updater index, pointing at `<endpoint folder>/<filename>`
+- `cap-desktop-manifest.json`: download hub v1, only `schema_version` and
+  `artifacts`. An available entry has platform, version, filename, bytes,
+  SHA-256 and status; a `pending` or `signing_pending` entry has only
+  platform and status.
+- `updater-manifest.json`: per Tauri updater platform key
+  (`windows-x86_64-nsis`, `linux-x86_64-deb`), the payload (the installer
+  itself) and its `.sig` with filename, bytes and SHA-256. The download
+  server builds `latest.json` from it with its own trusted URLs.
+- `cap-desktop-receipt.json`: version, commit and statuses for the record.
 - `SHA256SUMS`
 
-Copy the installers, their `.sig` files and `latest.json` to the folder that
-`CAP_UPDATER_ENDPOINT` points at. Check every file's size and SHA-256 against
-the manifest before serving it.
+Copy the installers and `.sig` files to the download folder and check every
+file's size and SHA-256 against the manifests before serving it. Updates on
+Windows install silently after the user clicks "Install and restart"; on
+Linux the updater installs the new `.deb` with `pkexec dpkg -i`, so it asks
+for the user's administrator password. Until the server publishes
+`latest.json`, the app shows no update and never claims to be up to date.
 
 ## What the workflow checks
 
