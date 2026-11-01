@@ -102,6 +102,11 @@ no storage link that could outlive it is handed out. Sessions also end after
 1 hour idle or 8 hours in total. Until Calari defines which meetings staff
 accounts may see, only Calari admins can open the library.
 
+Calari user IDs are opaque strings (Calari uses CUIDs), kept exactly as sent;
+tenant IDs are Calari workspace UUIDs. A status answer of `active: false`
+(Calari sends role `none`) ends the session, and a sign-in without the admin or
+staff role is refused.
+
 Contract: `library-signin-contract.md` in the shared Calari handoff folder;
 Calari's authorize, exchange and status endpoints are configured per
 integration (`login_authorize_url`, `login_exchange_url`, `login_status_url`).
