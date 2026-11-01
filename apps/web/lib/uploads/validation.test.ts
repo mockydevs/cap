@@ -40,7 +40,7 @@ describe("multipart upload validation", () => {
   });
 
   it("accepts an optional linkedRecordingId for a camera recording", () => {
-    const linkedRecordingId = "11111111-1111-1111-1111-111111111111";
+    const linkedRecordingId = "11111111-1111-4111-8111-111111111111";
     expect(
       createUploadSchema.parse({
         title: "Camera",

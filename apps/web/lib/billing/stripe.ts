@@ -102,7 +102,7 @@ const subscriptionSchema = z.object({
   cancel_at_period_end: z.boolean().optional(),
   current_period_start: z.number().int().optional(),
   current_period_end: z.number().int().optional(),
-  metadata: z.record(z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
   items: z
     .object({
       data: z
@@ -206,7 +206,7 @@ const checkoutSessionSchema = z.object({
   client_reference_id: z.string().nullable().optional(),
   customer: z.union([z.string(), z.object({ id: z.string() })]).nullable(),
   subscription: z.union([z.string(), subscriptionSchema]).nullable().optional(),
-  metadata: z.record(z.string()).nullable().optional(),
+  metadata: z.record(z.string(), z.string()).nullable().optional(),
 });
 
 export const stripeEventSchema = z.object({

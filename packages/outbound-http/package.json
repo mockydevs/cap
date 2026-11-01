@@ -13,11 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "undici": "^7.16.0"
+    "undici": "7.30.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "4.1.12"
   }
 }

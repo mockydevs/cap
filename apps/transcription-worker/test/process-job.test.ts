@@ -82,8 +82,8 @@ function baseJobData(
   overrides: Partial<TranscriptionJob> = {},
 ): TranscriptionJob {
   return {
-    recordingId: "33333333-3333-3333-3333-333333333333",
-    workspaceId: "22222222-2222-2222-2222-222222222222",
+    recordingId: "33333333-3333-4333-8333-333333333333",
+    workspaceId: "22222222-2222-4222-8222-222222222222",
     processingVersion: 1,
     sourceObjectKey: "recordings/source.mp4",
     ...overrides,

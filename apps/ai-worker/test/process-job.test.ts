@@ -59,13 +59,13 @@ const enabledPolicy = {
 
 function baseJobData(overrides: Partial<AiJob> = {}): AiJob {
   return {
-    jobId: "11111111-1111-1111-1111-111111111111",
-    workspaceId: "22222222-2222-2222-2222-222222222222",
-    recordingId: "33333333-3333-3333-3333-333333333333",
-    transcriptId: "44444444-4444-4444-4444-444444444444",
+    jobId: "11111111-1111-4111-8111-111111111111",
+    workspaceId: "22222222-2222-4222-8222-222222222222",
+    recordingId: "33333333-3333-4333-8333-333333333333",
+    transcriptId: "44444444-4444-4444-8444-444444444444",
     transcriptRevision: 1,
     capability: "SUMMARY",
-    requestedBy: "55555555-5555-5555-5555-555555555555",
+    requestedBy: "55555555-5555-4555-8555-555555555555",
     ...overrides,
   };
 }
@@ -207,8 +207,8 @@ describe("processJob", () => {
     const update = calls.find(([sql]) => sql.startsWith("UPDATE ai_jobs"));
     expect(update?.[0]).toContain("status='FAILED'");
     expect(update?.[1]).toEqual([
-      "11111111-1111-1111-1111-111111111111",
-      "22222222-2222-2222-2222-222222222222",
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
       "EXTERNAL_AI_DISABLED",
     ]);
     expect(calls.some(([sql]) => sql.includes("status='PROCESSING'"))).toBe(

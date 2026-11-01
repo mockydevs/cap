@@ -7,7 +7,12 @@ import {
   planByCode,
   planByPriceId,
 } from "./plans";
-import { normalizeSubscription, verifyWebhookSignature } from "./stripe";
+import {
+  normalizeSubscription,
+  parseCheckoutSession,
+  parseSubscription,
+  verifyWebhookSignature,
+} from "./stripe";
 
 const ORIGINAL = {
   plans: process.env.AI_PLANS,
@@ -199,5 +204,32 @@ describe("subscription normalization", () => {
       metadata: { workspaceId: "workspace-1" },
     });
     expect(normalized.workspaceId).toBe("workspace-1");
+  });
+});
+
+describe("Stripe metadata validation", () => {
+  const subscription = {
+    id: "sub_1",
+    status: "active",
+    customer: "cus_1",
+  };
+
+  it("preserves string metadata on checkout and subscription payloads", () => {
+    const metadata = { workspaceId: "workspace-1", source: "checkout" };
+    expect(parseSubscription({ ...subscription, metadata }).metadata).toEqual(
+      metadata,
+    );
+    expect(
+      parseCheckoutSession({ id: "cs_1", customer: "cus_1", metadata })
+        .metadata,
+    ).toEqual(metadata);
+  });
+
+  it("rejects non-string metadata values in both Stripe payloads", () => {
+    const metadata = { workspaceId: 42 };
+    expect(() => parseSubscription({ ...subscription, metadata })).toThrow();
+    expect(() =>
+      parseCheckoutSession({ id: "cs_1", customer: "cus_1", metadata }),
+    ).toThrow();
   });
 });

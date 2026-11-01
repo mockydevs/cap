@@ -33,11 +33,11 @@
     "drizzle-orm": "^0.45.2",
     "ioredis": "^5.6.1",
     "jose": "^6.2.8",
-    "next": "^16.3.0",
+    "next": "16.4.1",
     "pg": "^8.15.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "zod": "^3.24.4"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/pg": "^8.11.13",
@@ -46,9 +46,9 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.12",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.0",
+    "eslint-config-next": "16.4.1",
     "fake-indexeddb": "^6.0.0",
     "tsx": "^4.19.3",
-    "vitest": "^3.1.4"
+    "vitest": "4.1.12"
   }
 }
