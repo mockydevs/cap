@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Cap options</title>
+  <link rel="stylesheet" href="ui.css" />
+  <body style="max-width: 560px; margin: auto">
+    <h1>Cap options</h1>
+
+    <fieldset>
+      <legend>Microphone</legend>
+      <p>
+        A meeting tab carries the other people's voices, not yours. Allow the
+        microphone so your side is recorded too.
+      </p>
+      <label
+        ><input type="checkbox" id="useMic" checked /> Record my
+        microphone</label
+      >
+      <button id="micBtn" class="secondary">Allow microphone</button>
+      <p id="micState" class="muted"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Default</legend>
+      <label
+        ><input type="radio" name="mode" value="audio" checked /> Audio +
+        transcript</label
+      >
+      <label
+        ><input type="radio" name="mode" value="video" /> Video +
+        transcript</label
+      >
+    </fieldset>
+
+    <fieldset>
+      <legend>Google Calendar</legend>
+      <p>
+        In a Google Calendar event, choose <b>Include Cap</b> (or type
+        <code>[Cap: record audio]</code> or <code>[Cap: record video]</code> in
+        the description). Guests can see that line, so everyone knows the
+        meeting will be recorded. When the meeting starts, Cap reminds you and
+        you start it with one click: Chrome does not let extensions start
+        recording a tab on their own.
+      </p>
+      <button id="calBtn" class="secondary">
+        Connect Google Calendar (read-only)
+      </button>
+      <p id="calState" class="muted"></p>
+    </fieldset>
+
+    <button id="unpairBtn" class="secondary">
+      Disconnect from Calari client
+    </button>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

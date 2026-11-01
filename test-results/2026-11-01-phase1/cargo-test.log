@@ -1,24 +1,21 @@
-   Compiling cap-meeting-protocol v0.1.0 (/home/don/code/cap/crates/meeting-protocol)
-   Compiling cap-meeting-detector v0.1.0 (/home/don/code/cap/crates/meeting-detector)
-   Compiling cap-meeting-detector-wasm v0.1.0 (/home/don/code/cap/crates/meeting-detector-wasm)
-   Compiling cap-server v0.1.0 (/home/don/code/cap/crates/cap-server)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.94s
+   Compiling cap-meeting-recorder v0.1.0 (/home/don/code/cap/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.25s
      Running unittests src/lib.rs (target/debug/deps/cap_meeting_detector-77d3913d6af0f0ad)
 
 running 11 tests
-test tests::math_helpers_are_close ... ok
+test tests::hard_signals_stop_immediately ... ok
+test tests::pause_suspends_idle_but_not_hard_limit ... ok
 test tests::digital_silence_and_bad_values_are_safe ... ok
 test tests::soft_signals_have_a_grace_period ... ok
-test tests::pause_suspends_idle_but_not_hard_limit ... ok
-test tests::hard_signals_stop_immediately ... ok
+test tests::math_helpers_are_close ... ok
 test tests::prolonged_inactivity_warns_then_stops ... ok
 test tests::clicks_do_not_count_as_activity ... ok
-test tests::constant_hum_is_absorbed_into_the_floor ... ok
 test tests::speech_or_keep_recording_clears_the_warning ... ok
+test tests::constant_hum_is_absorbed_into_the_floor ... ok
 test tests::hard_limit_warns_then_stops_even_with_speech ... ok
 test tests::conversational_pauses_never_stop ... ok
 
-test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
      Running unittests src/lib.rs (target/debug/deps/cap_meeting_detector_wasm-a2c07f69d6d5c1e3)
 
@@ -31,31 +28,52 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 22 tests
 test audio::tests::detects_supported_containers_only ... ok
-test fixtures::pairing_fixtures_match_types ... ok
-test lifecycle::tests::happy_path ... ok
-test ids::tests::ids_tokens_and_codes ... ok
 test lifecycle::tests::crashed_steps_resume_and_failures_retry ... ok
-test fixtures::delivery_fixture_matches_types ... ok
-test signing::tests::body_timestamp_and_nonce_are_bound ... ok
-test ids::tests::pairing_codes_normalize ... ok
+test lifecycle::tests::happy_path ... ok
 test lifecycle::tests::illegal_jumps_are_refused ... ok
+test fixtures::pairing_fixtures_match_types ... ok
+test ids::tests::pairing_codes_normalize ... ok
+test ids::tests::ids_tokens_and_codes ... ok
 test signing::tests::matches_calari_cross_language_vector ... ok
-test signing::tests::rejects_stale_and_future_requests ... ok
+test signing::tests::body_timestamp_and_nonce_are_bound ... ok
 test signing::tests::nonce_shape ... ok
-test signing::tests::round_trips ... ok
+test signing::tests::rejects_stale_and_future_requests ... ok
 test signing::tests::purpose_is_bound ... ok
 test signing::tests::rejects_wrong_secret_weak_secret_and_garbage ... ok
-test types::tests::event_ids_are_stable_per_revision ... ok
+test fixtures::delivery_fixture_matches_types ... ok
+test signing::tests::round_trips ... ok
 test types::tests::external_ids_and_text ... ok
-test fixtures::signed_example_fixture ... ok
+test types::tests::event_ids_are_stable_per_revision ... ok
 test signing::tests::secrets_and_derived_codes ... ok
 test types::tests::meeting_urls_are_restricted_and_stripped ... ok
-test types::tests::pairing_kinds_bind_client_fields ... ok
 test types::tests::stop_reasons_round_trip ... ok
+test types::tests::pairing_kinds_bind_client_fields ... ok
+test fixtures::signed_example_fixture ... ok
 
 test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running unittests src/lib.rs (target/debug/deps/cap_server-9ba17dd067405dad)
+     Running unittests src/lib.rs (target/debug/deps/cap_meeting_recorder-234baf5e69b7db0c)
+
+running 4 tests
+test ffmpeg::tests::audio_mode_ignores_a_video_input ... ok
+test ffmpeg::tests::segment_list_parsing ... ok
+test ffmpeg::tests::audio_mode_mixes_inputs_into_segments_and_pcm ... ok
+test ffmpeg::tests::video_mode_adds_the_screen_and_webm_segments ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/capture.rs (target/debug/deps/capture-e2ca21cc36a3b13f)
+
+running 5 tests
+test prolonged_silence_warns_then_stops ... ok
+test user_stop_closes_the_last_segment_and_uploads_it ... ok
+test video_mode_uploads_webm_segments ... ok
+test a_crashed_session_is_recovered_as_interrupted ... ok
+test source_ending_stops_finalizes_and_delivers_every_segment ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.77s
+
+     Running unittests src/lib.rs (target/debug/deps/cap_server-ab721fb334fb8fe9)
 
 running 6 tests
 test config::tests::debug_output_redacts_secrets ... ok
@@ -67,27 +85,27 @@ test store::tests::filesystem_round_trip_and_rejects_traversal ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running unittests src/main.rs (target/debug/deps/cap_server-f57c9482735ec5db)
+     Running unittests src/main.rs (target/debug/deps/cap_server-6269d365f3bfa9ae)
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running tests/meetings.rs (target/debug/deps/meetings-4394485c79e5097e)
+     Running tests/meetings.rs (target/debug/deps/meetings-2f14f466a5852f0c)
 
 running 10 tests
 test pairing_requests_are_authenticated_fresh_and_tenant_bound ... ok
 test device_tokens_only_reach_their_own_meetings ... ok
-test pairing_retries_are_idempotent_and_codes_single_use ... ok
-test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
-test chunks_are_validated_and_finalize_reports_gaps ... ok
-test full_flow_delivers_a_signed_ordered_transcript ... ok
-test rejected_delivery_fails_visibly_and_operator_can_retry ... ok
 test transcription_retries_never_repeat_finished_chunks ... ok
+test full_flow_delivers_a_signed_ordered_transcript ... ok
 test internal_team_meetings_carry_no_client ... ok
+test chunks_are_validated_and_finalize_reports_gaps ... ok
+test pairing_retries_are_idempotent_and_codes_single_use ... ok
+test rejected_delivery_fails_visibly_and_operator_can_retry ... ok
+test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
 test delivery_retries_resend_identical_bytes_with_fresh_nonces ... ok
 
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
 
    Doc-tests cap_meeting_detector
 
@@ -102,6 +120,12 @@ running 0 tests
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
    Doc-tests cap_meeting_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cap_meeting_recorder
 
 running 0 tests
 

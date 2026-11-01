@@ -1,3 +1,4 @@
-cargo test exit=0
-clippy exit=0
-fmt exit=0
+cargo test --workspace exit=0 passed=59 failed=0
+cargo clippy --workspace --all-targets -D warnings exit=0
+cargo fmt --all --check exit=0
+desktop (container): cargo check/test exit=0, 10 passed; pnpm --filter @cap/desktop build exit=0

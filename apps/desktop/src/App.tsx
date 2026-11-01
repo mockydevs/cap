@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@cap/recording";
 import { listen, type EventCallback } from "@tauri-apps/api/event";
+import { MeetingPanel } from "./MeetingPanel";
 import {
   desktop,
   type CaptureOptions,
@@ -424,6 +425,8 @@ export function App() {
             {notice.text}
           </div>
         )}
+
+        <MeetingPanel sources={sources} />
 
         <section className="card record-card">
           <div className="record-title-row">

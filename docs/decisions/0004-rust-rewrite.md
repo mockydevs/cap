@@ -33,18 +33,18 @@ and without losing data.
   code that way.
 - **Desktop** stays Tauri (already Rust); its React window is replaced by the
   same server-rendered/WASM approach.
-- **Migrations**: Rust-owned tables use their own ledger (`cap_rust_migrations`).
+- **Migrations**: Rust-owned tables use their own ledger (sqlx's `_sqlx_migrations`).
   Until the Rust server owns a feature, the TS app keeps working against the same
   tables. When a phase moves a feature, its TS routes are removed in that phase.
 
 ## Phases
 
-| Phase | Moves to Rust                                                                                            | TS removed                                   |
-| ----- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| 1     | Meeting pipeline: pairing, chunk upload, on-server transcription, signed Calari delivery; detector; static landing page; extension; desktop meeting mode | none (new feature)                           |
-| 2     | Auth (Argon2id sessions, Google OAuth), workspaces, upload sessions, recordings, playback, desktop endpoints | matching `app/api/*` routes                  |
-| 3     | Media, transcription, render and webhook workers                                                         | `apps/*-worker`                              |
-| 4     | Library, record, watch, share and admin pages; browser recorder in WASM                                   | `apps/web`                                   |
+| Phase | Moves to Rust                                                                                                                                            | TS removed                  |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| 1     | Meeting pipeline: pairing, chunk upload, on-server transcription, signed Calari delivery; detector; static landing page; extension; desktop meeting mode | none (new feature)          |
+| 2     | Auth (Argon2id sessions, Google OAuth), workspaces, upload sessions, recordings, playback, desktop endpoints                                             | matching `app/api/*` routes |
+| 3     | Media, transcription, render and webhook workers                                                                                                         | `apps/*-worker`             |
+| 4     | Library, record, watch, share and admin pages; browser recorder in WASM                                                                                  | `apps/web`                  |
 
 Each phase ships only after its checks pass and Don approves the deploy; pushing
 to `main` deploys production.

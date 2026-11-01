@@ -672,6 +672,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-meeting-recorder"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cap-meeting-detector",
+ "cap-meeting-protocol",
+ "cap-server",
+ "chrono",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "cap-server"
 version = "0.1.0"
 dependencies = [
@@ -2318,6 +2336,7 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http 1.5.0",

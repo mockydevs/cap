@@ -68,7 +68,7 @@ fn platform_guidance() -> (&'static str, Vec<String>) {
     )
 }
 
-fn source_geometry(id: &str) -> Result<(i32, i32, u32, u32), String> {
+pub(crate) fn source_geometry(id: &str) -> Result<(i32, i32, u32, u32), String> {
     let values: Vec<_> = id.split(':').collect();
     if values.len() != 6 || (values[0] != "monitor" && values[0] != "window") {
         return Err("Invalid capture source".into());

@@ -89,6 +89,8 @@ Workspace BYOK setup for OpenAI, Anthropic Claude, and compatible private endpoi
 
 Desktop installers are published through tagged GitHub Releases. See [docs/DESKTOP.md](docs/DESKTOP.md).
 
+Meeting notes for the Calari portal (desktop meeting mode, Chrome extension, Rust server) are documented in [docs/MEETINGS.md](docs/MEETINGS.md). Cap is moving to Rust in phases: [ADR 0004](docs/decisions/0004-rust-rewrite.md).
+
 ## Administration and integrations
 
 Workspace owners and admins manage members, invitations, recording retention, webhooks, and API keys at `/admin`; every sensitive workspace action is recorded to an audit log visible there. Webhook events, delivery, and signature verification are documented in [docs/WEBHOOKS.md](docs/WEBHOOKS.md); the read-only public API is documented in [docs/PUBLIC_API.md](docs/PUBLIC_API.md).

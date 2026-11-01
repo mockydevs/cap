@@ -276,7 +276,7 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
 
     // Assemble in chunk order with absolute offsets.
     let rows = sqlx::query(
-        "SELECT c.start_ms, t.provider, t.model, t.language, t.segments FROM meeting_chunk_transcripts t
+        "SELECT c.start_ms, c.duration_ms, t.provider, t.model, t.language, t.segments FROM meeting_chunk_transcripts t
          JOIN meeting_chunks c ON c.meeting_id = t.meeting_id AND c.seq = t.seq
          WHERE t.meeting_id = $1 ORDER BY t.seq",
     )
@@ -291,12 +291,16 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
         provider = r.get("provider");
         model = r.get("model");
         language = language.or(r.get::<Option<String>, _>("language"));
+        // Whisper pads audio to 30 s windows, so a segment can claim to end
+        // after its chunk does; clamp to the chunk's real length.
+        let duration = r.get::<i64, _>("duration_ms").max(0) as u64;
         let parts: Vec<ChunkSegment> = serde_json::from_value(r.get("segments"))?;
         for p in parts {
+            let start = p.start_ms.min(duration);
             segments.push(TranscriptSegment {
                 index: segments.len() as u32,
-                start_ms: offset + p.start_ms,
-                end_ms: offset + p.end_ms,
+                start_ms: offset + start,
+                end_ms: offset + p.end_ms.clamp(start, duration),
                 text: p.text,
             });
         }

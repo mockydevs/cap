@@ -53,3 +53,46 @@ export const desktop = {
   openExtensionStore: (browser: "chrome" | "edge" | "firefox") =>
     invoke<void>("open_extension_store", { browser }),
 };
+
+export type PairInfo = {
+  serverUrl: string;
+  pairingKind: "client_intake" | "staff_client" | "internal_team";
+  clientName?: string | null;
+  expiresAt: string;
+};
+export type NoteTakerLink = {
+  code: string;
+  mode: "audio" | "video";
+  title?: string | null;
+};
+export type MeetingEvent =
+  | {
+      kind: "warning";
+      reason: "inactivity" | "hard_limit" | "signal";
+      stops_in_ms: number;
+    }
+  | { kind: "stopped"; reason: string }
+  | { kind: "finalized"; meeting_id: string }
+  | { kind: "failed"; message: string };
+export type MeetingOptions = {
+  title: string;
+  mode: "audio" | "video";
+  microphoneId?: string | undefined;
+  systemAudio: boolean;
+  videoSourceId?: string | undefined;
+  watchWindow?: string | undefined;
+};
+
+export const meeting = {
+  pair: (serverUrl: string, code: string) =>
+    invoke<PairInfo>("meeting_pair", { serverUrl, code }),
+  device: () => invoke<PairInfo | null>("meeting_device"),
+  unpair: () => invoke<void>("meeting_unpair"),
+  start: (options: MeetingOptions) =>
+    invoke<string>("meeting_start", { options }),
+  keep: () => invoke<void>("meeting_signal", { action: "keep" }),
+  stop: () => invoke<void>("meeting_signal", { action: "stop" }),
+  recording: () => invoke<string | null>("meeting_recording"),
+  pendingLink: () => invoke<NoteTakerLink | null>("meeting_pending_link"),
+  knownServer: () => invoke<string | null>("meeting_known_server"),
+};

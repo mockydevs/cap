@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Cap</title>
+  <link rel="stylesheet" href="ui.css" />
+  <body>
+    <h1>Cap meeting recorder</h1>
+
+    <section id="pair" hidden>
+      <p>Enter the code shown on the Calari intake receipt or client page.</p>
+      <label
+        >Cap server
+        <input id="server" type="url" placeholder="https://cap.example.com"
+      /></label>
+      <label
+        >Pairing code
+        <input id="code" type="text" autocomplete="off" placeholder="XXXX-XXXX"
+      /></label>
+      <button id="pairBtn">Connect</button>
+    </section>
+
+    <section id="ready" hidden>
+      <p id="client"></p>
+      <fieldset>
+        <legend>Record</legend>
+        <label
+          ><input type="radio" name="mode" value="audio" checked /> Audio +
+          transcript (meeting notes)</label
+        >
+        <label
+          ><input type="radio" name="mode" value="video" /> Video +
+          transcript</label
+        >
+      </fieldset>
+      <p>
+        Recording is visible in the tab and the toolbar. Tell everyone in the
+        meeting that it is being recorded.
+      </p>
+      <button id="startBtn">Start recording this tab</button>
+    </section>
+
+    <section id="recording" hidden>
+      <p class="rec">● Recording</p>
+      <p class="muted">
+        Cap stops on its own when the call ends, the tab closes, or after a long
+        silence (with a warning first).
+      </p>
+      <button id="stopBtn" class="stop">Stop and send to Calari</button>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+    <button id="optionsBtn" class="secondary">Options</button>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

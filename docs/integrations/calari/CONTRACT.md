@@ -10,11 +10,11 @@ fixtures and code cannot drift apart silently.
 
 ## Parties and trust
 
-| Party                       | Holds                                                                                   | Can do                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Calari server               | integration key (`key_id` + exactly 32 secret bytes, provisioned as base64url without padding; the decoded bytes are the HMAC key) | create pairings for its own tenant; receive deliveries                         |
-| Cap meeting service         | the same key, plus AI provider keys in its own env                                      | issue device tokens, store audio, transcribe, summarize, deliver               |
-| Desktop app / Chrome extension | a short-lived **device token** for one client                                        | create meetings for that one client, upload its audio, finalize it. Nothing else |
+| Party                          | Holds                                                                                                                              | Can do                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Calari server                  | integration key (`key_id` + exactly 32 secret bytes, provisioned as base64url without padding; the decoded bytes are the HMAC key) | create pairings for its own tenant; receive deliveries                           |
+| Cap meeting service            | the same key, plus AI provider keys in its own env                                                                                 | issue device tokens, store audio, transcribe, summarize, deliver                 |
+| Desktop app / Chrome extension | a short-lived **device token** for one client                                                                                      | create meetings for that one client, upload its audio, finalize it. Nothing else |
 
 - The tenant is bound to the `key_id`. A body that names a different tenant is
   rejected (`403 tenant_mismatch`).
@@ -28,12 +28,12 @@ fixtures and code cannot drift apart silently.
 
 Every server-to-server request carries (each retry uses a fresh nonce):
 
-| Header                | Value                                                         |
-| --------------------- | ------------------------------------------------------------- |
-| `x-cap-key-id`        | integration key id, e.g. `calari-prod-1`                      |
-| `x-cap-timestamp`     | Unix seconds                                                  |
-| `x-cap-nonce`         | 16–64 chars `[A-Za-z0-9_-]`, unique per request               |
-| `x-cap-signature-256` | `sha256=` + lowercase hex HMAC-SHA256 over the signing string |
+| Header                 | Value                                                         |
+| ---------------------- | ------------------------------------------------------------- |
+| `x-cap-key-id`         | integration key id, e.g. `calari-prod-1`                      |
+| `x-cap-timestamp`      | Unix seconds                                                  |
+| `x-cap-nonce`          | 16–64 chars `[A-Za-z0-9_-]`, unique per request               |
+| `x-cap-signature-256`  | `sha256=` + lowercase hex HMAC-SHA256 over the signing string |
 | `x-cap-content-sha256` | lowercase hex SHA-256 of the entire raw body (deliveries)     |
 
 Signing string (bytes, `\n` = 0x0A):
@@ -62,15 +62,15 @@ member on an existing client's page (`staff_client`), or a staff member with
 `POST {CAP_SERVER_URL}/v1/pairings` (signed, purpose `pairing`). Body: see
 [`fixtures/pairing.request.json`](fixtures/pairing.request.json).
 
-| Field                  | Rule                                                                              |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| `request_id`           | UUID, stable across retries of one logical request                                |
-| `tenant_id`            | must equal the tenant bound to `x-cap-key-id`                                     |
-| `pairing_kind`         | `client_intake` \| `staff_client` \| `internal_team`                              |
-| `client_id`            | UUID from Calari's own record. Required for client kinds, absent for `internal_team` |
-| `intake_receipt_id`    | UUID, required for `client_intake`                                                |
-| `client_display_name`  | optional, shown on the device after pairing                                       |
-| `ttl_seconds`          | 60–900                                                                            |
+| Field                 | Rule                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `request_id`          | UUID, stable across retries of one logical request                                   |
+| `tenant_id`           | must equal the tenant bound to `x-cap-key-id`                                        |
+| `pairing_kind`        | `client_intake` \| `staff_client` \| `internal_team`                                 |
+| `client_id`           | UUID from Calari's own record. Required for client kinds, absent for `internal_team` |
+| `intake_receipt_id`   | UUID, required for `client_intake`                                                   |
+| `client_display_name` | optional, shown on the device after pairing                                          |
+| `ttl_seconds`         | 60–900                                                                               |
 
 Response `201` ([`fixtures/pairing.response.json`](fixtures/pairing.response.json)):
 `pairing_id`, `code` (`XXXX-XXXX`, 8 Crockford base32 characters), `expires_at`,
@@ -96,13 +96,13 @@ Failed attempts are rate limited per source address and globally (`429`).
 
 ## 3. Meetings (device token, `Authorization: Bearer …`)
 
-| Method + path                         | Purpose                                                                                     |
-| ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `POST /v1/meetings`                   | create; idempotent on `idempotency_key` per token                                            |
-| `PUT /v1/meetings/{id}/chunks/{seq}`  | upload one standalone audio chunk; `x-chunk-sha256`, `x-chunk-start-ms`, `x-chunk-duration-ms` |
-| `POST /v1/meetings/{id}/events`       | lifecycle audit: idle warning, keep-recording, signal                                      |
-| `POST /v1/meetings/{id}/finalize`     | `{last_seq, stop_reason, ended_at}`; `409` lists missing chunks to resend                    |
-| `GET /v1/meetings/{id}`               | status, missing chunks, delivery receipt                                                    |
+| Method + path                        | Purpose                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `POST /v1/meetings`                  | create; idempotent on `idempotency_key` per token                                              |
+| `PUT /v1/meetings/{id}/chunks/{seq}` | upload one standalone audio chunk; `x-chunk-sha256`, `x-chunk-start-ms`, `x-chunk-duration-ms` |
+| `POST /v1/meetings/{id}/events`      | lifecycle audit: idle warning, keep-recording, signal                                          |
+| `POST /v1/meetings/{id}/finalize`    | `{last_seq, stop_reason, ended_at}`; `409` lists missing chunks to resend                      |
+| `GET /v1/meetings/{id}`              | status, missing chunks, delivery receipt                                                       |
 
 `POST /v1/meetings` takes `capture_mode`: `audio` (default) or `video`. Both are
 transcribed; video also keeps the picture in Cap's private storage.

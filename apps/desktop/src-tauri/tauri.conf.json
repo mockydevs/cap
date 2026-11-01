@@ -34,7 +34,11 @@
       "icons/icon.ico"
     ],
     "createUpdaterArtifacts": true,
-    "windows": { "wix": { "language": "en-US" } },
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "12.3",
       "entitlements": "Entitlements.plist",
@@ -42,7 +46,11 @@
         "Resources/macos/sck-audio-capture": "macos/sck-audio-capture"
       }
     },
-    "linux": { "appimage": { "bundleMediaFramework": true } }
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
   },
   "plugins": {
     "updater": {
@@ -50,6 +58,13 @@
       "endpoints": [
         "https://github.com/mockydevs/cap/releases/latest/download/latest.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "cap"
+        ]
+      }
     }
   }
 }

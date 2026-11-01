@@ -1,0 +1,124 @@
+:root {
+  --bg: #ffffff;
+  --fg: #16181d;
+  --muted: #5b626c;
+  --line: #dde1e6;
+  --card: #f6f7f9;
+  --accent: #c62828;
+  --link: #0b57d0;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121418;
+    --fg: #eceef1;
+    --muted: #a1a8b2;
+    --line: #2c3139;
+    --card: #1b1e24;
+    --accent: #ef5350;
+    --link: #8ab4f8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121418;
+  --fg: #eceef1;
+  --muted: #a1a8b2;
+  --line: #2c3139;
+  --card: #1b1e24;
+  --accent: #ef5350;
+  --link: #8ab4f8;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    16px/1.55 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 16px 32px;
+}
+header {
+  margin-bottom: 40px;
+}
+.mark {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+h1 {
+  font-size: 40px;
+  margin: 12px 0 4px;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+.lead {
+  font-size: 19px;
+  color: var(--muted);
+  margin: 0;
+}
+section {
+  margin-bottom: 40px;
+}
+.features {
+  margin: 0;
+  padding-left: 20px;
+}
+.features li {
+  margin-bottom: 8px;
+}
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.dl {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--fg);
+  text-decoration: none;
+}
+.dl span {
+  font-weight: 600;
+}
+.dl small {
+  color: var(--muted);
+}
+.dl:hover,
+.dl:focus-visible {
+  outline: none;
+  border-color: var(--link);
+}
+.dl.recommended {
+  border-color: var(--accent);
+}
+.dl[aria-disabled="true"] {
+  opacity: 0.6;
+}
+.note,
+footer {
+  color: var(--muted);
+  font-size: 14px;
+}
+a {
+  color: var(--link);
+}

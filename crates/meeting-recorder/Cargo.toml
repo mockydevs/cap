@@ -1,0 +1,26 @@
+[package]
+name = "cap-meeting-recorder"
+version = "0.1.0"
+description = "Crash-safe desktop meeting capture: FFmpeg segments, end/idle detection, resumable upload"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cap-meeting-detector = { path = "../meeting-detector" }
+cap-meeting-protocol = { path = "../meeting-protocol" }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+axum = "0.8"
+cap-server = { path = "../cap-server" }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }

@@ -1,4 +1,5 @@
 mod capture;
+mod meeting;
 mod model;
 mod projects;
 mod upload;
@@ -9,7 +10,7 @@ use model::{Capabilities, CaptureOptions, Project, ProjectStatus};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::{io::Write, process::Child, sync::Mutex, time::Instant};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
@@ -319,7 +320,7 @@ struct GoogleCapResponse {
     display_name: String,
 }
 
-fn checked_server_url(value: &str) -> Result<String, String> {
+pub(crate) fn checked_server_url(value: &str) -> Result<String, String> {
     let parsed = Url::parse(value.trim_end_matches('/')).map_err(|_| "Invalid server URL")?;
     if parsed.scheme() != "https" && !matches!(parsed.host_str(), Some("localhost" | "127.0.0.1")) {
         return Err("The server must use HTTPS".into());
@@ -576,7 +577,17 @@ async fn upload_project(app: AppHandle, project_id: String) -> Result<Project, S
 
 pub fn run() {
     tauri::Builder::default()
+        // Must be first: a second launch (for example a cap:// link) is
+        // forwarded to the running app instead of opening another window.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .manage(DesktopState::default())
+        .manage(meeting::PendingLink::default())
+        .manage(meeting::MeetingState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
@@ -599,6 +610,23 @@ pub fn run() {
             app.global_shortcut().register("CommandOrControl+Shift+P")?;
             let _ =
                 projects::load_all(&projects::root(app.handle()).map_err(std::io::Error::other)?);
+            meeting::recover_in_background(app.handle());
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                #[cfg(any(target_os = "linux", target_os = "windows"))]
+                let _ = app.deep_link().register_all();
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        meeting::handle_link(&handle, url.as_str());
+                    }
+                });
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    for url in urls {
+                        meeting::handle_link(app.handle(), url.as_str());
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -614,7 +642,15 @@ pub fn run() {
             google_login,
             logout,
             upload_project,
-            open_extension_store
+            open_extension_store,
+            meeting::meeting_pair,
+            meeting::meeting_device,
+            meeting::meeting_unpair,
+            meeting::meeting_start,
+            meeting::meeting_signal,
+            meeting::meeting_recording,
+            meeting::meeting_pending_link,
+            meeting::meeting_known_server
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Cap desktop")

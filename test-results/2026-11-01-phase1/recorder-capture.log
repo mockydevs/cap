@@ -1,0 +1,29 @@
+   Compiling cap-meeting-recorder v0.1.0 (/home/don/code/cap/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running unittests src/lib.rs (target/debug/deps/cap_meeting_recorder-e2f627ad624d1e1c)
+
+running 4 tests
+test ffmpeg::tests::segment_list_parsing ... ok
+test ffmpeg::tests::audio_mode_ignores_a_video_input ... ok
+test ffmpeg::tests::video_mode_adds_the_screen_and_webm_segments ... ok
+test ffmpeg::tests::audio_mode_mixes_inputs_into_segments_and_pcm ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/capture.rs (target/debug/deps/capture-b4f0a271ef7751ab)
+
+running 5 tests
+test prolonged_silence_warns_then_stops ... ok
+test user_stop_closes_the_last_segment_and_uploads_it ... ok
+test video_mode_uploads_webm_segments ... ok
+test a_crashed_session_is_recovered_as_interrupted ... ok
+test source_ending_stops_finalizes_and_delivers_every_segment ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.80s
+
+   Doc-tests cap_meeting_recorder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
