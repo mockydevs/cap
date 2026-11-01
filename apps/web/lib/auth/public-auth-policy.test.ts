@@ -61,7 +61,7 @@ describe("local legacy fixture isolation", () => {
           input: "{}",
           encoding: "utf8",
           timeout: 5000,
-          env: { DATABASE_URL: databaseUrl },
+          env: { NODE_ENV: "test", DATABASE_URL: databaseUrl },
         },
       );
       expect(result.status).toBe(1);
