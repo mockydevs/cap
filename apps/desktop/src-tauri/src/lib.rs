@@ -2,17 +2,12 @@ mod capture;
 mod meeting;
 mod model;
 mod projects;
-mod upload;
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use model::{Capabilities, CaptureOptions, Project, ProjectStatus};
-use rand::RngCore;
-use sha2::{Digest, Sha256};
 use std::{io::Write, process::Child, sync::Mutex, time::Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
 use uuid::Uuid;
 
@@ -287,292 +282,94 @@ fn reveal_project(app: AppHandle, project_id: String) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LoginResponse {
-    token: String,
-    user: LoginUser,
-}
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LoginUser {
-    display_name: String,
-}
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LoginResult {
-    display_name: String,
+/// Release builds get the update address and signing key from the release
+/// workflow; other builds have no endpoint, so this does nothing.
+fn check_for_update(app: &AppHandle) {
+    use tauri_plugin_updater::UpdaterExt;
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Ok(updater) = handle.updater() else {
+            return;
+        };
+        if let Ok(Some(update)) = updater.check().await {
+            let _ = handle.emit("update-available", update.version.clone());
+        }
+    });
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GoogleDesktopConfig {
-    client_id: String,
-}
-#[derive(serde::Deserialize)]
-struct GoogleTokenResponse {
-    id_token: String,
-}
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GoogleCapResponse {
-    token: String,
-    display_name: String,
+/// Installs a signed update and restarts, only when nothing is recording.
+/// Uploads still in progress resume after the restart.
+#[tauri::command]
+async fn install_update(
+    app: AppHandle,
+    desktop: State<'_, DesktopState>,
+    meetings: State<'_, meeting::MeetingState>,
+) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let busy = desktop.active.lock().map_err(|e| e.to_string())?.is_some()
+        || meeting::is_recording(&meetings);
+    if busy {
+        return Err("Stop the recording before updating Cap.".into());
+    }
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("Cap is already up to date.")?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    app.restart();
 }
 
-pub(crate) fn checked_server_url(value: &str) -> Result<String, String> {
-    let parsed = Url::parse(value.trim_end_matches('/')).map_err(|_| "Invalid server URL")?;
-    if parsed.scheme() != "https" && !matches!(parsed.host_str(), Some("localhost" | "127.0.0.1")) {
-        return Err("The server must use HTTPS".into());
+/// FFmpeg to record with. Windows installers bundle `ffmpeg.exe` next to the
+/// app (a Tauri sidecar); Linux packages depend on the distribution's FFmpeg.
+pub(crate) fn ffmpeg_path() -> String {
+    #[cfg(target_os = "windows")]
+    if let Some(bundled) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("ffmpeg.exe")))
+        .filter(|path| path.is_file())
+    {
+        return bundled.to_string_lossy().into_owned();
+    }
+    "ffmpeg".into()
+}
+
+/// The Cap server this build talks to. Release builds bake in an https
+/// address at build time (build.rs refuses to build without one) and never
+/// accept a local one. Debug builds may point at a local server with
+/// `CAP_DEV_SERVER_URL`. The server never comes from a link or a form.
+pub(crate) fn meeting_server() -> Result<String, String> {
+    let configured = option_env!("CAP_DEFAULT_SERVER_URL").map(str::to_owned);
+    #[cfg(debug_assertions)]
+    let configured = std::env::var("CAP_DEV_SERVER_URL").ok().or(configured);
+    let value = configured.ok_or("This copy of Cap has no server configured.")?;
+    checked_server_url(&value, cfg!(debug_assertions))
+}
+
+fn checked_server_url(value: &str, allow_local: bool) -> Result<String, String> {
+    let parsed =
+        Url::parse(value.trim().trim_end_matches('/')).map_err(|_| "Invalid server URL")?;
+    let local = matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    let scheme_ok = match parsed.scheme() {
+        "https" => !local || allow_local,
+        "http" => local && allow_local,
+        _ => false,
+    };
+    if !scheme_ok
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err("The Cap server must be an https address.".into());
     }
     Ok(parsed.as_str().trim_end_matches('/').to_string())
-}
-
-#[tauri::command]
-async fn login(server_url: String, email: String, password: String) -> Result<LoginResult, String> {
-    let server = checked_server_url(&server_url)?;
-    let response = reqwest::Client::new()
-        .post(format!("{server}/api/desktop/auth/login"))
-        .json(&serde_json::json!({"email":email,"password":password}))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if !response.status().is_success() {
-        return Err("Invalid email or password".into());
-    }
-    let authenticated: LoginResponse = response.json().await.map_err(|e| e.to_string())?;
-    keyring::Entry::new("cap-desktop", "server-url")
-        .map_err(|e| e.to_string())?
-        .set_password(&server)
-        .map_err(|e| e.to_string())?;
-    keyring::Entry::new("cap-desktop", "session-token")
-        .map_err(|e| e.to_string())?
-        .set_password(&authenticated.token)
-        .map_err(|e| e.to_string())?;
-    Ok(LoginResult {
-        display_name: authenticated.user.display_name,
-    })
-}
-
-fn open_system_browser(url: &str) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    let status = std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .status();
-    #[cfg(target_os = "macos")]
-    let status = std::process::Command::new("open").arg(url).status();
-    #[cfg(target_os = "linux")]
-    let status = std::process::Command::new("xdg-open").arg(url).status();
-    if status.map_err(|error| error.to_string())?.success() {
-        Ok(())
-    } else {
-        Err("Could not open the system browser".into())
-    }
-}
-
-#[tauri::command]
-async fn google_login(server_url: String) -> Result<LoginResult, String> {
-    let server = checked_server_url(&server_url)?;
-    let client = reqwest::Client::new();
-    let config_response = client
-        .get(format!("{server}/api/desktop/auth/google/config"))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !config_response.status().is_success() {
-        return Err("Google sign-in is not configured on this server".into());
-    }
-    let config: GoogleDesktopConfig = config_response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|error| error.to_string())?;
-    let redirect_uri = format!(
-        "http://127.0.0.1:{}",
-        listener
-            .local_addr()
-            .map_err(|error| error.to_string())?
-            .port()
-    );
-    let mut verifier_bytes = [0u8; 32];
-    let mut state_bytes = [0u8; 32];
-    let mut nonce_bytes = [0u8; 32];
-    rand::rng().fill_bytes(&mut verifier_bytes);
-    rand::rng().fill_bytes(&mut state_bytes);
-    rand::rng().fill_bytes(&mut nonce_bytes);
-    let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
-    let state = URL_SAFE_NO_PAD.encode(state_bytes);
-    let nonce = URL_SAFE_NO_PAD.encode(nonce_bytes);
-    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-    let mut authorization = Url::parse("https://accounts.google.com/o/oauth2/v2/auth")
-        .map_err(|error| error.to_string())?;
-    authorization
-        .query_pairs_mut()
-        .append_pair("client_id", &config.client_id)
-        .append_pair("redirect_uri", &redirect_uri)
-        .append_pair("response_type", "code")
-        .append_pair("scope", "openid email profile")
-        .append_pair("state", &state)
-        .append_pair("nonce", &nonce)
-        .append_pair("code_challenge", &challenge)
-        .append_pair("code_challenge_method", "S256")
-        .append_pair("prompt", "select_account");
-    open_system_browser(authorization.as_str())?;
-    let (mut stream, _) =
-        tokio::time::timeout(std::time::Duration::from_secs(180), listener.accept())
-            .await
-            .map_err(|_| "Google sign-in timed out")?
-            .map_err(|error| error.to_string())?;
-    let mut request = vec![0u8; 8192];
-    let length = stream
-        .read(&mut request)
-        .await
-        .map_err(|error| error.to_string())?;
-    let request_text = String::from_utf8_lossy(&request[..length]);
-    let target = request_text
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .ok_or("Invalid OAuth callback")?;
-    let callback =
-        Url::parse(&format!("http://127.0.0.1{target}")).map_err(|_| "Invalid OAuth callback")?;
-    let parameters: std::collections::HashMap<_, _> = callback.query_pairs().collect();
-    if parameters.get("state").map(|value| value.as_ref()) != Some(state.as_str()) {
-        return Err("Google sign-in state did not match".into());
-    }
-    let code = parameters
-        .get("code")
-        .ok_or("Google did not return an authorization code")?;
-    let message = "<!doctype html><title>Cap</title><p>Sign-in complete. You may close this window and return to Cap.</p>";
-    stream
-        .write_all(
-            format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{message}", message.len()).as_bytes(),
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-    let google_response = client
-        .post("https://oauth2.googleapis.com/token")
-        .form(&[
-            ("code", code.as_ref()),
-            ("client_id", config.client_id.as_str()),
-            ("redirect_uri", redirect_uri.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", verifier.as_str()),
-        ])
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !google_response.status().is_success() {
-        return Err("Google authorization-code exchange failed".into());
-    }
-    let google_token: GoogleTokenResponse = google_response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
-    let cap_response = client
-        .post(format!("{server}/api/desktop/auth/google"))
-        .json(&serde_json::json!({"idToken":google_token.id_token,"nonce":nonce}))
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
-    if !cap_response.status().is_success() {
-        return Err("The Cap server rejected Google sign-in".into());
-    }
-    let authenticated: GoogleCapResponse = cap_response
-        .json()
-        .await
-        .map_err(|error| error.to_string())?;
-    keyring::Entry::new("cap-desktop", "server-url")
-        .map_err(|error| error.to_string())?
-        .set_password(&server)
-        .map_err(|error| error.to_string())?;
-    keyring::Entry::new("cap-desktop", "session-token")
-        .map_err(|error| error.to_string())?
-        .set_password(&authenticated.token)
-        .map_err(|error| error.to_string())?;
-    Ok(LoginResult {
-        display_name: authenticated.display_name,
-    })
-}
-
-#[tauri::command]
-fn logout() -> Result<(), String> {
-    for key in ["session-token", "server-url"] {
-        let entry = keyring::Entry::new("cap-desktop", key).map_err(|e| e.to_string())?;
-        let _ = entry.delete_credential();
-    }
-    Ok(())
-}
-
-/// PLACEHOLDER — replace with the real Chrome Web Store item ID, Edge
-/// Add-ons product ID, and Firefox AMO slug once the extension is actually
-/// published (see docs/BROWSER_EXTENSION.md). Until then, `browser_store_url`
-/// deliberately falls back to the GitHub release page below instead of
-/// opening a URL that doesn't exist yet.
-const CHROME_WEB_STORE_URL: &str =
-    "https://chromewebstore.google.com/detail/REPLACE_WITH_CHROME_EXTENSION_ID";
-const EDGE_ADDONS_URL: &str =
-    "https://microsoftedge.microsoft.com/addons/detail/REPLACE_WITH_EDGE_EXTENSION_ID";
-const FIREFOX_AMO_URL: &str = "https://addons.mozilla.org/firefox/addon/REPLACE_WITH_FIREFOX_SLUG/";
-const EXTENSION_RELEASES_FALLBACK_URL: &str =
-    "https://github.com/mockydevs/cap/releases?q=extension-&expanded=true";
-
-fn browser_store_url(browser: &str) -> Result<&'static str, String> {
-    let url = match browser {
-        "chrome" => CHROME_WEB_STORE_URL,
-        "edge" => EDGE_ADDONS_URL,
-        "firefox" => FIREFOX_AMO_URL,
-        _ => return Err("Unknown browser".into()),
-    };
-    Ok(if url.contains("REPLACE_WITH") {
-        EXTENSION_RELEASES_FALLBACK_URL
-    } else {
-        url
-    })
-}
-
-/// Opens the given browser's extension store listing (Chrome Web Store,
-/// Edge Add-ons, or Firefox AMO) in the system's default browser, so
-/// installing Cap's browser extension is a single click from the desktop
-/// app once it's actually published to that store. Falls back to the
-/// GitHub releases page until real store URLs are configured above.
-#[tauri::command]
-fn open_extension_store(browser: String) -> Result<(), String> {
-    let url = browser_store_url(&browser)?;
-    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn upload_project(app: AppHandle, project_id: String) -> Result<Project, String> {
-    if Uuid::parse_str(&project_id).is_err() {
-        return Err("Invalid project ID".into());
-    }
-    let directory = projects::root(&app)?.join(&project_id);
-    let mut project = projects::load_all(&projects::root(&app)?)?
-        .into_iter()
-        .find(|p| p.id == project_id)
-        .ok_or("Project not found")?;
-    if !matches!(
-        project.status,
-        ProjectStatus::Ready
-            | ProjectStatus::Recoverable
-            | ProjectStatus::Failed
-            | ProjectStatus::Uploading
-    ) {
-        return Err("Project cannot be uploaded in its current state".into());
-    }
-    match upload::upload(&app, &directory, &mut project).await {
-        Ok(()) => Ok(project),
-        Err(error) => {
-            project.status = ProjectStatus::Failed;
-            project.failure = Some(error.clone());
-            project.updated_at = Utc::now();
-            projects::save(&directory, &project)?;
-            Err(error)
-        }
-    }
 }
 
 pub fn run() {
@@ -611,6 +408,7 @@ pub fn run() {
             let _ =
                 projects::load_all(&projects::root(app.handle()).map_err(std::io::Error::other)?);
             meeting::recover_in_background(app.handle());
+            check_for_update(app.handle());
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -638,11 +436,6 @@ pub fn run() {
             stop_recording,
             delete_project,
             reveal_project,
-            login,
-            google_login,
-            logout,
-            upload_project,
-            open_extension_store,
             meeting::meeting_pair,
             meeting::meeting_device,
             meeting::meeting_unpair,
@@ -650,8 +443,8 @@ pub fn run() {
             meeting::meeting_signal,
             meeting::meeting_recording,
             meeting::meeting_pending_link,
-            meeting::meeting_known_server,
-            meeting::meeting_audio_devices
+            meeting::meeting_audio_devices,
+            install_update
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Cap desktop")
@@ -660,17 +453,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn rejects_unknown_browsers() {
-        assert!(browser_store_url("safari").is_err());
-    }
-    #[test]
-    fn falls_back_to_the_releases_page_until_real_store_urls_are_configured() {
-        for browser in ["chrome", "edge", "firefox"] {
-            assert_eq!(
-                browser_store_url(browser).unwrap(),
-                EXTENSION_RELEASES_FALLBACK_URL
-            );
+    fn release_builds_only_talk_to_https_servers() {
+        assert_eq!(
+            checked_server_url("https://meetings.calari.tech/", false).unwrap(),
+            "https://meetings.calari.tech"
+        );
+        for bad in [
+            "http://meetings.calari.tech",
+            "https://localhost:8787",
+            "http://127.0.0.1:8787",
+            "https://user:pw@meetings.calari.tech",
+            "https://meetings.calari.tech/?next=x",
+            "file:///etc/passwd",
+            "not a url",
+        ] {
+            assert!(checked_server_url(bad, false).is_err(), "{bad}");
         }
+        // Debug builds may use a local server for development.
+        assert!(checked_server_url("http://127.0.0.1:8787", true).is_ok());
+        assert!(checked_server_url("http://meetings.calari.tech", true).is_err());
     }
 }

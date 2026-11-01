@@ -1,0 +1,6 @@
+Release builds need CAP_DEFAULT_SERVER_URL set to the production https Cap server (for Calari: https://meetings
+value=[] exit=101
+Release builds need CAP_DEFAULT_SERVER_URL set to the production https Cap server (for Calari: https://meetings
+value=[http://meetings.calari.tech] exit=101
+Release builds need CAP_DEFAULT_SERVER_URL set to the production https Cap server (for Calari: https://meetings
+value=[https://localhost:8787] exit=101

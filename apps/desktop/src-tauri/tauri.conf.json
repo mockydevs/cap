@@ -47,17 +47,16 @@
       }
     },
     "linux": {
-      "appimage": {
-        "bundleMediaFramework": true
+      "deb": {
+        "depends": ["ffmpeg"]
       }
     }
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFDOTNDMDVBOTFFMTYxOTQKUldTVVllR1JXc0NUck05ZU0xL3dTTlNESENkRWcvK2x5Y0Ftejd4TXFRdERMZnpMeVNGWlRyVUYK",
-      "endpoints": [
-        "https://github.com/mockydevs/cap/releases/latest/download/latest.json"
-      ]
+      "pubkey": "",
+      "endpoints": [],
+      "requireSignedVersion": true
     },
     "deep-link": {
       "desktop": {

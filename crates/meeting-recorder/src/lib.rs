@@ -12,6 +12,7 @@
 
 pub mod devices;
 pub mod ffmpeg;
+pub mod system_audio;
 
 use cap_meeting_detector::{Config as DetectorConfig, Decision, Detector, Signal, WarnReason};
 use cap_meeting_protocol::{
@@ -463,6 +464,9 @@ pub struct Session {
 impl Session {
     pub fn start(opts: StartOptions) -> Result<Self> {
         std::fs::create_dir_all(&opts.dir)?;
+        // Before the meeting exists on the server, so a missing output
+        // device is reported without leaving an empty meeting behind.
+        let (inputs, system_audio) = start_system_audio(&opts.inputs)?;
         let meeting = opts.client.create_meeting(&CreateMeetingRequest {
             title: opts.title.chars().take(200).collect(),
             idempotency_key: uuid::Uuid::new_v4().to_string(),
@@ -484,7 +488,7 @@ impl Session {
 
         let mut child = Command::new(&opts.ffmpeg)
             .args(ffmpeg::args(
-                &opts.inputs,
+                &inputs,
                 opts.mode,
                 &opts.dir,
                 opts.segment_seconds,
@@ -539,6 +543,7 @@ impl Session {
                 on_event: opts.on_event,
                 capture_done,
                 stop_reason,
+                system_audio,
             })
         });
         Ok(Self {
@@ -665,6 +670,27 @@ struct ControlCtx {
     on_event: Arc<dyn Fn(Event) + Send + Sync>,
     capture_done: Arc<AtomicBool>,
     stop_reason: Arc<Mutex<Option<StopReason>>>,
+    system_audio: Vec<system_audio::Loopback>,
+}
+
+/// Starts native system-audio captures and points FFmpeg at their pipes.
+fn start_system_audio(
+    inputs: &[ffmpeg::Input],
+) -> Result<(Vec<ffmpeg::Input>, Vec<system_audio::Loopback>)> {
+    let mut started = Vec::new();
+    let mut out = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        if *input == ffmpeg::Input::WindowsLoopback {
+            let capture = system_audio::Loopback::start().map_err(Error::Other)?;
+            out.push(ffmpeg::Input::PcmPipe {
+                path: capture.path().to_owned(),
+            });
+            started.push(capture);
+        } else {
+            out.push(input.clone());
+        }
+    }
+    Ok((out, started))
 }
 
 fn control_loop(mut c: ControlCtx) {
@@ -738,6 +764,9 @@ fn control_loop(mut c: ControlCtx) {
     if matches!(c.child.try_wait(), Ok(None)) {
         let _ = c.child.kill();
         let _ = c.child.wait();
+    }
+    for capture in &mut c.system_audio {
+        capture.stop();
     }
     (c.on_event)(Event::Stopped { reason });
     c.capture_done.store(true, Ordering::SeqCst);

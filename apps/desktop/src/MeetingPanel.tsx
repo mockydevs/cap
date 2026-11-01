@@ -23,7 +23,6 @@ export function MeetingPanel({
   sources: { id: string; name: string; kind: string }[];
 }) {
   const [device, setDevice] = useState<PairInfo | null>(null);
-  const [server, setServer] = useState("");
   const [code, setCode] = useState("");
   const [mode, setMode] = useState<"audio" | "video">("audio");
   const [title, setTitle] = useState("Meeting notes");
@@ -48,10 +47,6 @@ export function MeetingPanel({
     void meeting
       .recording()
       .then(setRecording)
-      .catch(() => {});
-    void meeting
-      .knownServer()
-      .then((s) => s && setServer(s))
       .catch(() => {});
     void meeting
       .pendingLink()
@@ -119,8 +114,7 @@ export function MeetingPanel({
   const acceptLink = () =>
     run(async () => {
       if (!link) return;
-      if (!server) throw new Error("Enter the Cap server address first.");
-      const info = await meeting.pair(server, link.code);
+      const info = await meeting.pair(link.code);
       setDevice(info);
       const l = link;
       setLink(null);
@@ -153,14 +147,6 @@ export function MeetingPanel({
             <strong>Add note taker?</strong> Calari asked Cap to record a
             meeting ({link.mode === "video" ? "video" : "audio"} + transcript).
             Tell everyone in the meeting it is being recorded.
-            {!server && (
-              <input
-                className="record-title-input"
-                placeholder="Cap server, e.g. https://cap.example.com"
-                value={server}
-                onChange={(e) => setServer(e.target.value)}
-              />
-            )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button
                 className="btn btn-primary"
@@ -185,13 +171,6 @@ export function MeetingPanel({
           </p>
           <input
             className="record-title-input"
-            placeholder="Cap server"
-            value={server}
-            onChange={(e) => setServer(e.target.value)}
-            aria-label="Cap server"
-          />
-          <input
-            className="record-title-input"
             placeholder="XXXX-XXXX"
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -201,7 +180,7 @@ export function MeetingPanel({
             className="btn btn-primary"
             disabled={busy}
             onClick={() =>
-              void run(async () => setDevice(await meeting.pair(server, code)))
+              void run(async () => setDevice(await meeting.pair(code)))
             }
           >
             Connect
@@ -271,9 +250,9 @@ export function MeetingPanel({
           </label>
           {devices && !devices.systemAudioAvailable && (
             <p className="card-subtitle">
-              {devices.platform === "windows"
-                ? 'This PC has no device that records its own sound. Enable "Stereo Mix" in Windows sound settings or install a loopback device, then reopen Cap.'
-                : "Recording the computer's sound is not available on this Mac yet, so only your microphone is recorded."}
+              {devices.platform === "macos"
+                ? "Recording the computer's sound is not available on this Mac yet, so only your microphone is recorded."
+                : "Recording the computer's sound is not available here, so only your microphone is recorded."}
             </p>
           )}
           <input

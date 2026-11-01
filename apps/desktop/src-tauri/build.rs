@@ -1,6 +1,32 @@
 fn main() {
+    require_release_server();
     tauri_build::build();
     compile_macos_system_audio_helper();
+}
+
+/// Release builds talk to exactly one Cap server, fixed at build time. Fail
+/// the build, loudly, rather than ship an app with no server or a local one.
+fn require_release_server() {
+    println!("cargo:rerun-if-env-changed=CAP_DEFAULT_SERVER_URL");
+    if std::env::var("PROFILE").as_deref() != Ok("release") {
+        return;
+    }
+    let value = std::env::var("CAP_DEFAULT_SERVER_URL").unwrap_or_default();
+    let host = value
+        .strip_prefix("https://")
+        .and_then(|rest| rest.split(['/', ':']).next())
+        .unwrap_or("");
+    if host.is_empty()
+        || host == "localhost"
+        || host.starts_with("127.")
+        || host.starts_with('[')
+        || value.contains(['?', '#', '@'])
+    {
+        panic!(
+            "Release builds need CAP_DEFAULT_SERVER_URL set to the production https Cap server \
+             (for Calari: https://meetings.calari.tech). Got {value:?}."
+        );
+    }
 }
 
 /// Compiles `macos/sck-audio-capture.swift` into a standalone executable used

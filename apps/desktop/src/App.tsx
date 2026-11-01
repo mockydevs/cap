@@ -12,8 +12,6 @@ import {
   AlertIcon,
   CapMarkIcon,
   CheckCircleIcon,
-  ChevronDownIcon,
-  CloudIcon,
   CursorIcon,
   FilmIcon,
   FolderIcon,
@@ -26,7 +24,6 @@ import {
   SpeakerIcon,
   StopIcon,
   TrashIcon,
-  UploadIcon,
 } from "./icons";
 
 const defaults: CaptureOptions = {
@@ -41,7 +38,6 @@ const defaults: CaptureOptions = {
 };
 
 type Notice = { kind: "error" | "success"; text: string };
-type Account = { displayName: string };
 
 /** Short clips read better in seconds; anything longer uses the mm:ss clock. */
 function formatClipLength(ms: number): string {
@@ -58,11 +54,6 @@ function formatRelative(iso: string): string {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
 /** listen() throws when there's no Tauri host (e.g. previewing the UI in a plain browser); never let that escape uncaught. */
@@ -127,13 +118,8 @@ export function App() {
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [tauriUnavailable, setTauriUnavailable] = useState(false);
-  const [serverUrl, setServerUrl] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [signingIn, setSigningIn] = useState(false);
-  const [account, setAccount] = useState<Account | null>(null);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [extensionMenuOpen, setExtensionMenuOpen] = useState(false);
+  const [update, setUpdate] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
   const recordingRef = useRef(recording);
   const optionsRef = useRef(options);
   const startedAt = useRef(0);
@@ -196,14 +182,8 @@ export function App() {
         setRecording(false);
         void refresh();
       }),
-      safeListen<number>("upload-progress", (event) =>
-        setProjects((items) =>
-          items.map((item) =>
-            item.status === "UPLOADING"
-              ? { ...item, uploadProgress: event.payload }
-              : item,
-          ),
-        ),
+      safeListen<string>("update-available", (event) =>
+        setUpdate(event.payload),
       ),
       safeListen("shortcut-record", async () => {
         if (recordingRef.current) await desktop.stop();
@@ -221,35 +201,6 @@ export function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!accountMenuOpen) return;
-    const close = () => setAccountMenuOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [accountMenuOpen]);
-
-  useEffect(() => {
-    if (!extensionMenuOpen) return;
-    const close = () => setExtensionMenuOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [extensionMenuOpen]);
-
-  const installExtension = async (browser: "chrome" | "edge" | "firefox") => {
-    setExtensionMenuOpen(false);
-    try {
-      await desktop.openExtensionStore(browser);
-    } catch (error) {
-      setNotice({
-        kind: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "Could not open the extension page",
-      });
-    }
-  };
 
   const start = async () => {
     try {
@@ -271,41 +222,6 @@ export function App() {
     }
   };
 
-  const signIn = async () => {
-    setSigningIn(true);
-    try {
-      const user = await desktop.login(serverUrl, email, password);
-      setPassword("");
-      setAccount(user);
-      setNotice({ kind: "success", text: `Signed in as ${user.displayName}` });
-    } catch (error) {
-      setNotice({ kind: "error", text: String(error) });
-    } finally {
-      setSigningIn(false);
-    }
-  };
-  const signInWithGoogle = async () => {
-    setSigningIn(true);
-    try {
-      const user = await desktop.googleLogin(serverUrl);
-      setAccount(user);
-      setNotice({ kind: "success", text: `Signed in as ${user.displayName}` });
-    } catch (error) {
-      setNotice({ kind: "error", text: String(error) });
-    } finally {
-      setSigningIn(false);
-    }
-  };
-  const signOut = async () => {
-    try {
-      await desktop.logout();
-    } finally {
-      setAccount(null);
-      setAccountMenuOpen(false);
-      setNotice({ kind: "success", text: "Signed out" });
-    }
-  };
-
   const monitorsAndWindows = sources.filter(
     (s) => s.kind === "MONITOR" || s.kind === "WINDOW",
   );
@@ -321,90 +237,14 @@ export function App() {
           <span className="brand-name">Cap</span>
         </div>
         <div className="topbar-spacer" />
-        <div style={{ position: "relative" }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExtensionMenuOpen((open) => !open);
-            }}
-          >
-            <PuzzleIcon className="icon" />
-            Browser extension
-            <ChevronDownIcon className="icon" />
-          </button>
-          {extensionMenuOpen && (
-            <div className="account-menu" onClick={(e) => e.stopPropagation()}>
-              <div className="account-menu-label">
-                Record from your browser toolbar
-              </div>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void installExtension("chrome")}
-              >
-                Get it for Chrome
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void installExtension("edge")}
-              >
-                Get it for Edge
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void installExtension("firefox")}
-              >
-                Get it for Firefox
-              </button>
-            </div>
-          )}
-        </div>
-        {account ? (
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              className="account-chip"
-              onClick={(e) => {
-                e.stopPropagation();
-                setAccountMenuOpen((open) => !open);
-              }}
-            >
-              <span className="avatar">{initialsOf(account.displayName)}</span>
-              {account.displayName}
-              <ChevronDownIcon className="icon" />
-            </button>
-            {accountMenuOpen && (
-              <div
-                className="account-menu"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="account-menu-label">
-                  Signed in to {serverUrl || "your workspace"}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => void signOut()}
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <span
-            className="account-chip"
-            aria-hidden
-            style={{ cursor: "default" }}
-          >
-            <span className="status-dot" />
-            Not connected
-          </span>
-        )}
+        <span
+          className="account-chip"
+          style={{ cursor: "default" }}
+          title="The Cap browser extension is not available yet."
+        >
+          <PuzzleIcon className="icon" />
+          Browser extension: coming soon
+        </span>
       </div>
 
       <main className="main">
@@ -413,6 +253,26 @@ export function App() {
             <AlertIcon className="icon" />
             Open this page inside the Cap desktop app to record — recording
             controls need the native app shell.
+          </div>
+        )}
+        {update && (
+          <div className="banner">
+            <CheckCircleIcon className="icon" />
+            Cap {update} is available.
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={updating || recording}
+              onClick={() => {
+                setUpdating(true);
+                desktop.installUpdate().catch((error: unknown) => {
+                  setUpdating(false);
+                  setNotice({ kind: "error", text: String(error) });
+                });
+              }}
+            >
+              {updating ? "Updating…" : "Install and restart"}
+            </button>
           </div>
         )}
         {notice && (
@@ -593,70 +453,6 @@ export function App() {
           </div>
         </section>
 
-        {!account && (
-          <section className="card">
-            <div className="card-header">
-              <h2 className="card-title">
-                <CloudIcon className="icon" />
-                Connect your workspace
-              </h2>
-              <span className="card-subtitle">Optional — needed to upload</span>
-            </div>
-            <div className="connection-form">
-              <div className="field-grid">
-                <label className="field">
-                  <span className="field-label">Server URL</span>
-                  <input
-                    className="control"
-                    placeholder="https://your-cap-domain.com"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Email</span>
-                  <input
-                    className="control"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field-label">Password</span>
-                  <input
-                    className="control"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void signIn();
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="connection-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={signingIn || !serverUrl || !email || !password}
-                  onClick={() => void signIn()}
-                >
-                  Sign in securely
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={signingIn || !serverUrl}
-                  onClick={() => void signInWithGoogle()}
-                >
-                  Continue with Google
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
-
         <section className="card">
           <div className="card-header">
             <h2 className="card-title">
@@ -675,17 +471,13 @@ export function App() {
               <span className="empty-title">No recordings yet</span>
               <span className="empty-hint">
                 Recordings are saved to this device first, even offline, and
-                stay here until you upload or delete them.
+                stay here until you delete them.
               </span>
             </div>
           ) : (
             <div className="recordings">
               {projects.map((project) => {
                 const badge = statusBadge[project.status];
-                const canUpload =
-                  project.status === "READY" ||
-                  project.status === "RECOVERABLE" ||
-                  project.status === "FAILED";
                 return (
                   <div className="recording-row" key={project.id}>
                     <span className="recording-thumb">
@@ -719,19 +511,6 @@ export function App() {
                       >
                         <FolderIcon className="icon" />
                       </button>
-                      {canUpload && (
-                        <button
-                          type="button"
-                          className="btn btn-icon btn-ghost"
-                          title="Upload"
-                          aria-label="Upload"
-                          onClick={() =>
-                            void desktop.upload(project.id).then(refresh)
-                          }
-                        >
-                          <UploadIcon className="icon" />
-                        </button>
-                      )}
                       <button
                         type="button"
                         className="btn btn-icon btn-danger"
