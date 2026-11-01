@@ -1,0 +1,13 @@
+[package]
+name = "cap-meeting-detector"
+version = "0.1.0"
+description = "Meeting end and inactivity detection: voice activity plus window/tab/device signals with hard bounds"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No dependencies: this crate also compiles to wasm32 for the Chrome extension.
+[dependencies]
+
+[lints]
+workspace = true

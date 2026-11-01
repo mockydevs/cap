@@ -1,0 +1,9 @@
+{
+  "client_display_name": "Acme Ltd",
+  "client_id": "00000000-0000-4000-8000-000000000002",
+  "intake_receipt_id": "00000000-0000-4000-8000-000000000003",
+  "pairing_kind": "client_intake",
+  "request_id": "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+  "tenant_id": "00000000-0000-4000-8000-000000000001",
+  "ttl_seconds": 600
+}

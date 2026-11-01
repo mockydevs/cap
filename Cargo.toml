@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/meeting-protocol",
+  "crates/meeting-detector",
+  "crates/meeting-detector-wasm",
+  "crates/cap-server",
+]
+# The Tauri desktop app keeps its own lockfile and is built from its own
+# directory; it depends on the protocol and detector crates by path.
+exclude = ["apps/desktop/src-tauri", "vendor/glib"]
+
+[workspace.package]
+edition = "2021"
+license = "AGPL-3.0-only"
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+unwrap_used = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.release-wasm]
+inherits = "release"
+opt-level = "s"
+panic = "abort"

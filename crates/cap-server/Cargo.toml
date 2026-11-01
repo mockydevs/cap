@@ -1,0 +1,43 @@
+[package]
+name = "cap-server"
+version = "0.1.0"
+description = "Cap server: meeting pipeline (pairing, chunk storage, transcription, signed Calari delivery), jobs, and the phased replacement of the TypeScript backend"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+# In-process Whisper (whisper.cpp through whisper-rs). Needs cmake and libclang
+# at build time; the server Docker image enables it.
+local-whisper = ["dep:whisper-rs"]
+
+[dependencies]
+anyhow = "1"
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls", "credentials-process"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls"] }
+axum = { version = "0.8", features = ["macros"] }
+base64 = "0.22"
+cap-meeting-protocol = { path = "../meeting-protocol" }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "uuid", "json", "macros", "migrate"] }
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "net", "process", "signal", "sync", "time"] }
+tower-http = { version = "0.6", features = ["trace", "limit", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+whisper-rs = { version = "0.15", optional = true }
+
+[dev-dependencies]
+axum = { version = "0.8", features = ["macros", "multipart"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true
