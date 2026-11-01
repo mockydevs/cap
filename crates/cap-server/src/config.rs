@@ -95,8 +95,10 @@ pub struct Config {
     /// as `interrupted` with whatever audio arrived.
     pub abandon_after: Duration,
     pub worker_interval: Duration,
-    /// Static landing page directory served at `/`.
-    pub site_dir: Option<PathBuf>,
+    /// Dedicated publisher-owned directory, mounted read-only; optional until installers ship.
+    pub download_dir: Option<PathBuf>,
+    /// Universal Calari portal, separate from the privileged meetings-library SSO.
+    pub portal_url: Option<String>,
     pub ffmpeg_path: String,
 }
 
@@ -218,7 +220,8 @@ impl Config {
                 parse_var::<u64>("CAP_MEETING_ABANDON_AFTER_MINUTES", 360)? * 60,
             ),
             worker_interval: Duration::from_secs(2),
-            site_dir: var("CAP_SITE_DIR").map(PathBuf::from),
+            download_dir: var("CAP_DOWNLOAD_DIR").map(PathBuf::from),
+            portal_url: var("CALARI_PORTAL_URL"),
             ffmpeg_path: var("FFMPEG_PATH").unwrap_or_else(|| "ffmpeg".into()),
         };
         cfg.validate()?;
@@ -227,6 +230,29 @@ impl Config {
 
     /// Rules that hold everywhere, plus production-only rules.
     pub fn validate(&self) -> Result<()> {
+        if self.production && self.portal_url.is_none() {
+            bail!("CALARI_PORTAL_URL is required for the public hub in production");
+        }
+        if let Some(url) = &self.portal_url {
+            let url = reqwest::Url::parse(url).context("CALARI_PORTAL_URL")?;
+            if !(url.scheme() == "https" || (!self.production && url.scheme() == "http"))
+                || url.host_str().is_none()
+                || !url.username().is_empty()
+                || url.password().is_some()
+                || url.query().is_some()
+                || url.fragment().is_some()
+            {
+                bail!("CALARI_PORTAL_URL must be an absolute HTTPS portal URL without credentials/query/fragment");
+            }
+        }
+        if self.production
+            && self
+                .download_dir
+                .as_ref()
+                .is_some_and(|path| !path.is_absolute())
+        {
+            bail!("CAP_DOWNLOAD_DIR must be absolute in production");
+        }
         let mut seen = std::collections::HashSet::new();
         for i in &self.integrations {
             if !cap_meeting_protocol::valid_external_id(&i.key_id)
@@ -365,7 +391,8 @@ pub(crate) mod tests {
             },
             abandon_after: Duration::from_secs(60),
             worker_interval: Duration::from_secs(1),
-            site_dir: None,
+            download_dir: None,
+            portal_url: Some("https://calari.example/portal".into()),
             ffmpeg_path: "ffmpeg".into(),
         }
     }
@@ -376,6 +403,12 @@ pub(crate) mod tests {
         type Mutation = Box<dyn Fn(&mut Config)>;
         let cases: Vec<Mutation> = vec![
             Box::new(|c| c.public_base_url = "http://localhost:8787".into()),
+            Box::new(|c| c.portal_url = None),
+            Box::new(|c| c.portal_url = Some("https://user:secret@calari.example/portal".into())),
+            Box::new(|c| {
+                c.portal_url = Some("https://calari.example/portal?next=untrusted".into())
+            }),
+            Box::new(|c| c.download_dir = Some(PathBuf::from("relative-downloads"))),
             Box::new(|c| c.integrations.clear()),
             Box::new(|c| c.integrations[0].secret = vec![1; 31]),
             Box::new(|c| c.integrations[0].delivery_url = "http://calari.example".into()),

@@ -38,10 +38,13 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     volumes:
       - ${CAP_WHISPER_MODEL_DIRECTORY:?Set the absolute host directory containing verified Whisper models}:/models:ro
+      - ${CAP_DOWNLOAD_HOST_DIRECTORY:?Set the dedicated verified public installer directory}:/srv/downloads:ro
     environment:
       CAP_ENV: production
       CAP_SERVER_BIND: 0.0.0.0:8787
       CAP_SERVER_PUBLIC_URL: ${CAP_SERVER_PUBLIC_URL:?Set the public HTTPS meeting service URL}
+      CALARI_PORTAL_URL: ${CALARI_PORTAL_URL:?Set the existing universal HTTPS Calari portal URL}
+      CAP_DOWNLOAD_DIR: /srv/downloads
       DATABASE_URL: ${DATABASE_URL:?Use the existing private Cap PostgreSQL connection}
       AWS_REGION: ${AWS_REGION:?Set AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}

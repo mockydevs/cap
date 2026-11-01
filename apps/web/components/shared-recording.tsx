@@ -60,8 +60,8 @@ export function SharedRecording({
         <WorkspaceMark href="/" />
         <div className="shared-header-actions">
           <span>Shared with Cap</span>
-          <Link className="nav-cta" href="/signup">
-            Create your workspace
+          <Link className="nav-cta" href="/portal">
+            Sign in to Calari
           </Link>
         </div>
       </header>

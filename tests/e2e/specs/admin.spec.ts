@@ -1,18 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { signUpAndSignIn } from "./helpers";
+import { seedLegacySession } from "./helpers";
 
 // apps/web/components/admin-panel.tsx, apps/web/app/admin/page.tsx.
-// A fresh signup is always the OWNER of a brand-new workspace (see
-// helpers.ts / apps/web/components/user-nav.tsx), which satisfies every
-// route this panel calls (all require at least the ADMIN role), so the full
-// panel renders without any additional setup.
+// A guarded test-process fixture seeds an existing legacy OWNER session.
+// Public signup and password/OAuth provisioning stay closed throughout these tests.
 
 // Settings is a tabbed surface: one panel at a time, so each section is
 // reached by its tab rather than by scrolling one long page.
 test("gives a fresh workspace owner every settings section", async ({
   page,
 }) => {
-  const user = await signUpAndSignIn(page, "Admin Owner");
+  const user = await seedLegacySession(page, "Admin Owner");
   await page.goto("/admin");
 
   // Members is the landing tab.
@@ -41,7 +39,7 @@ test("gives a fresh workspace owner every settings section", async ({
 test("invites a new member and saves the retention policy", async ({
   page,
 }) => {
-  await signUpAndSignIn(page, "Admin Actions");
+  await seedLegacySession(page, "Admin Actions");
   await page.goto("/admin");
 
   const inviteEmail = `invitee-${Date.now()}@example.com`;
@@ -70,7 +68,7 @@ test("invites a new member and saves the retention policy", async ({
 test("tells a fresh workspace who pays for each AI feature", async ({
   page,
 }) => {
-  await signUpAndSignIn(page, "AI Entitlements");
+  await seedLegacySession(page, "AI Entitlements");
   await page.goto("/admin");
   await page.getByRole("button", { name: "AI", exact: true }).click();
 

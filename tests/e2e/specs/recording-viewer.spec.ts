@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createUploadingRecording, signUpAndSignIn } from "./helpers";
+import { createUploadingRecording, seedLegacySession } from "./helpers";
 
 // apps/web/components/recording-viewer.tsx, apps/web/app/library/[recordingId]/page.tsx
 //
@@ -12,7 +12,7 @@ import { createUploadingRecording, signUpAndSignIn } from "./helpers";
 test("shows an owner their own recording's pre-processing panels", async ({
   page,
 }) => {
-  await signUpAndSignIn(page, "Viewer Owner");
+  await seedLegacySession(page, "Viewer Owner");
   const title = `Viewer spec recording ${Date.now()}`;
   const recordingId = await createUploadingRecording(page, title);
 
@@ -53,7 +53,7 @@ test("shows an owner their own recording's pre-processing panels", async ({
 });
 
 test("enforces private access across workspaces", async ({ page, browser }) => {
-  await signUpAndSignIn(page, "Viewer Private Owner");
+  await seedLegacySession(page, "Viewer Private Owner");
   const recordingId = await createUploadingRecording(
     page,
     `Private spec recording ${Date.now()}`,
@@ -62,7 +62,7 @@ test("enforces private access across workspaces", async ({ page, browser }) => {
   const outsiderContext = await browser.newContext();
   const outsiderPage = await outsiderContext.newPage();
   try {
-    await signUpAndSignIn(outsiderPage, "Viewer Outsider");
+    await seedLegacySession(outsiderPage, "Viewer Outsider");
     await outsiderPage.goto(`/library/${recordingId}`);
     await expect(
       outsiderPage.getByText("Recording not found in this workspace."),

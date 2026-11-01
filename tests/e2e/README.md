@@ -4,37 +4,40 @@ Real-browser tests against the actual running app (auth, uploads, playback,
 editing) — not mocks. They need the full local stack:
 
 ```bash
-docker compose up -d           # postgres, redis, workers
+docker compose -f docker-compose.test.yml up -d --wait
+export DATABASE_URL=postgresql://cap:cap@localhost:5433/cap_test
+# Provision the local S3/KMS test fixtures using the CI e2e setup recipe.
 pnpm --filter @cap/web db:migrate
 pnpm --filter @cap/e2e exec playwright install --with-deps chromium
 pnpm --filter @cap/e2e test:e2e    # starts `pnpm --filter @cap/web dev` itself
 ```
 
-Set `E2E_BASE_URL` to point at an already-running app (e.g. staging) instead
+Set `E2E_BASE_URL` to point at an already-running local test app instead
 of having Playwright start one:
 
 ```bash
-E2E_BASE_URL=https://staging.example.com pnpm --filter @cap/e2e test:e2e
+E2E_BASE_URL=http://localhost:3000 pnpm --filter @cap/e2e test:e2e
 ```
 
 ## Coverage
 
-`specs/helpers.ts` has two shared, plain functions (no fixtures/page
-objects): `signUpAndSignIn(page, label)`, factored out of the signup flow in
-`auth.spec.ts` once a second spec file needed an authenticated user, and
-`createUploadingRecording(page, title)`, documented in detail below.
+`specs/helpers.ts` provides `seedLegacySession(page, label)` and
+`createUploadingRecording(page, title)`. Public Cap signup/password/Google provisioning
+is closed in every environment. A test-process-only SQL fixture creates an existing
+legacy session, guarded to an explicit loopback PostgreSQL `*_test` database with no
+query overrides. It is not an application endpoint or a production auth bypass.
 
-None of this has been run against a live stack in this environment (no
-Docker here) — every spec below was written by reading the real component
-and API route source under `apps/web` for its selectors and behavior, then
-re-checked side-by-side against that source, not run. See the note at the
-bottom of this section for the subset that _has_ actually been executed.
+The auth spec asserts all retired public credential endpoints return410, the UI offers
+only Calari portal sign-in, and existing legacy sessions/data/logout continue to work.
+Run against isolated test services only, following the S3/KMS setup in the CI e2e job.
+Execution evidence is recorded per release; these fixtures do not prove native capture,
+installer signing, or a complete recording/transcription flow.
 
 ### Covered
 
-- `specs/auth.spec.ts` — login form fields, a failed-login error message,
-  redirecting an unauthenticated visitor away from the library, and a full
-  signup → authenticated session → sign-out round trip.
+- `specs/auth.spec.ts` — Calari-only sign-in UI, server-enforced closure of signup,
+  password login and Google provisioning, unauthenticated access checks, and an existing
+  legacy session → library → sign-out round trip.
 - `specs/library.spec.ts` — the library's empty state for a fresh workspace,
   and a recording created through the upload API appearing in the library
   grid with the correct title and `UPLOADING` status.

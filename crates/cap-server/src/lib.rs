@@ -2,6 +2,7 @@
 //! site. Later phases move the rest of the TypeScript backend here.
 
 pub mod config;
+pub mod downloads;
 pub mod error;
 pub mod meetings;
 pub mod store;
@@ -19,6 +20,7 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 #[derive(Clone)]
 pub struct AppState {
     pub cfg: Arc<config::Config>,
+    pub downloads: Arc<downloads::Catalog>,
     pub db: sqlx::PgPool,
     pub store: store::ObjectStore,
     pub http: reqwest::Client,
@@ -28,6 +30,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(cfg: config::Config) -> anyhow::Result<Self> {
+        let downloads = Arc::new(downloads::Catalog::load(cfg.download_dir.as_deref()).await?);
         let db = sqlx::postgres::PgPoolOptions::new()
             .max_connections(10)
             .acquire_timeout(std::time::Duration::from_secs(10))
@@ -44,6 +47,7 @@ impl AppState {
             .build()?;
         Ok(Self {
             cfg: Arc::new(cfg),
+            downloads,
             db,
             store,
             http,
@@ -74,7 +78,7 @@ async fn health(
 pub fn router(state: AppState) -> Router {
     use meetings::api;
     let max_chunk = cap_meeting_protocol::MAX_VIDEO_CHUNK_BYTES + 1024;
-    let mut app = Router::new()
+    let app = Router::new()
         .route("/healthz", get(health))
         .route("/v1/pairings", post(api::create_pairing))
         .route("/v1/pairings/redeem", post(api::redeem_pairing))
@@ -88,10 +92,11 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/meetings/{id}/events", post(api::meeting_event))
         .route("/v1/meetings/{id}/adopt", post(api::adopt_meeting))
         .merge(web::router())
+        .merge(downloads::router(
+            state.downloads.clone(),
+            state.cfg.portal_url.clone(),
+        ))
         .layer(DefaultBodyLimit::max(256 * 1024));
-    if let Some(dir) = &state.cfg.site_dir {
-        app = app.fallback_service(tower_http::services::ServeDir::new(dir));
-    }
     app.layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(state)
 }

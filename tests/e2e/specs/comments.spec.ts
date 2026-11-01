@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createUploadingRecording, signUpAndSignIn } from "./helpers";
+import { createUploadingRecording, seedLegacySession } from "./helpers";
 
 // apps/web/components/comment-thread.tsx, rendered from recording-viewer.tsx.
 // CommentThread (and its API route, apps/web/app/api/recordings/[recordingId]
@@ -8,7 +8,7 @@ import { createUploadingRecording, signUpAndSignIn } from "./helpers";
 // a recording that only ever reaches "UPLOADING" (see helpers.ts).
 
 test("adds a timestamped comment to a recording you own", async ({ page }) => {
-  const user = await signUpAndSignIn(page, "Comments");
+  const user = await seedLegacySession(page, "Comments");
   const recordingId = await createUploadingRecording(
     page,
     `Comment spec recording ${Date.now()}`,

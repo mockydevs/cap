@@ -3,104 +3,130 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cap</title>
+    <meta name="color-scheme" content="light" />
+    <title>Cap for Calari — Downloads</title>
     <meta
       name="description"
-      content="Cap records your screen or your meetings and sends meeting notes to the Calari portal."
+      content="Download the Calari meeting recorder. Record your meeting and keep notes and follow-up work connected to Calari."
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <span class="mark" aria-hidden="true"></span>
-        <h1>Cap</h1>
-        <p class="lead">
-          Record your screen, or record a meeting and get the notes in the
-          Calari portal.
-        </p>
-      </header>
-
-      <section aria-labelledby="what">
-        <h2 id="what">What it does</h2>
-        <ul class="features">
-          <li>
-            <strong>Screen recording.</strong> Record your screen, a window or a
-            region, with your voice.
-          </li>
-          <li>
-            <strong>Meeting notes.</strong> Record a meeting as audio or video.
-            Cap writes the transcript and sends it to the right client in
-            Calari.
-          </li>
-          <li>
-            <strong>Stops on its own.</strong> When the call ends, the window
-            closes, or no one has spoken for a long time (it warns you first).
-          </li>
-        </ul>
-      </section>
-
-      <section aria-labelledby="desktop">
-        <h2 id="desktop">Desktop app</h2>
-        <div class="downloads">
-          <a
-            class="dl"
-            data-asset="windows"
-            href="https://github.com/mockydevs/cap/releases"
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Cap for Calari home"
+        ><span class="brand-mark" aria-hidden="true"></span
+        ><span>Cap <small>for Calari</small></span></a
+      >
+      <nav aria-label="Main navigation">
+        <a class="nav-link" href="#downloads">Downloads</a
+        ><a class="button button-small button-secondary" href="/portal"
+          >Sign in to Calari <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">
+            <span aria-hidden="true"></span> THE CALARI MEETING RECORDER
+          </p>
+          <h1 id="hero-title">
+            Less note-taking.<br /><span>More moving forward.</span>
+          </h1>
+          <p class="hero-description">
+            Record a meeting, keep the notes, and bring the follow-up work into
+            Calari. Start with the desktop app for your computer.
+          </p>
+          <a class="button button-primary" href="#downloads"
+            >Choose your download <span aria-hidden="true">↓</span></a
           >
-            <span>Windows</span><small>.exe installer</small>
-          </a>
-          <a
-            class="dl"
-            data-asset="mac-arm"
-            href="https://github.com/mockydevs/cap/releases"
-          >
-            <span>Mac (Apple chip)</span><small>.dmg</small>
-          </a>
-          <a
-            class="dl"
-            data-asset="mac-intel"
-            href="https://github.com/mockydevs/cap/releases"
-          >
-            <span>Mac (Intel)</span><small>.dmg</small>
-          </a>
-          <a
-            class="dl"
-            data-asset="linux"
-            href="https://github.com/mockydevs/cap/releases"
-          >
-            <span>Linux</span><small>.deb package</small>
-          </a>
+          <p class="account-note">
+            Your Calari account is all you need. No separate Cap account.
+          </p>
         </div>
-        <p class="note" id="release-note">Checking for the latest version…</p>
+        <aside class="workflow" aria-label="The Cap to Calari workflow">
+          <div class="workflow-heading">
+            <span class="mini-mark" aria-hidden="true">C</span
+            ><span>One connected workflow</span>
+          </div>
+          <ol>
+            <li>
+              <span class="step-icon" aria-hidden="true">01</span>
+              <div>
+                <strong>Record with Cap</strong>
+                <p>Capture the meeting on your computer.</p>
+              </div>
+            </li>
+            <li>
+              <span class="step-icon" aria-hidden="true">02</span>
+              <div>
+                <strong>Keep the notes in Calari</strong>
+                <p>Bring the transcript into your team's work.</p>
+              </div>
+            </li>
+            <li>
+              <span class="step-icon" aria-hidden="true">03</span>
+              <div>
+                <strong>Follow through</strong>
+                <p>Review notes and next steps in your portal.</p>
+              </div>
+            </li>
+          </ol>
+          <p class="consent-note">Let everyone know before you record.</p>
+        </aside>
       </section>
-
-      <section aria-labelledby="extension">
-        <h2 id="extension">Chrome extension</h2>
-        <p>
-          Record a Google Meet, Zoom or Teams call that runs in a Chrome tab.
-          Add <em>Include Cap</em> to a Google Calendar event and Cap reminds
-          you to start when the meeting begins.
-        </p>
-        <div class="downloads">
-          <a
-            class="dl"
-            data-asset="extension"
-            href="https://github.com/mockydevs/cap/releases"
-          >
-            <span>Chrome extension</span
-            ><small>.zip, load in chrome://extensions</small>
-          </a>
+      <section
+        id="downloads"
+        class="download-section"
+        aria-labelledby="downloads-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">DESKTOP APP</p>
+            <h2 id="downloads-title">Made for your computer.</h2>
+          </div>
+          <p>
+            Choose your operating system. <br />Only published, verified
+            installers appear here.
+          </p>
         </div>
-      </section>
-
-      <footer>
-        <p>Tell everyone in a meeting before you record it.</p>
-        <p>
-          <a href="https://github.com/mockydevs/cap">Source code</a> · AGPL-3.0
+        <div class="download-grid"><!-- DOWNLOAD_CARDS --></div>
+        <p class="download-help">
+          An unavailable button means the installer is not ready to publish. You
+          can still <a href="/portal">sign in to Calari</a>.
         </p>
-      </footer>
+      </section>
+      <section class="extension-card" aria-labelledby="extension-title">
+        <span class="extension-icon" aria-hidden="true">↗</span>
+        <div>
+          <div class="extension-heading">
+            <h2 id="extension-title">Chrome extension</h2>
+            <span class="status status-pending">Review pending</span>
+          </div>
+          <p>
+            Use the desktop app for now. The extension download will appear
+            after its review and testing are complete.
+          </p>
+        </div>
+        <button class="button button-secondary" type="button" disabled>
+          Not available yet
+        </button>
+      </section>
+      <section class="signin-banner" aria-labelledby="signin-title">
+        <div>
+          <h2 id="signin-title">Already part of Calari?</h2>
+          <p>Open your portal to continue your work.</p>
+        </div>
+        <a class="button button-secondary" href="/portal"
+          >Sign in to Calari <span aria-hidden="true">↗</span></a
+        >
+      </section>
     </main>
-    <script src="site.js" defer></script>
+    <footer class="site-footer">
+      <span>Cap for Calari</span>
+      <p>Record thoughtfully. Keep everyone informed.</p>
+      <span>AGPL-3.0</span>
+    </footer>
   </body>
 </html>

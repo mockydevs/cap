@@ -1,61 +1,47 @@
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 
-export type SignedUpUser = {
+export type LegacyTestUser = {
   displayName: string;
   workspaceName: string;
   email: string;
-  password: string;
 };
 
-const octet = () => Math.floor(Math.random() * 256);
-
-/**
- * A distinct caller address per signup, from the shared-CGNAT range so it can
- * never be confused with a real client.
- *
- * Sign-up and sign-in are rate limited per address (10 per 15 minutes). Every
- * page here reaches the dev server over the same loopback connection, so
- * without this the whole suite queues behind one bucket and starts failing
- * partway through a run — a throttled suite, not a tested one. Honoured only
- * because the E2E server runs with TRUSTED_PROXY_HOP_COUNT=1.
- */
-async function presentAsDistinctClient(page: Page): Promise<void> {
-  await page.setExtraHTTPHeaders({
-    "x-forwarded-for": `100.64.${octet()}.${octet()}`,
-  });
-}
-
-/**
- * Runs the same signup flow verified field-by-field in auth.spec.ts
- * ("Display name" / "Workspace name" / "Email" / "Password" -> "Create
- * account") and waits for the redirect to the authenticated recorder page
- * ("/record").
- * A fresh signup always creates a brand-new workspace with the signer as its
- * OWNER, so this also doubles as "create a workspace to test against" for
- * specs that need one.
- */
-export async function signUpAndSignIn(
+/** Seed an isolated local test session directly, without reopening public signup.
+ * The subprocess enforces a loopback *_test database and never runs in the server. */
+export async function seedLegacySession(
   page: Page,
   label = "E2E",
-): Promise<SignedUpUser> {
-  await presentAsDistinctClient(page);
+): Promise<LegacyTestUser> {
+  // Preserve independent test caller buckets for sharing/upload rate limits.
+  await page.setExtraHTTPHeaders({
+    "x-forwarded-for": `100.64.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`,
+  });
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const emailLabel = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  const user: SignedUpUser = {
+  const user = {
     displayName: `${label} User ${unique}`,
     workspaceName: `${label} Workspace ${unique}`,
-    email: `e2e-${emailLabel}-${unique}@example.com`,
-    password: "a genuinely random password",
+    email: `e2e-${unique}@example.com`,
   };
-  await page.goto("/signup");
-  await page.getByLabel("Display name").fill(user.displayName);
-  await page.getByLabel("Workspace name").fill(user.workspaceName);
-  await page.getByLabel("Email").fill(user.email);
-  await page.getByLabel("Password").fill(user.password);
-  await page.getByRole("button", { name: "Create account" }).click();
+  const fixture = execFileSync(
+    process.execPath,
+    [fileURLToPath(new URL("../seed-legacy-session.mjs", import.meta.url))],
+    { input: JSON.stringify(user), encoding: "utf8" },
+  );
+  const { token } = JSON.parse(fixture) as { token: string };
+  const base = new URL(process.env.E2E_BASE_URL ?? "http://localhost:3000");
+  await page.context().addCookies([
+    {
+      name: base.protocol === "https:" ? "__Host-cap_session" : "cap_session",
+      value: token,
+      url: base.origin,
+      httpOnly: true,
+      secure: base.protocol === "https:",
+      sameSite: "Lax",
+    },
+  ]);
+  await page.goto("/record");
   await page.waitForURL(/\/record$/);
   return user;
 }

@@ -169,7 +169,8 @@ impl H {
             transcription: TranscriptionConfig::TestFixture,
             abandon_after: Duration::from_secs(3600),
             worker_interval: Duration::from_millis(50),
-            site_dir: None,
+            download_dir: None,
+            portal_url: None,
             ffmpeg_path: "ffmpeg".into(),
         };
         let state = AppState::new(cfg).await.unwrap();

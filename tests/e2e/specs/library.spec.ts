@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { createUploadingRecording, signUpAndSignIn } from "./helpers";
+import { createUploadingRecording, seedLegacySession } from "./helpers";
 
 // apps/web/components/recording-library.tsx
 
 test("shows the empty state for a freshly created workspace", async ({
   page,
 }) => {
-  await signUpAndSignIn(page, "Library Empty");
+  await seedLegacySession(page, "Library Empty");
   await page.goto("/library");
   await expect(page.getByRole("heading", { name: "Recordings" })).toBeVisible();
   await expect(
@@ -22,7 +22,7 @@ test("shows the empty state for a freshly created workspace", async ({
 });
 
 test("lists a recording created through the upload API", async ({ page }) => {
-  await signUpAndSignIn(page, "Library List");
+  await seedLegacySession(page, "Library List");
   const title = `Library spec recording ${Date.now()}`;
   await createUploadingRecording(page, title);
 

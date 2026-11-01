@@ -85,14 +85,12 @@ export function AcceptInvitation() {
             <p className="eyebrow">Account required</p>
             <h1>Sign in to accept.</h1>
             <p>
-              Use the invited email address, then reopen this invitation link.
+              Use your existing Calari account, then reopen this invitation
+              link.
             </p>
             <div className="invite-actions">
-              <Link className="marketing-primary" href="/login">
-                Sign in
-              </Link>
-              <Link className="marketing-secondary" href="/signup">
-                Create account
+              <Link className="marketing-primary" href="/portal">
+                Sign in to Calari
               </Link>
             </div>
           </>

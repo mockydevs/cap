@@ -1,8 +1,5 @@
-import { AuthForm } from "../../components/auth-form";
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  return <AuthForm mode="login" error={(await searchParams).error} />;
+import { CalariSignIn } from "../../components/calari-sign-in";
+
+export default function LoginPage() {
+  return <CalariSignIn />;
 }

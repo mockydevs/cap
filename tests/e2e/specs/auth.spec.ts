@@ -1,69 +1,84 @@
 import { expect, test } from "@playwright/test";
+import { seedLegacySession } from "./helpers";
 
-test("shows the login form with expected fields", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Sign in." })).toBeVisible();
-  await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByLabel("Password")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Create an account" }),
-  ).toBeVisible();
-});
+const closed = [
+  "/api/auth/signup",
+  "/api/auth/login",
+  "/api/auth/google",
+  "/api/auth/google/callback",
+  "/api/desktop/auth/login",
+  "/api/desktop/auth/google",
+  "/api/desktop/auth/google/config",
+];
 
-test("shows an error message after a failed login", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(`nonexistent-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("wrong-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/login\?error=credentials/);
-  // Scoped to the form's own error: Next's route announcer is also role=alert,
-  // and it enters the DOM on hydration, so an unscoped role query is a race.
-  await expect(page.locator(".form-error")).toContainText("incorrect");
-});
-
-test("redirects an unauthenticated visitor away from the library", async ({
+test("offers only Calari sign-in, with no Cap password or account creation", async ({
   page,
 }) => {
-  await page.goto("/library");
-  await expect(page).toHaveURL(/\/login$/);
-});
-
-test("requires an account before opening the recorder", async ({ page }) => {
-  await page.goto("/record");
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("button", { name: "Start capture" })).toHaveCount(
-    0,
-  );
-});
-
-test("signs up, reaches an authenticated session, and can sign out", async ({
-  page,
-}) => {
-  const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await page.goto("/signup");
-  await page.getByLabel("Display name").fill("E2E Test User");
-  await page.getByLabel("Workspace name").fill("E2E Test Workspace");
-  await page.getByLabel("Email").fill(`e2e-${unique}@example.com`);
-  await page.getByLabel("Password").fill("a genuinely random password");
-  await page.getByRole("button", { name: "Create account" }).click();
-
-  await expect(page).toHaveURL(/\/record$/);
-  // Identity and sign-out live behind the workspace bar's account menu, which
-  // is a <details> and starts closed.
-  const account = page.locator(".account-menu");
-  await account.locator("summary").click();
-  const identity = account.locator(".account-identity");
+  await expect(page).toHaveURL(/\/login$/);
   await expect(
-    identity.getByText("E2E Test User", { exact: true }),
+    page.getByRole("heading", { name: "Sign in to Calari." }),
   ).toBeVisible();
-  await expect(identity.getByText("owner", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Sign in to Calari", exact: true }),
+  ).toHaveAttribute("href", "/portal");
+  await expect(
+    page.locator("input[type=password], form[action='/api/auth/signup']"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: /create.*account/i }),
+  ).toHaveCount(0);
+});
 
+test("server rejects every retired password/signup/Google provisioning endpoint", async ({
+  request,
+}) => {
+  for (const path of closed) {
+    for (const method of ["GET", "POST"]) {
+      const response = await request.fetch(path, {
+        method,
+        data:
+          method === "POST"
+            ? { email: "blocked@example.com", password: "not-a-real-password" }
+            : undefined,
+      });
+      expect(response.status(), `${method} ${path}`).toBe(410);
+      expect(await response.json()).toMatchObject({
+        error: { code: "CALARI_SIGN_IN_REQUIRED" },
+        signInUrl: "/portal",
+      });
+      expect(response.headers()["set-cookie"]).toBeUndefined();
+    }
+  }
+});
+
+test("unauthenticated legacy data pages retain their access checks", async ({
+  page,
+}) => {
+  for (const path of ["/library", "/record"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(
+      page.getByRole("heading", { name: "Sign in to Calari." }),
+    ).toBeVisible();
+  }
+});
+
+test("existing legacy sessions, data and logout remain usable", async ({
+  page,
+}) => {
+  const user = await seedLegacySession(page, "Legacy session");
   await page.goto("/library");
   await expect(page).toHaveURL(/\/library/);
-
   await page.locator(".account-menu summary").click();
+  await expect(
+    page
+      .locator(".account-identity")
+      .getByText(user.displayName, { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Sign in." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Calari." }),
+  ).toBeVisible();
 });

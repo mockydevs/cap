@@ -4,7 +4,7 @@ This is an additive service. Keep the existing Cap web app, database, bucket and
 
 ## Prepare
 
-Use the existing Coolify Cap Compose application and private `DATABASE_URL`/AWS credentials. Set the `cap-server` service domain to a dedicated HTTPS hostname, preserving the existing web domain. The Calari deployment uses `https://meetings.calari.tech`; verify DNS and the proxy before assigning it. Set `CAP_SERVER_PUBLIC_URL` to that service origin. Calari's API uses the same origin in `CAP_MEETING_SERVICE_URL` and `CAP_PUBLIC_URL`.
+Use the existing Coolify Cap Compose application and private `DATABASE_URL`/AWS credentials. The approved Calari rollout routes `https://cap.calari.tech` and the existing `https://meetings.calari.tech` to the Rust service, preserving legacy services/data privately. Verify existing DNS and proxy routing; do not create a new hostname. Set `CAP_SERVER_PUBLIC_URL=https://cap.calari.tech` and `CALARI_PORTAL_URL=https://calarisolutions.com/portal`. Public sign-in goes to the universal portal, while private library `/login` retains its existing role policy. Calari's API uses the same origin in `CAP_MEETING_SERVICE_URL` and `CAP_PUBLIC_URL`.
 
 Provision an absolute host directory owned by the operator and readable by UID10001. Run `scripts/fetch-whisper-model.sh base.en /absolute/model-directory`, then set `CAP_WHISPER_MODEL_DIRECTORY` to that directory in Coolify. The service mounts it read-only. The script pins the official whisper.cpp Hugging Face repository revision and validates its LFS SHA-256 before an atomic replacement. Sources: [model repository](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1).
 
@@ -29,3 +29,9 @@ Set these variables before deploying the new Compose service. Required values us
 5. Keep prior images and schema/data intact for rollback. Stop the new meeting service or roll back its image if necessary; do not drop `meeting_*` tables, reset migration ledgers, or delete recordings/model volumes.
 
 The Chrome extension needs an explicit user gesture for tab capture. Calendar OAuth needs its own real Chrome-extension client ID; an unconfigured placeholder is not a working Calendar connection. macOS meeting video/system audio and Windows/macOS hardware capture must not be described as verified until tested on those devices.
+
+## Public download hub
+
+Follow [DOWNLOAD-HUB.md](./DOWNLOAD-HUB.md). Set `CAP_DOWNLOAD_HOST_DIRECTORY` to a dedicated publisher-owned artifact directory, readable by UID10001; Compose mounts it read-only at `/srv/downloads` and sets `CAP_DOWNLOAD_DIR` accordingly. Publish a validated `manifest.json` before starting the configured service; missing/corrupt files fail startup rather than exposing unverified links. A pending-only manifest is valid with platform/status entries and no invented version/file/hash/size.
+
+Do not upload artifacts through the web service or reuse a private storage/model/credential directory. Publish only actual release-owner-verified installers with immutable basenames. macOS signing and extension review remain separate availability gates. Root owns routing, artifact publication and live verification. Existing Cap password and Google account provisioning endpoints now return410; existing legacy data/session/logout APIs remain intact.

@@ -24,9 +24,8 @@ export function UserNav() {
   if (!session)
     return (
       <nav className="user-nav">
-        <Link href="/login">Sign in</Link>
-        <Link className="nav-cta" href="/signup">
-          Create account
+        <Link className="nav-cta" href="/portal">
+          Sign in to Calari
         </Link>
       </nav>
     );
