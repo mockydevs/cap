@@ -7,8 +7,6 @@ Depends: ffmpeg, libwebkit2gtk-4.1-0, libgtk-3-0
 missing shared libraries: 0
  DE pulse           Pulse audio output
  D  x11grab         X11 screen capture, using XCB
+app-running-after-15s
 remove=0
 removed-clean
-== binary
-cap-desktop: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/l
-server url in binary: 1

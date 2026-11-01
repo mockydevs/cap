@@ -128,20 +128,14 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, 
     let mut command = Command::new(crate::ffmpeg_path());
     command.arg("-hide_banner").arg("-nostdin").arg("-y");
     let (audio_helper, loopback) = platform_input(&mut command, x, y, width, height, options)?;
-    command.args([
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        &options.quality.to_string(),
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        &options.frame_rate.to_string(),
-    ]);
+    command.args(["-map", "0:v:0"]);
+    command.args(video_encoder(
+        u32::from(options.quality),
+        width,
+        height,
+        options.frame_rate,
+    ));
+    command.args(["-pix_fmt", "yuv420p", "-r", &options.frame_rate.to_string()]);
     if options.microphone_id.is_some() || options.system_audio {
         command.args(["-map", "1:a:0", "-c:a", "aac", "-b:a", "160k"]);
     } else {
@@ -182,6 +176,37 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, 
         system_audio_fifo,
         _loopback: loopback,
     })
+}
+
+/// H.264 encoder flags. Windows ships an LGPL FFmpeg without libx264, so it
+/// uses OpenH264 with a bitrate derived from the quality setting (CRF-like,
+/// 1 best to 51 worst); elsewhere the system FFmpeg's libx264 is used.
+fn video_encoder(quality: u32, width: u32, height: u32, fps: u32) -> Vec<String> {
+    if cfg!(target_os = "windows") {
+        vec![
+            "-c:v".into(),
+            "libopenh264".into(),
+            "-b:v".into(),
+            format!("{}k", openh264_kbps(quality, width, height, fps)),
+        ]
+    } else {
+        vec![
+            "-c:v".into(),
+            "libx264".into(),
+            "-preset".into(),
+            "veryfast".into(),
+            "-crf".into(),
+            quality.to_string(),
+        ]
+    }
+}
+
+/// About 0.1 bits per pixel at quality 23, halving every 6 steps like CRF,
+/// kept between 500 kbit/s and 20 Mbit/s.
+fn openh264_kbps(quality: u32, width: u32, height: u32, fps: u32) -> u64 {
+    let pixels_per_second = u64::from(width) * u64::from(height) * u64::from(fps);
+    let bits_per_pixel = 0.1 * 2f64.powf((23.0 - f64::from(quality)) / 6.0);
+    ((pixels_per_second as f64 * bits_per_pixel / 1000.0) as u64).clamp(500, 20_000)
 }
 
 #[cfg(target_os = "windows")]
@@ -413,6 +438,14 @@ mod tests {
             source_geometry("monitor:7:-1920:0:1920:1080").unwrap(),
             (-1920, 0, 1920, 1080)
         );
+    }
+    #[test]
+    fn openh264_bitrate_follows_quality_and_size() {
+        // 1080p30 at the default quality: about 6 Mbit/s.
+        assert_eq!(openh264_kbps(23, 1920, 1080, 30), 6220);
+        assert!(openh264_kbps(17, 1920, 1080, 30) > openh264_kbps(23, 1920, 1080, 30));
+        assert_eq!(openh264_kbps(51, 320, 240, 1), 500);
+        assert_eq!(openh264_kbps(1, 3840, 2160, 60), 20_000);
     }
     #[test]
     fn rejects_caller_paths_as_sources() {
