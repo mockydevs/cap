@@ -3,11 +3,14 @@
     python -I scripts/desktop/release-config.py > tauri.release.json
     pnpm --filter @cap/desktop tauri build --config tauri.release.json
 
-Reads TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT (repository variables)
-and fails if either is missing, so no release ships without signed updates.
-On Windows it also bundles the FFmpeg fetched by fetch-windows-ffmpeg.py;
-dev builds and `cargo check` never need it. Linux .deb installs are updated
-by downloading the new .deb, so no Linux updater artifact is made.
+The first releases are direct downloads: no update payload is built. Tauri
+CLI 2.11 signs updates without the version, which the app's required
+signed-version check rejects, so updates stay off until a version-bound
+signer is reviewed. The check itself is never relaxed. If
+TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT are set they are embedded, so
+the app can find a future signed update; until one is published it shows
+none. On Windows the FFmpeg fetched by fetch-windows-ffmpeg.py is bundled;
+dev builds and `cargo check` never need it.
 """
 
 import json
@@ -15,32 +18,22 @@ import os
 import re
 import sys
 
-
-def need(name: str) -> str:
-    value = os.environ.get(name, "").strip()
-    if not value:
-        print(f"release-config: {name} is required for a release build", file=sys.stderr)
-        sys.exit(1)
-    return value
-
-
-pubkey = need("TAURI_UPDATER_PUBKEY")
-endpoint = need("CAP_UPDATER_ENDPOINT")
-if not re.match(r"^https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*latest\.json$", endpoint):
+pubkey = os.environ.get("TAURI_UPDATER_PUBKEY", "").strip()
+endpoint = os.environ.get("CAP_UPDATER_ENDPOINT", "").strip()
+if bool(pubkey) != bool(endpoint):
+    print("release-config: set both TAURI_UPDATER_PUBKEY and CAP_UPDATER_ENDPOINT, or neither",
+          file=sys.stderr)
+    sys.exit(1)
+if endpoint and not re.match(r"^https://[A-Za-z0-9.-]+/([A-Za-z0-9._-]+/)*latest\.json$", endpoint):
     print("release-config: CAP_UPDATER_ENDPOINT must be https://<host>/<path>/latest.json",
           file=sys.stderr)
     sys.exit(1)
 
-config = {
-    "bundle": {"createUpdaterArtifacts": not sys.platform.startswith("linux")},
-    "plugins": {
-        "updater": {
-            "pubkey": pubkey,
-            "endpoints": [endpoint],
-            "requireSignedVersion": True,
-        }
-    },
-}
+config = {"bundle": {"createUpdaterArtifacts": False}}
+if pubkey:
+    config["plugins"] = {
+        "updater": {"pubkey": pubkey, "endpoints": [endpoint], "requireSignedVersion": True}
+    }
 if sys.platform == "win32":
     config["bundle"]["externalBin"] = ["binaries/ffmpeg"]
     config["bundle"]["resources"] = {

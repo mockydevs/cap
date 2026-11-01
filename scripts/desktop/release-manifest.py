@@ -1,7 +1,7 @@
 """Write the desktop download manifest, updater catalog and checksums.
 
     python -I scripts/desktop/release-manifest.py --dir DIR --version V \
-        --commit SHA --download-base https://meetings.calari.tech/downloads/ \
+        --commit SHA [--download-base https://cap.calari.tech/downloads/] \
         [--linux available|pending] [--windows available|pending]
 
 DIR holds the installers the release workflow built and checked in this run,
@@ -9,8 +9,9 @@ and the Windows installer's updater .sig. Only files listed here can be marked "
 macOS stays "signing_pending" until signing exists. Writes into DIR:
   cap-desktop-manifest.json  download hub v1: only schema_version + artifacts;
                              a pending entry is just platform + status
-  updater-manifest.json      Tauri updater payload + signature per platform key
-                             (the hub serves latest.json from it)
+  updater-manifest.json      only when a signed update payload exists (none
+                             while updates are off): payload + signature per
+                             Tauri platform key; the hub serves latest.json
   cap-desktop-receipt.json   provenance: version, commit, download base
   SHA256SUMS
 """
@@ -67,7 +68,7 @@ def main() -> None:
     parser.add_argument("--dir", required=True, type=pathlib.Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--download-base", required=True)
+    parser.add_argument("--download-base", default="")
     parser.add_argument("--linux", choices=["available", "pending"], default="pending")
     parser.add_argument("--windows", choices=["available", "pending"], default="pending")
     args = parser.parse_args()
@@ -77,7 +78,7 @@ def main() -> None:
     if not COMMIT_RE.match(args.commit):
         fail("commit must be a full 40-character SHA")
     base = args.download_base
-    if not re.match(r"^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9._/-]*/)?$", base):
+    if base and not re.match(r"^https://[A-Za-z0-9.-]+(:[0-9]+)?/([A-Za-z0-9._/-]*/)?$", base):
         fail("download base must be an https URL ending in /")
 
     wanted = {"linux-x86_64": args.linux, "windows-x86_64": args.windows}
