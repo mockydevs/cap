@@ -199,31 +199,66 @@ impl H {
         self.call(b.body(Body::empty()).unwrap()).await
     }
 
-    /// Runs /login, plays Calari's part, and returns the session cookie.
-    async fn sign_in(&self) -> String {
-        let (s, h, _) = self.get("/login", None).await;
+    /// Starts a sign-in: returns the browser-binding cookie and Calari's query.
+    async fn begin_login(&self, cookie: Option<&str>) -> (String, HashMap<String, String>) {
+        let (s, h, _) = self.get("/login", cookie).await;
         assert_eq!(s, StatusCode::SEE_OTHER);
         let location = reqwest::Url::parse(h[header::LOCATION].to_str().unwrap()).unwrap();
-        assert!(location
-            .as_str()
-            .starts_with("https://calari.test/portal/cap/authorize?"));
+        assert!(
+            location
+                .as_str()
+                .starts_with("https://calari.test/portal/cap/authorize?"),
+            "{location}"
+        );
+        let login_cookie = h
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .find(|c| c.starts_with("cap_login="))
+            .expect("login cookie");
+        assert!(login_cookie.contains("HttpOnly") && login_cookie.contains("SameSite=Lax"));
         let q: HashMap<_, _> = location.query_pairs().into_owned().collect();
         assert_eq!(q["code_challenge_method"], "S256");
         assert_eq!(q["redirect_uri"], "http://cap.test/auth/calari/callback");
+        (login_cookie.split(';').next().unwrap().to_owned(), q)
+    }
+
+    /// Plays Calari: issues a code bound to that attempt's challenge.
+    fn issue_code(&self, q: &HashMap<String, String>) -> String {
         let code = ids::random_token(32);
         self.calari.lock().unwrap().codes.insert(
             code.clone(),
             (q["code_challenge"].clone(), q["redirect_uri"].clone()),
         );
-        let (s, h, body) = self
-            .get(
-                &format!("/auth/calari/callback?code={code}&state={}", q["state"]),
-                None,
-            )
-            .await;
+        code
+    }
+
+    async fn callback(
+        &self,
+        code: &str,
+        state: &str,
+        cookie: Option<&str>,
+    ) -> (StatusCode, axum::http::HeaderMap, String) {
+        self.get(
+            &format!("/auth/calari/callback?code={code}&state={state}"),
+            cookie,
+        )
+        .await
+    }
+
+    /// Runs /login, plays Calari's part, and returns the session cookie.
+    async fn sign_in(&self) -> String {
+        let (login_cookie, q) = self.begin_login(None).await;
+        let code = self.issue_code(&q);
+        let (s, h, body) = self.callback(&code, &q["state"], Some(&login_cookie)).await;
         assert_eq!(s, StatusCode::SEE_OTHER, "{body}");
         assert_eq!(h[header::LOCATION], "/meetings");
-        let cookie = h[header::SET_COOKIE].to_str().unwrap();
+        let cookie = h
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .find(|c| c.starts_with("cap_web="))
+            .expect("session cookie");
         assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Lax"));
         cookie.split(';').next().unwrap().to_owned()
     }
@@ -375,40 +410,26 @@ async fn staff_sign_in_through_calari_and_browse_meetings() {
 #[tokio::test]
 async fn sign_in_codes_and_states_are_single_use_and_bound() {
     let Some(h) = H::new().await else { return };
-    let (_, hd, _) = h.get("/login", None).await;
-    let loc = reqwest::Url::parse(hd[header::LOCATION].to_str().unwrap()).unwrap();
-    let q: HashMap<_, _> = loc.query_pairs().into_owned().collect();
+    let (cookie, q) = h.begin_login(None).await;
     // A code Calari issued for a different challenge is refused.
     h.calari.lock().unwrap().codes.insert(
         "c1".into(),
         (pkce_s256(&ids::random_token(64)), q["redirect_uri"].clone()),
     );
-    let (s, hd, _) = h
-        .get(
-            &format!("/auth/calari/callback?code=c1&state={}", q["state"]),
-            None,
-        )
-        .await;
+    let (s, hd, _) = h.callback("c1", &q["state"], Some(&cookie)).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-    assert!(hd.get(header::SET_COOKIE).is_none());
+    assert!(!hd
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .any(|c| c.to_str().unwrap().starts_with("cap_web=")));
     // The state was consumed: replaying it fails even with a good code.
-    h.calari.lock().unwrap().codes.insert(
-        "c2".into(),
-        (q["code_challenge"].clone(), q["redirect_uri"].clone()),
-    );
+    let c2 = h.issue_code(&q);
     assert_eq!(
-        h.get(
-            &format!("/auth/calari/callback?code=c2&state={}", q["state"]),
-            None
-        )
-        .await
-        .0,
+        h.callback(&c2, &q["state"], Some(&cookie)).await.0,
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        h.get("/auth/calari/callback?code=c2&state=made-up", None)
-            .await
-            .0,
+        h.callback(&c2, "made-up", Some(&cookie)).await.0,
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
@@ -419,21 +440,71 @@ async fn sign_in_codes_and_states_are_single_use_and_bound() {
     );
     // A staff member of another tenant is refused.
     h.calari.lock().unwrap().tenant = "00000000-0000-4000-8000-0000000000ff".into();
-    let (_, hd, _) = h.get("/login", None).await;
-    let loc = reqwest::Url::parse(hd[header::LOCATION].to_str().unwrap()).unwrap();
-    let q: HashMap<_, _> = loc.query_pairs().into_owned().collect();
-    h.calari.lock().unwrap().codes.insert(
-        "c3".into(),
-        (q["code_challenge"].clone(), q["redirect_uri"].clone()),
-    );
-    let (s, _, body) = h
-        .get(
-            &format!("/auth/calari/callback?code=c3&state={}", q["state"]),
-            None,
-        )
-        .await;
+    let (cookie, q) = h.begin_login(None).await;
+    let c3 = h.issue_code(&q);
+    let (s, _, body) = h.callback(&c3, &q["state"], Some(&cookie)).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
     assert!(body.contains("does not belong"));
+    h.drop_db().await;
+}
+
+/// Review P1 (login CSRF): an attacker who starts a sign-in and hands the
+/// unused callback link to someone else cannot sign them in, and the link
+/// is not spoiled for the browser that really started it.
+#[tokio::test]
+async fn a_callback_link_only_works_in_the_browser_that_started_it() {
+    let Some(h) = H::new().await else { return };
+    let (attacker_cookie, q) = h.begin_login(None).await;
+    let code = h.issue_code(&q);
+    // Victim's browser: no attempt cookie, or another attempt's cookie.
+    let (s, hd, _) = h.callback(&code, &q["state"], None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+    assert!(!hd
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .any(|c| c.to_str().unwrap().starts_with("cap_web=")));
+    let (other_cookie, _) = h.begin_login(None).await;
+    assert_eq!(
+        h.callback(&code, &q["state"], Some(&other_cookie)).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.calari.lock().unwrap().exchanges,
+        0,
+        "nothing was exchanged for the wrong browser"
+    );
+    // The browser that started it still succeeds, exactly once.
+    let (s, _, body) = h.callback(&code, &q["state"], Some(&attacker_cookie)).await;
+    assert_eq!(s, StatusCode::SEE_OTHER, "{body}");
+    assert_eq!(
+        h.callback(&code, &q["state"], Some(&attacker_cookie))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    h.drop_db().await;
+}
+
+/// Review P1 (idle loop): an idle session cookie leads to a fresh Calari
+/// sign-in, not back to /meetings.
+#[tokio::test]
+async fn an_idle_cookie_starts_a_fresh_sign_in() {
+    let Some(h) = H::new().await else { return };
+    let cookie = h.sign_in().await;
+    sqlx::query("UPDATE cap_web_sessions SET last_seen_at = now() - interval '61 minutes'")
+        .execute(&h.state.db)
+        .await
+        .unwrap();
+    assert_eq!(
+        h.get("/meetings", Some(&cookie)).await.0,
+        StatusCode::SEE_OTHER
+    );
+    let _ = h.begin_login(Some(&cookie)).await; // asserts a redirect to Calari, not /meetings
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM cap_web_sessions")
+        .fetch_one(&h.state.db)
+        .await
+        .unwrap();
+    assert_eq!(left, 0, "the idle session was removed");
     h.drop_db().await;
 }
 

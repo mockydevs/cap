@@ -1,6 +1,5 @@
-Library revised per root decision bea1a213: per-request Calari status (no cache), media streamed through Cap (no presigned links), admin-only until staff scope is agreed (Claude, 2026-11-01T21:53:27Z)
-cargo test --workspace exit=0 passed=79 failed=0
+Library review P1 fixes: browser-bound sign-in attempts, idle predicate on /login (Claude, 2026-11-01T22:12:26Z)
+cargo test --workspace exit=0 passed=81 failed=0
 cargo clippy --workspace --all-targets -D warnings exit=0
 cargo fmt --all --check exit=0
-cargo audit exit=0
-(test DB: dedicated container cap-claude-pg on 127.0.0.1:5444; shared cap-postgres-test-1 was being restarted by another agent)
+(test DB: dedicated cap-claude-pg on 127.0.0.1:5444)

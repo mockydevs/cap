@@ -6,7 +6,7 @@ use crate::{config::Integration, error::ApiError, AppState};
 use axum::{
     extract::{FromRequestParts, Query, State},
     http::{header, request::Parts, HeaderMap, StatusCode},
-    response::{IntoResponse, Redirect, Response},
+    response::{AppendHeaders, IntoResponse, Redirect, Response},
 };
 use cap_meeting_protocol::{
     ids::{random_token, sha256_hex},
@@ -22,6 +22,23 @@ use sqlx::Row;
 pub const SESSION_HOURS: i64 = 8;
 pub const IDLE_MINUTES: i64 = 60;
 const ATTEMPT_MINUTES: i64 = 10;
+
+/// Short-lived cookie tying a sign-in attempt to the browser that began it.
+pub fn login_cookie_name(production: bool) -> &'static str {
+    if production {
+        "__Host-cap_login"
+    } else {
+        "cap_login"
+    }
+}
+
+fn login_cookie(production: bool, value: &str, max_age: i64) -> String {
+    format!(
+        "{}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax{}",
+        login_cookie_name(production),
+        if production { "; Secure" } else { "" }
+    )
+}
 
 pub fn cookie_name(production: bool) -> &'static str {
     if production {
@@ -53,7 +70,10 @@ impl WebUser {
 }
 
 fn token_from(headers: &HeaderMap, production: bool) -> Option<String> {
-    let name = cookie_name(production);
+    cookie_value(headers, cookie_name(production))
+}
+
+fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get_all(header::COOKIE)
         .iter()
@@ -216,10 +236,14 @@ fn login_integration(state: &AppState) -> Option<&Integration> {
 /// GET /login: send the browser to Calari's staff sign-in.
 pub async fn start(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Some(t) = token_from(&headers, state.cfg.production) {
+        // Same expiry rules as every protected page (absolute and idle),
+        // so an idle cookie leads to a fresh sign-in instead of a loop.
         let live: Option<i32> = sqlx::query_scalar(
-            "SELECT 1 FROM cap_web_sessions WHERE token_hash = $1 AND expires_at > now()",
+            "SELECT 1 FROM cap_web_sessions WHERE token_hash = $1 AND expires_at > now()
+               AND last_seen_at > now() - make_interval(mins => $2)",
         )
         .bind(sha256_hex(t.as_bytes()))
+        .bind(IDLE_MINUTES as i32)
         .fetch_optional(&state.db)
         .await
         .ok()
@@ -227,6 +251,10 @@ pub async fn start(State(state): State<AppState>, headers: HeaderMap) -> Respons
         if live.is_some() {
             return Redirect::to("/meetings").into_response();
         }
+        let _ = sqlx::query("DELETE FROM cap_web_sessions WHERE token_hash = $1")
+            .bind(sha256_hex(t.as_bytes()))
+            .execute(&state.db)
+            .await;
     }
     let Some(integration) = login_integration(&state) else {
         return super::pages::message_page(
@@ -240,13 +268,16 @@ pub async fn start(State(state): State<AppState>, headers: HeaderMap) -> Respons
     };
     let login_state = random_token(43);
     let verifier = random_token(64);
+    let browser = random_token(43);
     let stored = sqlx::query(
-        "INSERT INTO cap_login_attempts (state_hash, code_verifier, key_id, expires_at) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO cap_login_attempts (state_hash, code_verifier, key_id, expires_at, browser_hash)
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(sha256_hex(login_state.as_bytes()))
     .bind(&verifier)
     .bind(&integration.key_id)
     .bind(Utc::now() + Duration::minutes(ATTEMPT_MINUTES))
+    .bind(sha256_hex(browser.as_bytes()))
     .execute(&state.db)
     .await;
     if let Err(e) = stored {
@@ -264,7 +295,17 @@ pub async fn start(State(state): State<AppState>, headers: HeaderMap) -> Respons
         .append_pair("state", &login_state)
         .append_pair("code_challenge", &pkce_s256(&verifier))
         .append_pair("code_challenge_method", "S256");
-    Redirect::to(url.as_str()).into_response()
+    (
+        StatusCode::SEE_OTHER,
+        AppendHeaders([
+            (
+                header::SET_COOKIE,
+                login_cookie(state.cfg.production, &browser, ATTEMPT_MINUTES * 60),
+            ),
+            (header::LOCATION, url.to_string()),
+        ]),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -283,18 +324,32 @@ fn failed(why: &str) -> Response {
 
 /// GET /auth/calari/callback: exchange Calari's one-time code (signed,
 /// server to server) for the staff member, then start a Cap session.
-pub async fn callback(State(state): State<AppState>, Query(q): Query<Callback>) -> Response {
+pub async fn callback(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<Callback>,
+) -> Response {
     if !q.error.is_empty() {
         return failed("Calari did not complete the sign-in. Try again from the sign-in page.");
     }
     if q.code.is_empty() || q.code.len() > 512 || q.state.is_empty() || q.state.len() > 256 {
         return failed("The sign-in response was incomplete. Try again.");
     }
+    // The attempt must have been started by this browser. Without the
+    // matching cookie nothing is consumed, so a link handed to someone else
+    // neither signs them in nor spoils the real attempt.
+    let Some(browser) = cookie_value(&headers, login_cookie_name(state.cfg.production)) else {
+        return failed(
+            "This sign-in was started in a different browser. Start again from the sign-in page.",
+        );
+    };
     // Single use: the attempt is deleted as it is read.
     let attempt = match sqlx::query(
-        "DELETE FROM cap_login_attempts WHERE state_hash = $1 AND expires_at > now() RETURNING code_verifier, key_id",
+        "DELETE FROM cap_login_attempts WHERE state_hash = $1 AND browser_hash = $2 AND expires_at > now()
+         RETURNING code_verifier, key_id",
     )
     .bind(sha256_hex(q.state.as_bytes()))
+    .bind(sha256_hex(browser.as_bytes()))
     .fetch_optional(&state.db)
     .await
     {
@@ -371,10 +426,14 @@ pub async fn callback(State(state): State<AppState>, Query(q): Query<Callback>) 
     );
     (
         StatusCode::SEE_OTHER,
-        [
+        AppendHeaders([
             (header::SET_COOKIE, cookie),
+            (
+                header::SET_COOKIE,
+                login_cookie(state.cfg.production, "", 0),
+            ),
             (header::LOCATION, "/meetings".to_owned()),
-        ],
+        ]),
     )
         .into_response()
 }
