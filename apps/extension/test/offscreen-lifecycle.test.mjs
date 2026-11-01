@@ -6,8 +6,10 @@ globalThis.crypto ??= webcrypto;
 for (const automatic of [false, true]) {
 test(`${automatic ? "rollover quota failure auto-stops without user action" : "manual Stop quota failure"}; retry preserves bytes and finalizes once`, async (t) => {
   const listeners = [];
+  let retryObserved;
   const event = () => ({ addListener() {} });
   const send = (message) => new Promise((resolve, reject) => {
+    if (message.target === "offscreen" && message.type === "stop") retryObserved?.();
     let handled = false;
     for (const fn of listeners) handled = fn(message, {}, resolve) || handled;
     if (!handled) reject(new Error("No message handler"));
@@ -78,12 +80,14 @@ test(`${automatic ? "rollover quota failure auto-stops without user action" : "m
     },
   } } });
   let contextClosed = false;
+  let releaseClose;
+  const closing = automatic ? new Promise((resolve) => { releaseClose = resolve; }) : Promise.resolve();
   globalThis.AudioContext = class {
     destination = {};
     createMediaStreamDestination() { return { stream }; }
     createMediaStreamSource() { return { connect() {} }; }
     createAnalyser() { return { getFloatTimeDomainData() {} }; }
-    async close() { contextClosed = true; }
+    async close() { contextClosed = true; await closing; }
   };
   globalThis.MediaStream = class { constructor() { return stream; } };
   let starts = 0;
@@ -105,7 +109,7 @@ test(`${automatic ? "rollover quota failure auto-stops without user action" : "m
   };
   await import(`../src/background.js?automatic=${automatic}`);
   await import(`../src/offscreen.js?automatic=${automatic}`);
-  t.after(async () => { quotaFull = false; await send({ type: "stop" }).catch(() => {}); });
+  t.after(async () => { releaseClose?.(); quotaFull = false; await send({ type: "stop" }).catch(() => {}); });
   const started = await send({ type: "start", tabId: 1, streamId: "synthetic", mode: "audio" });
   assert.equal(started.ok, true, started.error);
   if (automatic) {
@@ -134,7 +138,13 @@ test(`${automatic ? "rollover quota failure auto-stops without user action" : "m
   assert.equal(status.pendingSave, true);
   quotaFull = false;
   // Concurrent Stop/retry gestures share the same save operation.
-  const retries = await Promise.all([send({ type: "stop" }), send({ type: "stop" })]);
+  const dispatched = new Promise((resolve) => { retryObserved = resolve; });
+  const retryResults = Promise.all([send({ type: "stop" }), send({ type: "stop" })]);
+  // Force the reported race: Retry reaches offscreen while original shutdown
+  // is blocked in AudioContext.close, then let shutdown finish (no sleeps).
+  await dispatched;
+  releaseClose?.();
+  const retries = await retryResults;
   assert.ok(retries.every((reply) => reply.ok));
   for (let n = 0; n < 50 && !finalized.length; n++) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(captures, 1);
@@ -142,7 +152,7 @@ test(`${automatic ? "rollover quota failure auto-stops without user action" : "m
   assert.equal(rolloverTimers.size, 0);
   assert.equal(savedChunks.length, automatic ? 2 : 1);
   assert.equal(await savedChunks[0].blob.text(), await original.text());
-  assert.equal(savedChunks[0].seq, 0);
+  assert.deepEqual(savedChunks.map((chunk) => chunk.seq).sort(), automatic ? [0, 1] : [0]);
   assert.ok(uploads.length >= 1);
   assert.equal(await uploads[0].text(), await original.text());
   assert.equal(finalized.length, 1);

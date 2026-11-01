@@ -16,6 +16,7 @@ let rec = null; // current recording session
 const SAVE_FAILURE = "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
 
 function reportSaveFailure(r) {
+  r.saveFailed = true;
   return chrome.runtime.sendMessage({
     type: "offscreen-save-failed", meetingId: r.meetingId, error: SAVE_FAILURE,
   }).catch(() => {});
@@ -200,13 +201,30 @@ function signal(code) {
   tick();
 }
 
+function runStop(r) {
+  r.attemptIsRetry = !!r.attemptStarted;
+  r.attemptStarted = true;
+  r.stopTask = stopSession(r).finally(() => { r.stopTask = null; });
+  return r.stopTask;
+}
+
 function stop(reason) {
   const r = rec;
   if (!r) return Promise.resolve();
-  if (r.stopTask) return r.stopTask;
   r.stopReason ??= reason;
-  r.stopTask = stopSession(r).finally(() => { r.stopTask = null; });
-  return r.stopTask;
+  if (r.retryTask) return r.retryTask;
+  if (r.stopTask) {
+    if (reason === "user_stopped" && r.saveFailed && !r.attemptIsRetry) {
+      // The warning can arrive before initial shutdown has settled. Queue
+      // one retry behind that attempt; repeated gestures share this promise.
+      r.retryTask = r.stopTask.catch(() => {}).then(() => {
+        if (rec === r) return runStop(r);
+      }).finally(() => { r.retryTask = null; });
+      return r.retryTask;
+    }
+    return r.stopTask;
+  }
+  return runStop(r);
 }
 
 async function stopSession(r) {
