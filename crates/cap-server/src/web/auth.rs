@@ -21,8 +21,6 @@ use sqlx::Row;
 
 pub const SESSION_HOURS: i64 = 8;
 pub const IDLE_MINUTES: i64 = 60;
-/// Calari confirms the staff member is still active at least this often.
-pub const VERIFY_SECONDS: i64 = 60;
 const ATTEMPT_MINUTES: i64 = 10;
 
 pub fn cookie_name(production: bool) -> &'static str {
@@ -74,13 +72,11 @@ impl FromRequestParts<AppState> for WebUser {
         let token = token_from(&parts.headers, state.cfg.production).ok_or_else(to_login)?;
         let hash = sha256_hex(token.as_bytes());
         let row = sqlx::query(
-            "SELECT tenant_id, calari_user_id, email, display_name, role,
-                    verified_at < now() - make_interval(secs => $2) AS stale
+            "SELECT tenant_id, calari_user_id, email, display_name, role
              FROM cap_web_sessions
-             WHERE token_hash = $1 AND expires_at > now() AND last_seen_at > now() - make_interval(mins => $3)",
+             WHERE token_hash = $1 AND expires_at > now() AND last_seen_at > now() - make_interval(mins => $2)",
         )
         .bind(&hash)
-        .bind(VERIFY_SECONDS as f64)
         .bind(IDLE_MINUTES as i32)
         .fetch_optional(&state.db)
         .await
@@ -97,7 +93,8 @@ impl FromRequestParts<AppState> for WebUser {
             },
             session_hash: hash.clone(),
         };
-        if row.get::<bool, _>("stale") {
+        // Every protected request asks Calari first; there is no cached allow.
+        {
             let user_id: uuid::Uuid = row.get("calari_user_id");
             match check_status(state, &user.tenant_id, &user_id.to_string()).await {
                 Status::Active(s) => {

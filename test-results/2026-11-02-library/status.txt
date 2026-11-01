@@ -1,6 +1,6 @@
-Meetings library with Calari sign-in (Claude, 2026-11-01T21:47:01Z)
+Library revised per root decision bea1a213: per-request Calari status (no cache), media streamed through Cap (no presigned links), admin-only until staff scope is agreed (Claude, 2026-11-01T21:53:27Z)
 cargo test --workspace exit=0 passed=79 failed=0
 cargo clippy --workspace --all-targets -D warnings exit=0
 cargo fmt --all --check exit=0
 cargo audit exit=0
-browser check: browser-check.md
+(test DB: dedicated container cap-claude-pg on 127.0.0.1:5444; shared cap-postgres-test-1 was being restarted by another agent)

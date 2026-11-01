@@ -73,6 +73,27 @@ pub fn message_page(status: StatusCode, title: &str, text: &str) -> Response {
         .into_response()
 }
 
+/// Who may see which meetings has not been agreed with Calari yet, so only
+/// Calari admins see the library for now. Staff get a clear message rather
+/// than access to every meeting in the workspace.
+fn library_denied(user: &WebUser) -> Option<Response> {
+    if user.role == StaffRole::Admin {
+        return None;
+    }
+    Some((
+        StatusCode::FORBIDDEN,
+        layout(
+            "No access yet",
+            Some(user),
+            html! {
+                h1 { "Meetings are not available to your account yet" }
+                p.muted { "Calari has not set which meetings staff accounts may see. Ask a Calari admin." }
+            },
+        ),
+    )
+        .into_response())
+}
+
 pub async fn signed_out() -> Response {
     message_page(StatusCode::OK, "Signed out", "You have signed out of Cap.")
 }
@@ -119,6 +140,9 @@ pub async fn meetings(
     user: WebUser,
     Query(query): Query<ListQuery>,
 ) -> Response {
+    if let Some(r) = library_denied(&user) {
+        return r;
+    }
     let q: String = query.q.trim().chars().take(100).collect();
     let pattern = format!(
         "%{}%",
@@ -209,6 +233,9 @@ pub async fn meeting(
     user: WebUser,
     Path(id): Path<Uuid>,
 ) -> Response {
+    if let Some(r) = library_denied(&user) {
+        return r;
+    }
     let row = match sqlx::query(
         "SELECT m.title, m.state, m.capture_mode, m.started_at, m.ended_at, m.stop_reason, m.partial, m.failure, m.meeting_url,
                 p.pairing_kind, p.client_display_name, t.segments, t.model,
@@ -397,13 +424,15 @@ fn ranged(bytes: Vec<u8>, mime: &'static str, range: Option<&str>) -> Response {
 }
 
 /// One audio/video part, after re-checking the viewer may see the meeting.
-/// S3 objects are handed out as short-lived pre-signed links.
 pub async fn part(
     State(state): State<AppState>,
     user: WebUser,
     headers: axum::http::HeaderMap,
     Path((id, seq)): Path<(Uuid, i32)>,
 ) -> Response {
+    if let Some(r) = library_denied(&user) {
+        return r;
+    }
     let row = match sqlx::query(
         "SELECT c.object_key, c.container FROM meeting_chunks c
          JOIN meeting_sessions m ON m.id = c.meeting_id JOIN meeting_pairings p ON p.id = m.pairing_id
@@ -423,32 +452,16 @@ pub async fn part(
     let mime = AudioContainer::from_extension(&row.get::<String, _>("container"))
         .map(|c| c.mime())
         .unwrap_or("application/octet-stream");
-    match state
-        .store
-        .presign_get(&key, std::time::Duration::from_secs(300))
-        .await
-    {
-        Ok(Some(url)) => (
-            StatusCode::FOUND,
-            [
-                (header::LOCATION, url),
-                (header::CACHE_CONTROL, "no-store".to_owned()),
-            ],
-        )
-            .into_response(),
-        Ok(None) => match state.store.get(&key).await {
-            Ok(bytes) => ranged(
-                bytes,
-                mime,
-                headers.get(header::RANGE).and_then(|v| v.to_str().ok()),
-            ),
-            Err(e) => {
-                tracing::error!(error = %e, "reading a meeting part failed");
-                StatusCode::SERVICE_UNAVAILABLE.into_response()
-            }
-        },
+    // Streamed through Cap after this request's Calari check; no storage
+    // link is handed out that could outlive the check.
+    match state.store.get(&key).await {
+        Ok(bytes) => ranged(
+            bytes,
+            mime,
+            headers.get(header::RANGE).and_then(|v| v.to_str().ok()),
+        ),
         Err(e) => {
-            tracing::error!(error = %e, "presigning a meeting part failed");
+            tracing::error!(error = %e, "reading a meeting part failed");
             StatusCode::SERVICE_UNAVAILABLE.into_response()
         }
     }

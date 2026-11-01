@@ -13,7 +13,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 pub fn router() -> Router<AppState> {
     let csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
-               media-src 'self' https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+               media-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
     Router::new()
         .route("/login", get(auth::start))
         .route("/login/signed-out", get(pages::signed_out))

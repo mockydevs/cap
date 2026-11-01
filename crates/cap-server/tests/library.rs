@@ -35,6 +35,8 @@ struct FakeCalari {
     codes: HashMap<String, (String, String)>,
     active: bool,
     status_broken: bool,
+    /// Role Calari's status endpoint reports ("admin" or "staff").
+    status_role: String,
     tenant: String,
     exchanges: usize,
     status_calls: usize,
@@ -105,8 +107,7 @@ async fn spawn_calari(shared: Shared) -> String {
                     }
                     (
                         StatusCode::OK,
-                        json!({"tenant_id": TENANT, "user_id": req.user_id, "email": "clare@calari.example",
-                               "display_name": "Clare", "role": "staff", "active": c.active})
+                        json!({"tenant_id": TENANT, "user_id": req.user_id, "email": "clare@calari.example", "display_name": "Clare <b>", "role": c.status_role, "active": c.active})
                         .to_string(),
                     )
                 }
@@ -140,6 +141,7 @@ impl H {
         let calari: Shared = Arc::new(Mutex::new(FakeCalari {
             active: true,
             tenant: TENANT.into(),
+            status_role: "admin".into(),
             ..Default::default()
         }));
         let base = spawn_calari(calari.clone()).await;
@@ -436,45 +438,60 @@ async fn sign_in_codes_and_states_are_single_use_and_bound() {
 }
 
 #[tokio::test]
-async fn access_is_rechecked_with_calari_and_fails_closed() {
+async fn every_request_is_checked_with_calari_and_fails_closed() {
     let Some(h) = H::new().await else { return };
+    let id = seed_meeting(&h, TENANT, "Kickoff").await;
     let cookie = h.sign_in().await;
     assert_eq!(h.get("/meetings", Some(&cookie)).await.0, StatusCode::OK);
     assert_eq!(
-        h.calari.lock().unwrap().status_calls,
-        0,
-        "fresh sign-in needs no extra check"
-    );
-    let age = |secs: i32| {
-        let db = h.state.db.clone();
-        async move {
-            sqlx::query(
-                "UPDATE cap_web_sessions SET verified_at = now() - make_interval(secs => $1)",
-            )
-            .bind(f64::from(secs))
-            .execute(&db)
+        h.get(&format!("/meetings/{id}/parts/0"), Some(&cookie))
             .await
-            .unwrap();
-        }
-    };
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        h.calari.lock().unwrap().status_calls,
+        2,
+        "one Calari check per protected request, no cache"
+    );
+
     // Calari unreachable: no access, but the session survives for later.
-    age(61).await;
     h.calari.lock().unwrap().status_broken = true;
     let (s, _, body) = h.get("/meetings", Some(&cookie)).await;
     assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
     assert!(body.contains("could not check"));
-    // Calari answers again: access resumes and the role is refreshed.
-    h.calari.lock().unwrap().status_broken = false;
-    let (s, _, body) = h.get("/meetings", Some(&cookie)).await;
-    assert_eq!(s, StatusCode::OK);
-    assert!(
-        !body.contains("· Admin"),
-        "role refreshed from Calari (now staff)"
+    assert_eq!(
+        h.get(&format!("/meetings/{id}/parts/0"), Some(&cookie))
+            .await
+            .0,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "media too"
     );
-    // Offboarded in Calari: the next check ends the session.
-    age(61).await;
+    h.calari.lock().unwrap().status_broken = false;
+    assert_eq!(h.get("/meetings", Some(&cookie)).await.0, StatusCode::OK);
+
+    // Until Calari defines staff scope, only admins see meetings.
+    h.calari.lock().unwrap().status_role = "staff".into();
+    let (s, _, body) = h.get("/meetings", Some(&cookie)).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert!(body.contains("not available to your account"));
+    assert_eq!(
+        h.get(&format!("/meetings/{id}"), Some(&cookie)).await.0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        h.get(&format!("/meetings/{id}/parts/0"), Some(&cookie))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    h.calari.lock().unwrap().status_role = "admin".into();
+
+    // Offboarded in Calari: the very next request ends the session.
     h.calari.lock().unwrap().active = false;
-    let (s, hd, _) = h.get("/meetings", Some(&cookie)).await;
+    let (s, hd, _) = h
+        .get(&format!("/meetings/{id}/parts/0"), Some(&cookie))
+        .await;
     assert_eq!(
         (s, hd[header::LOCATION].to_str().unwrap()),
         (StatusCode::SEE_OTHER, "/login")
