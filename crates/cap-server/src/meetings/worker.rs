@@ -426,7 +426,8 @@ async fn frozen_delivery(
                 .and_then(|s| StopReason::parse(&s))
                 .unwrap_or(StopReason::Interrupted),
             partial: m.get("partial"),
-            cap_url: format!("{}/v1/meetings/{id}", state.cfg.public_base_url),
+            // No user-facing meeting page exists in Cap yet.
+            cap_url: None,
             meeting_url: m.get("meeting_url"),
         },
         transcript: DeliveredTranscript {

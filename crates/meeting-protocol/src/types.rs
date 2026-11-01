@@ -342,7 +342,9 @@ pub struct DeliveredMeeting {
     pub stop_reason: StopReason,
     /// Partial audio was finalized after an interruption or missing chunks.
     pub partial: bool,
-    pub cap_url: String,
+    /// A page in Cap where a signed-in person can view the meeting. `None`
+    /// until Cap has a meeting viewer (ADR 0004 phase 4); never an API route.
+    pub cap_url: Option<String>,
     pub meeting_url: Option<String>,
 }
 

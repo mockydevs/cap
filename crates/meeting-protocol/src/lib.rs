@@ -89,8 +89,7 @@ mod fixtures {
                 duration_ms: 2_530_000,
                 stop_reason: StopReason::MeetingEnded,
                 partial: false,
-                cap_url: "https://cap.example/v1/meetings/3c9e7f20-5b1a-4d8e-9f6c-2a7b8c9d0e1f"
-                    .into(),
+                cap_url: None,
                 meeting_url: Some("https://meet.google.com/abc-defg-hij".into()),
             },
             transcript: DeliveredTranscript {

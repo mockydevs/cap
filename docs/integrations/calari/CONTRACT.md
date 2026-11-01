@@ -132,6 +132,10 @@ Key rules for the Calari receiver:
 - Accept only if `pairing_id` is one Calari issued to the signing tenant and
   `client_id`/`intake_receipt_id`/`context.pairing_kind` equal what Calari
   stored for it. Otherwise `403`, do not store.
+- `meeting.cap_url` is `null` until Cap has a page a signed-in person can
+  open; it will never point at the token-only `/v1` API.
+- Only `revision: 1` is sent today; correction revisions are not supported
+  until both sides agree on them.
 - `summary` is `null` by default: Calari's own worker summarizes and extracts
   actions once, so the transcript is not paid for twice.
 - `context` carries only facts Cap knows (`pairing_kind`, `capture_mode`).

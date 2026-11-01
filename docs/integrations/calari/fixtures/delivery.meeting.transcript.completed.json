@@ -9,7 +9,7 @@
   "event_type": "meeting.transcript.completed",
   "intake_receipt_id": "00000000-0000-4000-8000-000000000003",
   "meeting": {
-    "cap_url": "https://cap.example/v1/meetings/3c9e7f20-5b1a-4d8e-9f6c-2a7b8c9d0e1f",
+    "cap_url": null,
     "duration_ms": 2530000,
     "ended_at": "2026-11-01T09:42:10Z",
     "id": "3c9e7f20-5b1a-4d8e-9f6c-2a7b8c9d0e1f",
