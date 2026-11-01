@@ -176,7 +176,9 @@ function tick() {
     });
   } else if (decision === 2) {
     // Failed saves already publish retry state to the service worker.
-    void stop(STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped").catch(() => {});
+    void stop(
+      STOP_REASONS[r.detector.detector_reason_code()] ?? "user_stopped",
+    ).catch(() => {});
   }
   if (now % 10_000 < 500) drain();
 }
@@ -195,7 +197,8 @@ async function stop(reason) {
   r.stopping = true;
   clearInterval(r.tickTimer);
   const saved = r.chunker.stop().then(
-    (result) => ({ result }), (error) => ({ error }),
+    (result) => ({ result }),
+    (error) => ({ error }),
   );
   // Release capture even when storage is full. The chunker retains failed
   // bytes in this offscreen document and Stop can retry saving them.
@@ -208,10 +211,15 @@ async function stop(reason) {
     if (outcome.error) throw outcome.error;
     ({ lastSeq } = outcome.result);
   } catch {
-    const message = "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
-    await chrome.runtime.sendMessage({
-      type: "offscreen-save-failed", meetingId: r.meetingId, error: message,
-    }).catch(() => {});
+    const message =
+      "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
+    await chrome.runtime
+      .sendMessage({
+        type: "offscreen-save-failed",
+        meetingId: r.meetingId,
+        error: message,
+      })
+      .catch(() => {});
     throw new Error(message);
   } finally {
     r.saving = false;
@@ -242,7 +250,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         await stop(msg.reason ?? "user_stopped");
         return { ok: true };
       case "status":
-        return { recording: !!rec && !rec.stopping, pendingSave: !!rec?.stopping, meetingId: rec?.meetingId ?? null };
+        return {
+          recording: !!rec && !rec.stopping,
+          pendingSave: !!rec?.stopping,
+          meetingId: rec?.meetingId ?? null,
+        };
       default:
         return { ok: false };
     }

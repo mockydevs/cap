@@ -61,9 +61,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "cap"
-        ]
+        "schemes": ["cap"]
       }
     }
   }

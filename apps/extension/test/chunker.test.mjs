@@ -79,21 +79,27 @@ test("a stop right after start still yields one chunk with a positive duration",
   assert.ok(chunks[0].durationMs >= 1);
 });
 
-
 test("stop waits for an earlier chunk still being saved", async () => {
   let release;
-  const held = new Promise((resolve) => { release = resolve; });
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
   const { chunker, chunks, advance } = harness({
     stopDelayMs: 0,
-    saveChunk: (c) => c.seq === 0 ? held : undefined,
+    saveChunk: (c) => (c.seq === 0 ? held : undefined),
   });
   await advance(30_100);
   let stopped = false;
-  const stop = chunker.stop().then(() => { stopped = true; });
+  const stop = chunker.stop().then(() => {
+    stopped = true;
+  });
   await advance(10);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(stopped, false);
-  assert.deepEqual(chunks.map((c) => c.seq), [1]);
+  assert.deepEqual(
+    chunks.map((c) => c.seq),
+    [1],
+  );
   release();
   await stop;
   assert.deepEqual(chunks.map((c) => c.seq).sort(), [0, 1]);
@@ -102,21 +108,25 @@ test("stop waits for an earlier chunk still being saved", async () => {
 test("stop reports failed chunk persistence instead of claiming success", async () => {
   const { chunker, advance } = harness({
     stopDelayMs: 0,
-    saveChunk: () => { throw new Error("storage full"); },
+    saveChunk: () => {
+      throw new Error("storage full");
+    },
   });
   const stopped = assert.rejects(chunker.stop(), /storage full/);
   await advance(10);
   await stopped;
 });
 
-
 test("quota failure retains earlier and final chunks for Stop retry without recapture", async () => {
   let full = true;
   const attempts = [];
-  const { chunker, chunks, advance } = harness({ stopDelayMs: 0, saveChunk: (chunk) => {
-    attempts.push(chunk);
-    if (full) throw new Error("quota full");
-  } });
+  const { chunker, chunks, advance } = harness({
+    stopDelayMs: 0,
+    saveChunk: (chunk) => {
+      attempts.push(chunk);
+      if (full) throw new Error("quota full");
+    },
+  });
   await advance(65_000);
   const rejected = assert.rejects(chunker.stop(), /quota full/);
   await advance(10);

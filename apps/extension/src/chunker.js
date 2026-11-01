@@ -92,10 +92,14 @@ export function createChunker({
       stopTask = (async () => {
         await Promise.all([...pending]);
         if (retry)
-          await Promise.all([...failed.values()].map(({ chunk }) => save(chunk)));
+          await Promise.all(
+            [...failed.values()].map(({ chunk }) => save(chunk)),
+          );
         if (failed.size) throw failed.values().next().value.error;
         return { lastSeq: current.seq };
-      })().finally(() => { stopTask = null; });
+      })().finally(() => {
+        stopTask = null;
+      });
       return stopTask;
     },
   };

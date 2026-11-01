@@ -8,7 +8,8 @@ function show(err) {
 
 async function render() {
   const s = await send({ type: "status" });
-  if (!s.ok) return show(s.error || "Could not read recorder status. Reopen Cap.");
+  if (!s.ok)
+    return show(s.error || "Could not read recorder status. Reopen Cap.");
   $("uploadStatus").hidden = !s.unfinishedCount;
   $("reconnectBtn").hidden = !s.unfinishedCount || !!s.active;
   $("uploadStatus").textContent = s.unfinishedCount
@@ -19,11 +20,16 @@ async function render() {
   $("recording").hidden = !s.active;
   const pendingSave = s.active?.pendingSave;
   $("recordingState").textContent = pendingSave
-    ? "Recording stopped — saving audio" : "● Recording";
-  $("recordingHelp").textContent = s.active?.saveError || (pendingSave
-    ? "Keep Chrome open while your audio is saved."
-    : "Cap stops when the call ends, the tab closes, or after a long silence (with a warning first).");
-  $("stopBtn").textContent = pendingSave ? "Retry saving and send to Calari" : "Stop and send to Calari";
+    ? "Recording stopped — saving audio"
+    : "● Recording";
+  $("recordingHelp").textContent =
+    s.active?.saveError ||
+    (pendingSave
+      ? "Keep Chrome open while your audio is saved."
+      : "Cap stops when the call ends, the tab closes, or after a long silence (with a warning first).");
+  $("stopBtn").textContent = pendingSave
+    ? "Retry saving and send to Calari"
+    : "Stop and send to Calari";
   if (s.device) {
     const who =
       s.device.pairingKind === "internal_team"

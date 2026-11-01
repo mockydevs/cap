@@ -135,7 +135,9 @@ async function startRecording({ tabId, streamId, mode }) {
   }).catch(async (error) => {
     if (error instanceof ApiError && error.status === 401) {
       await chrome.storage.local.remove("device");
-      throw new Error("Your Calari sign-in expired. Sign in again to start recording.");
+      throw new Error(
+        "Your Calari sign-in expired. Sign in again to start recording.",
+      );
     }
     throw error;
   });
@@ -191,10 +193,16 @@ async function adoptMeeting(m) {
   // A new pairing can resume only its own client's recording; the server
   // authorizes adoption and preserves the meeting's original binding.
   const current = await device();
-  if (!current || current.token === m.token || (await get("server")) !== m.server)
+  if (
+    !current ||
+    current.token === m.token ||
+    (await get("server")) !== m.server
+  )
     return false;
   try {
-    await api(m.server, current.token, `/v1/meetings/${m.meetingId}/adopt`, { method: "POST" });
+    await api(m.server, current.token, `/v1/meetings/${m.meetingId}/adopt`, {
+      method: "POST",
+    });
     m.token = current.token;
     await saveUnfinished(m);
     return true;
@@ -208,26 +216,38 @@ async function refreshLastSeq(m) {
   try {
     view = await api(m.server, m.token, `/v1/meetings/${m.meetingId}`);
   } catch (error) {
-    if (error instanceof ApiError && [401, 404].includes(error.status) && await adoptMeeting(m))
+    if (
+      error instanceof ApiError &&
+      [401, 404].includes(error.status) &&
+      (await adoptMeeting(m))
+    )
       return refreshLastSeq(m);
     throw error;
   }
-  if (!Number.isInteger(view?.received_chunks) || !Array.isArray(view?.missing_chunks))
+  if (
+    !Number.isInteger(view?.received_chunks) ||
+    !Array.isArray(view?.missing_chunks)
+  )
     throw new Error("Could not recover the recording's final chunk number.");
-  m.lastSeq = Math.max(0, view.received_chunks + view.missing_chunks.length - 1);
+  m.lastSeq = Math.max(
+    0,
+    view.received_chunks + view.missing_chunks.length - 1,
+  );
   await saveUnfinished(m);
 }
 
 async function settle(m) {
   let outcome = await drainMeeting(m.server, m.token, m.meetingId);
-  if (outcome === "reauth" && await adoptMeeting(m))
+  if (outcome === "reauth" && (await adoptMeeting(m)))
     outcome = await drainMeeting(m.server, m.token, m.meetingId);
   if (outcome !== "done") return outcome;
   if (!Number.isInteger(m.lastSeq) || m.lastSeq < 0) {
     try {
       await refreshLastSeq(m);
     } catch (error) {
-      return error instanceof ApiError && [401, 404].includes(error.status) ? "reauth" : "retry";
+      return error instanceof ApiError && [401, 404].includes(error.status)
+        ? "reauth"
+        : "retry";
     }
   }
   const body = {
@@ -407,9 +427,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     stop: async () => {
       const active = await get("active");
       if (active) await set({ active: { ...active, pendingSave: true } });
-      const result = await toOffscreen({ type: "stop", reason: "user_stopped" });
+      const result = await toOffscreen({
+        type: "stop",
+        reason: "user_stopped",
+      });
       if (!result?.ok)
-        throw new Error(result?.error || "Could not stop recording. Try again.");
+        throw new Error(
+          result?.error || "Could not stop recording. Try again.",
+        );
       return { ok: true };
     },
     status: async () => ({
@@ -424,7 +449,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     "offscreen-save-failed": async () => {
       const active = await get("active");
       if (active?.meetingId !== msg.meetingId) return;
-      await set({ active: { ...active, pendingSave: true, saveError: msg.error } });
+      await set({
+        active: { ...active, pendingSave: true, saveError: msg.error },
+      });
       badge("!", "#c62828");
     },
     "offscreen-warn": () => warn(msg),
