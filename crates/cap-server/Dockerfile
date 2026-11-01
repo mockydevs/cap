@@ -17,6 +17,6 @@ COPY apps/site /srv/site
 ENV CAP_SERVER_BIND=0.0.0.0:8787 CAP_SITE_DIR=/srv/site RUST_LOG=info
 USER cap
 EXPOSE 8787
-HEALTHCHECK --interval=30s --timeout=5s CMD ["/bin/sh", "-c", "exec 3<>/dev/tcp/127.0.0.1/8787"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD ["/usr/local/bin/cap-server", "healthcheck"]
 ENTRYPOINT ["/usr/local/bin/cap-server"]
 CMD ["serve"]

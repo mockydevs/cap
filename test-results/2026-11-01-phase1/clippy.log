@@ -1,2 +1,3 @@
+    Checking cap-server v0.1.0 (/home/don/code/cap/crates/cap-server)
     Checking cap-meeting-recorder v0.1.0 (/home/don/code/cap/crates/meeting-recorder)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.30s

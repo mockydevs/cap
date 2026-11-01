@@ -779,3 +779,113 @@ async fn internal_team_meetings_carry_no_client() {
     );
     h.drop_db().await;
 }
+
+/// Server review 1: a worker whose lease expired and was taken over can no
+/// longer change the meeting.
+#[tokio::test]
+async fn an_expired_worker_lease_is_fenced_out() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else { return };
+    let t = h.device(client_pairing()).await;
+    let id = h.meeting(&t, "k").await;
+    h.chunk(&t, &id, 0, &ogg(0)).await;
+    h.finalize(&t, &id, 0, false).await;
+    let now = Utc::now();
+    let a = worker::claim(&h.state, now).await.unwrap().expect("worker A claims");
+    assert!(worker::claim(&h.state, now).await.unwrap().is_none(), "a live lease is exclusive");
+    let b = worker::claim(&h.state, now + chrono::Duration::minutes(16)).await.unwrap().expect("worker B takes over");
+    assert_ne!(a.token, b.token);
+
+    // The stale worker wakes up and tries to work: nothing changes.
+    worker::work(&h.state, a, now).await.unwrap();
+    let (state, token): (String, Option<Uuid>) =
+        sqlx::query_as("SELECT state, lease_token FROM meeting_sessions WHERE id = $1::uuid")
+            .bind(&id)
+            .fetch_one(&h.state.db)
+            .await
+            .unwrap();
+    assert_eq!(state, "finalized");
+    assert_eq!(token, Some(b.token), "the stale worker did not clear the new lease");
+    assert!(a.renew(&h.state).await.is_err());
+    assert!(h.calari.lock().unwrap().received.is_empty());
+
+    worker::work(&h.state, b, now).await.unwrap();
+    let (_, v) = h.call(get_req(&format!("/v1/meetings/{id}"), &t)).await;
+    assert_eq!(v["state"], "delivered");
+    assert_eq!(h.calari.lock().unwrap().received.len(), 1);
+    h.drop_db().await;
+}
+
+/// Server review 2: a chunk still being stored when the meeting is
+/// finalized (or swept as abandoned) is refused, never silently dropped.
+#[tokio::test]
+async fn an_upload_racing_finalize_or_abandon_is_refused() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else { return };
+    let mut slow = h.state.clone();
+    slow.store = cap_server::store::ObjectStore::Delayed(Box::new(h.state.store.clone()), Duration::from_millis(800));
+    let put = |token: &str, id: &str, seq: u32| {
+        let bytes = ogg(seq as u8);
+        Request::put(format!("/v1/meetings/{id}/chunks/{seq}"))
+            .header("authorization", format!("Bearer {token}"))
+            .header("x-chunk-sha256", ids::sha256_hex(&bytes))
+            .header("x-chunk-start-ms", (seq as u64 * 30_000).to_string())
+            .header("x-chunk-duration-ms", "30000")
+            .body(Body::from(bytes))
+            .unwrap()
+    };
+    for race_with_abandon in [false, true] {
+        let t = h.device(client_pairing()).await;
+        let id = h.meeting(&t, if race_with_abandon { "abandon" } else { "finalize" }).await;
+        assert_eq!(h.chunk(&t, &id, 0, &ogg(0)).await.0, StatusCode::CREATED);
+        let upload = router(slow.clone()).oneshot(put(&t, &id, 1));
+        let transition = async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            if race_with_abandon {
+                worker::run_once(&h.state, Utc::now() + chrono::Duration::hours(2)).await.unwrap();
+            } else {
+                assert_eq!(h.finalize(&t, &id, 0, false).await.0, StatusCode::ACCEPTED);
+            }
+        };
+        let (res, ()) = tokio::join!(upload, transition);
+        let res = res.unwrap();
+        assert_eq!(res.status(), StatusCode::CONFLICT, "abandon={race_with_abandon}");
+        let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1::uuid AND seq = 1")
+            .bind(&id)
+            .fetch_one(&h.state.db)
+            .await
+            .unwrap();
+        assert_eq!(stored, 0);
+    }
+    h.drop_db().await;
+}
+
+/// Server review 3: decoding is bounded by real audio length, not by the
+/// duration the client claimed.
+#[tokio::test]
+async fn overlong_compressed_audio_is_rejected_while_decoding() {
+    let Ok(ffmpeg) = std::env::var("CAP_TEST_FFMPEG") else {
+        eprintln!("SKIPPED: set CAP_TEST_FFMPEG");
+        return;
+    };
+    let make = |seconds: u32| {
+        let path = format!("/tmp/cap-decode-{}.ogg", Uuid::new_v4());
+        let ok = std::process::Command::new(&ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", &format!("anullsrc=r=48000:cl=mono:d={seconds}")])
+            .args(["-c:a", "libopus", "-b:a", "8k", &path])
+            .stdin(std::process::Stdio::null())
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok);
+        let bytes = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        bytes
+    };
+    use cap_server::meetings::transcribe::{decode_pcm16k, DECODE_SLACK_MS};
+    // Twenty minutes of audio in a small file that claims to be 30 seconds.
+    let long = make(1_200);
+    assert!(long.len() < 2 << 20, "compressed size {}", long.len());
+    let err = decode_pcm16k(&ffmpeg, &long, 30_000 + DECODE_SLACK_MS).await.unwrap_err();
+    assert!(err.to_string().contains("more than"), "{err}");
+    let ok = decode_pcm16k(&ffmpeg, &make(5), 5_000 + DECODE_SLACK_MS).await.unwrap();
+    assert!((70_000..=90_000).contains(&ok.len()), "{} samples", ok.len());
+}

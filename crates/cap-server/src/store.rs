@@ -16,6 +16,9 @@ pub enum ObjectStore {
     Filesystem {
         root: PathBuf,
     },
+    /// Wraps another store and pauses before every write. Used by tests to
+    /// hold an upload in flight while the meeting changes state.
+    Delayed(Box<ObjectStore>, std::time::Duration),
 }
 
 impl ObjectStore {
@@ -63,6 +66,10 @@ impl ObjectStore {
     /// and the local store writes a temp file, fsyncs and renames.
     pub async fn put(&self, key: &str, bytes: Vec<u8>, content_type: &str) -> Result<()> {
         match self {
+            ObjectStore::Delayed(inner, delay) => {
+                tokio::time::sleep(*delay).await;
+                return Box::pin(inner.put(key, bytes, content_type)).await;
+            }
             ObjectStore::S3 {
                 client,
                 bucket,
@@ -102,6 +109,7 @@ impl ObjectStore {
 
     pub async fn get(&self, key: &str) -> Result<Vec<u8>> {
         match self {
+            ObjectStore::Delayed(inner, _) => Box::pin(inner.get(key)).await,
             ObjectStore::S3 { client, bucket, .. } => {
                 let out = client
                     .get_object()

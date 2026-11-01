@@ -30,6 +30,50 @@ pub fn backoff(attempt: i32) -> Duration {
     Duration::seconds(secs.min(1_800))
 }
 
+/// A claim on one meeting. `token` fences every write: a worker whose lease
+/// expired and was taken over can no longer change the meeting.
+#[derive(Clone, Copy, Debug)]
+pub struct Lease {
+    pub id: Uuid,
+    pub token: Uuid,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("another worker took over this meeting")]
+pub struct LostLease;
+
+impl Lease {
+    /// Extends the lease, or fails if another worker owns the meeting now.
+    pub async fn renew(&self, state: &AppState) -> Result<()> {
+        let rows = sqlx::query(
+            "UPDATE meeting_sessions SET lease_until = greatest(lease_until, now() + make_interval(mins => $3))
+             WHERE id = $1 AND lease_token = $2",
+        )
+        .bind(self.id)
+        .bind(self.token)
+        .bind(LEASE_MINUTES as i32)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+        if rows == 0 {
+            return Err(LostLease.into());
+        }
+        Ok(())
+    }
+
+    /// Locks the meeting row in `tx`, or fails if this worker lost it.
+    async fn hold(&self, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> Result<()> {
+        let held: Option<i32> = sqlx::query_scalar(
+            "SELECT 1 FROM meeting_sessions WHERE id = $1 AND lease_token = $2 FOR UPDATE",
+        )
+        .bind(self.id)
+        .bind(self.token)
+        .fetch_optional(&mut **tx)
+        .await?;
+        held.map(|_| ()).ok_or_else(|| LostLease.into())
+    }
+}
+
 enum Step {
     Done,
     Retry(String),
@@ -54,10 +98,36 @@ pub async fn run(state: AppState) {
 /// meeting was processed, so callers can loop until idle.
 pub async fn run_once(state: &AppState, now: DateTime<Utc>) -> Result<bool> {
     housekeeping(state, now).await?;
-    let Some(id) = claim(state, now).await? else {
+    let Some(lease) = claim(state, now).await? else {
         return Ok(false);
     };
-    let outcome = process(state, id).await;
+    work(state, lease, now).await?;
+    Ok(true)
+}
+
+/// Processes one claimed meeting and records the outcome, fenced by the lease.
+pub async fn work(state: &AppState, lease: Lease, now: DateTime<Utc>) -> Result<()> {
+    let id = lease.id;
+    // Keep the lease alive during long steps; writes stay fenced regardless.
+    let renewer = {
+        let state = state.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                if lease.renew(&state).await.is_err() {
+                    break;
+                }
+            }
+        })
+    };
+    let outcome = process(state, lease).await;
+    renewer.abort();
+    if let Err(e) = &outcome {
+        if e.downcast_ref::<LostLease>().is_some() {
+            tracing::warn!(meeting = %id, "lease lost to another worker; leaving the meeting to it");
+            return Ok(());
+        }
+    }
     let (step, detail) = match outcome {
         Ok(step) => (step, None),
         Err(e) => {
@@ -68,8 +138,7 @@ pub async fn run_once(state: &AppState, now: DateTime<Utc>) -> Result<bool> {
     if let Some(d) = detail {
         tracing::warn!(meeting = %id, error = %d, "meeting step errored");
     }
-    finish(state, id, step, now).await?;
-    Ok(true)
+    finish(state, lease, step, now).await
 }
 
 async fn housekeeping(state: &AppState, now: DateTime<Utc>) -> Result<()> {
@@ -106,9 +175,10 @@ async fn housekeeping(state: &AppState, now: DateTime<Utc>) -> Result<()> {
     Ok(())
 }
 
-async fn claim(state: &AppState, now: DateTime<Utc>) -> Result<Option<Uuid>> {
-    Ok(sqlx::query_scalar(
-        "UPDATE meeting_sessions SET lease_until = $1 + make_interval(mins => $2), attempts = attempts + 1
+pub async fn claim(state: &AppState, now: DateTime<Utc>) -> Result<Option<Lease>> {
+    let token = Uuid::new_v4();
+    let id: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE meeting_sessions SET lease_until = $1 + make_interval(mins => $2), lease_token = $3, attempts = attempts + 1
          WHERE id = (
            SELECT id FROM meeting_sessions
            WHERE state IN ('finalized', 'transcribing', 'summarizing', 'delivering')
@@ -118,59 +188,71 @@ async fn claim(state: &AppState, now: DateTime<Utc>) -> Result<Option<Uuid>> {
     )
     .bind(now)
     .bind(LEASE_MINUTES as i32)
+    .bind(token)
     .fetch_optional(&state.db)
-    .await?)
+    .await?;
+    Ok(id.map(|id| Lease { id, token }))
 }
 
-async fn finish(state: &AppState, id: Uuid, step: Step, now: DateTime<Utc>) -> Result<()> {
-    match step {
-        Step::Done => {
-            sqlx::query("UPDATE meeting_sessions SET lease_until = NULL, attempts = 0, failure = NULL, updated_at = now() WHERE id = $1")
-                .bind(id)
-                .execute(&state.db)
-                .await?;
-        }
+async fn finish(state: &AppState, lease: Lease, step: Step, now: DateTime<Utc>) -> Result<()> {
+    let id = lease.id;
+    let rows = match step {
+        Step::Done => sqlx::query(
+            "UPDATE meeting_sessions SET lease_until = NULL, lease_token = NULL, attempts = 0, failure = NULL, updated_at = now()
+             WHERE id = $1 AND lease_token = $2",
+        )
+        .bind(id)
+        .bind(lease.token)
+        .execute(&state.db)
+        .await?
+        .rows_affected(),
         Step::Retry(reason) => {
-            let attempts: i32 =
-                sqlx::query_scalar("SELECT attempts FROM meeting_sessions WHERE id = $1")
-                    .bind(id)
-                    .fetch_one(&state.db)
-                    .await?;
+            let attempts: i32 = sqlx::query_scalar("SELECT attempts FROM meeting_sessions WHERE id = $1")
+                .bind(id)
+                .fetch_one(&state.db)
+                .await?;
             if attempts >= MAX_ATTEMPTS {
-                return fail(
-                    state,
-                    id,
-                    &format!("gave up after {attempts} attempts: {reason}"),
-                )
-                .await;
+                return fail(state, lease, &format!("gave up after {attempts} attempts: {reason}")).await;
             }
             sqlx::query(
-                "UPDATE meeting_sessions SET lease_until = NULL, next_attempt_at = $2, failure = $3, updated_at = now() WHERE id = $1",
+                "UPDATE meeting_sessions SET lease_until = NULL, lease_token = NULL, next_attempt_at = $3, failure = $4, updated_at = now()
+                 WHERE id = $1 AND lease_token = $2",
             )
             .bind(id)
+            .bind(lease.token)
             .bind(now + backoff(attempts))
             .bind(truncate(&reason))
             .execute(&state.db)
-            .await?;
+            .await?
+            .rows_affected()
         }
-        Step::Fail(reason) => fail(state, id, &reason).await?,
+        Step::Fail(reason) => return fail(state, lease, &reason).await,
+    };
+    if rows == 0 {
+        tracing::warn!(meeting = %id, "lease lost before finishing; another worker owns the meeting");
     }
     Ok(())
 }
 
-async fn fail(state: &AppState, id: Uuid, reason: &str) -> Result<()> {
-    tracing::error!(meeting = %id, reason, "meeting processing failed permanently; audio is kept");
+async fn fail(state: &AppState, lease: Lease, reason: &str) -> Result<()> {
+    let mut tx = state.db.begin().await?;
+    if lease.hold(&mut tx).await.is_err() {
+        tracing::warn!(meeting = %lease.id, "lease lost; not marking the meeting failed");
+        return Ok(());
+    }
+    tracing::error!(meeting = %lease.id, reason, "meeting processing failed permanently; audio is kept");
     sqlx::query(
-        "UPDATE meeting_sessions SET state = 'failed', lease_until = NULL, failure = $2, updated_at = now() WHERE id = $1",
+        "UPDATE meeting_sessions SET state = 'failed', lease_until = NULL, lease_token = NULL, failure = $2, updated_at = now() WHERE id = $1",
     )
-    .bind(id)
+    .bind(lease.id)
     .bind(truncate(reason))
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
     sqlx::query("UPDATE meeting_deliveries SET status = 'failed' WHERE meeting_id = $1 AND status = 'pending'")
-        .bind(id)
-        .execute(&state.db)
+        .bind(lease.id)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -180,22 +262,31 @@ fn truncate(s: &str) -> String {
 
 async fn set_state(
     state: &AppState,
-    id: Uuid,
+    lease: Lease,
     from: MeetingState,
     t: Transition,
 ) -> Result<MeetingState> {
     let to = from
         .transition(t)
         .ok_or_else(|| anyhow!("illegal transition {from:?} -> {t:?}"))?;
-    sqlx::query("UPDATE meeting_sessions SET state = $2, updated_at = now() WHERE id = $1")
-        .bind(id)
-        .bind(to.as_str())
-        .execute(&state.db)
-        .await?;
+    let rows = sqlx::query(
+        "UPDATE meeting_sessions SET state = $3, updated_at = now() WHERE id = $1 AND lease_token = $2 AND state = $4",
+    )
+    .bind(lease.id)
+    .bind(lease.token)
+    .bind(to.as_str())
+    .bind(from.as_str())
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if rows == 0 {
+        return Err(LostLease.into());
+    }
     Ok(to)
 }
 
-async fn process(state: &AppState, id: Uuid) -> Result<Step> {
+async fn process(state: &AppState, lease: Lease) -> Result<Step> {
+    let id = lease.id;
     let current: String = sqlx::query_scalar("SELECT state FROM meeting_sessions WHERE id = $1")
         .bind(id)
         .fetch_one(&state.db)
@@ -205,25 +296,26 @@ async fn process(state: &AppState, id: Uuid) -> Result<Step> {
         current,
         MeetingState::Finalized | MeetingState::Transcribing
     ) {
-        current = set_state(state, id, current, Transition::StartTranscription).await?;
-        match transcribe_all(state, id).await? {
+        current = set_state(state, lease, current, Transition::StartTranscription).await?;
+        match transcribe_all(state, lease).await? {
             Step::Done => {}
             other => return Ok(other),
         }
         // Calari summarizes once with its own key, so Cap's summary step is a
         // pass-through; the state stays in the lifecycle for other receivers.
-        current = set_state(state, id, current, Transition::StartSummary).await?;
+        current = set_state(state, lease, current, Transition::StartSummary).await?;
     }
     if current == MeetingState::Summarizing {
-        current = set_state(state, id, current, Transition::StartDelivery).await?;
+        current = set_state(state, lease, current, Transition::StartDelivery).await?;
     }
     if current == MeetingState::Delivering {
-        return deliver(state, id, current).await;
+        return deliver(state, lease, current).await;
     }
     Ok(Step::Done)
 }
 
-async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
+async fn transcribe_all(state: &AppState, lease: Lease) -> Result<Step> {
+    let id = lease.id;
     let chunks = sqlx::query(
         "SELECT c.seq, c.object_key, c.container, c.start_ms, c.duration_ms, t.segments IS NOT NULL AS done
          FROM meeting_chunks c LEFT JOIN meeting_chunk_transcripts t ON t.meeting_id = c.meeting_id AND t.seq = c.seq
@@ -239,6 +331,7 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
             prompt = last_words(state, id, seq).await?;
             continue;
         }
+        lease.renew(state).await?;
         let bytes = state.store.get(c.get("object_key")).await?;
         let container =
             AudioContainer::from_extension(c.get("container")).context("unknown container")?;
@@ -260,6 +353,8 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
             Err(TranscribeError::Permanent(e)) => return Ok(Step::Fail(e)),
         };
         prompt = tail(&t.segments);
+        let mut tx = state.db.begin().await?;
+        lease.hold(&mut tx).await?;
         sqlx::query(
             "INSERT INTO meeting_chunk_transcripts (meeting_id, seq, provider, model, language, segments)
              VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
@@ -270,8 +365,9 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
         .bind(&t.model)
         .bind(&t.language)
         .bind(serde_json::to_value(&t.segments)?)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
     }
 
     // Assemble in chunk order with absolute offsets.
@@ -310,6 +406,8 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
         .map(|s| s.text.as_str())
         .collect::<Vec<_>>()
         .join("\n");
+    let mut tx = state.db.begin().await?;
+    lease.hold(&mut tx).await?;
     sqlx::query(
         "INSERT INTO meeting_transcripts (meeting_id, provider, model, language, segments, text, sha256)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -322,8 +420,9 @@ async fn transcribe_all(state: &AppState, id: Uuid) -> Result<Step> {
     .bind(serde_json::to_value(&segments)?)
     .bind(&text)
     .bind(transcript_digest(&segments))
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(Step::Done)
 }
 
@@ -355,8 +454,9 @@ async fn last_words(state: &AppState, id: Uuid, seq: i32) -> Result<Option<Strin
 /// sends identical content (and an identical content hash).
 async fn frozen_delivery(
     state: &AppState,
-    id: Uuid,
+    lease: Lease,
 ) -> Result<Option<(Uuid, String, String, Vec<u8>, String)>> {
+    let id = lease.id;
     let revision: i32 = sqlx::query_scalar("SELECT revision FROM meeting_sessions WHERE id = $1")
         .bind(id)
         .fetch_one(&state.db)
@@ -444,6 +544,8 @@ async fn frozen_delivery(
     let body = serde_json::to_vec(&payload)?;
     let body_sha = ids::sha256_hex(&body);
     let event_uuid = Uuid::parse_str(&event_id)?;
+    let mut tx = state.db.begin().await?;
+    lease.hold(&mut tx).await?;
     sqlx::query(
         "INSERT INTO meeting_deliveries (event_id, meeting_id, revision, key_id, delivery_url, body, body_sha256, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending') ON CONFLICT (meeting_id, revision) DO NOTHING",
@@ -455,8 +557,9 @@ async fn frozen_delivery(
     .bind(&integration.delivery_url)
     .bind(&body)
     .bind(&body_sha)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     // Re-read so a concurrent builder's row wins consistently.
     let r = sqlx::query("SELECT event_id, key_id, delivery_url, body, body_sha256 FROM meeting_deliveries WHERE meeting_id = $1 AND revision = $2")
         .bind(id)
@@ -472,15 +575,17 @@ async fn frozen_delivery(
     )))
 }
 
-async fn deliver(state: &AppState, id: Uuid, current: MeetingState) -> Result<Step> {
-    let Some((event_id, key_id, url, body, body_sha)) = frozen_delivery(state, id).await? else {
-        set_state(state, id, current, Transition::Delivered).await?;
+async fn deliver(state: &AppState, lease: Lease, current: MeetingState) -> Result<Step> {
+    let id = lease.id;
+    let Some((event_id, key_id, url, body, body_sha)) = frozen_delivery(state, lease).await? else {
+        set_state(state, lease, current, Transition::Delivered).await?;
         return Ok(Step::Done);
     };
     let integration = state
         .cfg
         .integration(&key_id)
         .with_context(|| format!("integration {key_id} is no longer configured"))?;
+    lease.renew(state).await?;
     let ts = Utc::now().timestamp();
     let nonce = signing::new_nonce();
     let sig = signing::sign(&integration.secret, Purpose::Delivery, ts, &nonce, &body)?;
@@ -514,13 +619,15 @@ async fn deliver(state: &AppState, id: Uuid, current: MeetingState) -> Result<St
             None,
         ),
     };
+    let mut tx = state.db.begin().await?;
+    lease.hold(&mut tx).await?;
     sqlx::query(
         "INSERT INTO meeting_delivery_attempts (event_id, status_code, error) VALUES ($1, $2, $3)",
     )
     .bind(event_id)
     .bind(code.map(i32::from))
     .bind(&error)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
     sqlx::query(
         "UPDATE meeting_deliveries SET attempts = attempts + 1, last_status_code = $2, last_error = $3 WHERE event_id = $1",
@@ -528,19 +635,23 @@ async fn deliver(state: &AppState, id: Uuid, current: MeetingState) -> Result<St
     .bind(event_id)
     .bind(code.map(i32::from))
     .bind(&error)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     match code {
         Some(c) if (200..300).contains(&c) => {
+            let mut tx = state.db.begin().await?;
+            lease.hold(&mut tx).await?;
             sqlx::query(
                 "UPDATE meeting_deliveries SET status = 'delivered', delivered_at = now(), receipt_id = $2, ack_status = $3 WHERE event_id = $1",
             )
             .bind(event_id)
             .bind(ack.as_ref().map(|a| a.receipt_id.clone()))
             .bind(ack.as_ref().map(|a| a.status.clone()))
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await?;
-            set_state(state, id, current, Transition::Delivered).await?;
+            tx.commit().await?;
+            set_state(state, lease, current, Transition::Delivered).await?;
             tracing::info!(meeting = %id, event = %event_id, "delivered to Calari");
             Ok(Step::Done)
         }
@@ -562,7 +673,7 @@ pub async fn retry_failed(state: &AppState, id: Uuid) -> Result<()> {
         .transition(Transition::Retry)
         .context("only failed meetings can be retried")?;
     sqlx::query(
-        "UPDATE meeting_sessions SET state = $2, attempts = 0, next_attempt_at = now(), failure = NULL WHERE id = $1",
+        "UPDATE meeting_sessions SET state = $2, attempts = 0, next_attempt_at = now(), failure = NULL, lease_until = NULL, lease_token = NULL WHERE id = $1",
     )
     .bind(id)
     .bind(next.as_str())

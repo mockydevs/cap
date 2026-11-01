@@ -519,7 +519,22 @@ pub async fn put_chunk(
             tracing::error!(error = %e, "storing chunk failed");
             ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "storage_unavailable")
         })?;
+    // Re-check under the meeting row lock that finalize and the abandon
+    // sweep also take: if the meeting stopped accepting audio while the
+    // object was being stored, the chunk is refused rather than silently
+    // missing from the transcript.
     let mut tx = state.db.begin().await?;
+    let current: String = sqlx::query_scalar(
+        "SELECT state FROM meeting_sessions WHERE id = $1 AND device_token_hash = $2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(&device.token_hash)
+    .fetch_one(&mut *tx)
+    .await?;
+    if !MeetingState::parse(&current).is_some_and(MeetingState::accepts_chunks) {
+        tx.rollback().await?;
+        return Err(ApiError::new(StatusCode::CONFLICT, "meeting_not_recording"));
+    }
     let inserted = sqlx::query(
         "INSERT INTO meeting_chunks (meeting_id, seq, sha256, size_bytes, container, object_key, start_ms, duration_ms)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING",

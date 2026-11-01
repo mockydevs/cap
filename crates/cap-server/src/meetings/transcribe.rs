@@ -237,9 +237,19 @@ async fn openai(
     })
 }
 
+/// Extra audio allowed beyond a chunk's declared duration (encoder padding).
+pub const DECODE_SLACK_MS: u64 = 10_000;
+const PCM_BYTES_PER_MS: u64 = 16 * 4; // 16 kHz mono f32
+const DECODE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+const STDERR_LIMIT: usize = 4_096;
+
 /// Decodes any supported container to 16 kHz mono f32 PCM with FFmpeg.
-pub async fn decode_pcm16k(ffmpeg: &str, bytes: &[u8]) -> Result<Vec<f32>> {
-    use tokio::io::AsyncWriteExt;
+///
+/// The output is read as a stream and capped at `max_ms` of audio: a small
+/// compressed file that decodes to far more audio than it claimed is
+/// rejected (not truncated) before it can use much memory or CPU.
+pub async fn decode_pcm16k(ffmpeg: &str, bytes: &[u8], max_ms: u64) -> Result<Vec<f32>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut child = tokio::process::Command::new(ffmpeg)
         .args([
             "-hide_banner",
@@ -264,28 +274,69 @@ pub async fn decode_pcm16k(ffmpeg: &str, bytes: &[u8]) -> Result<Vec<f32>> {
         .spawn()
         .with_context(|| format!("starting {ffmpeg}"))?;
     let mut stdin = child.stdin.take().context("ffmpeg stdin")?;
+    let mut stdout = child.stdout.take().context("ffmpeg stdout")?;
+    let mut stderr = child.stderr.take().context("ffmpeg stderr")?;
     let data = bytes.to_vec();
     let writer = tokio::spawn(async move {
         let _ = stdin.write_all(&data).await;
     });
-    let out = tokio::time::timeout(
-        std::time::Duration::from_secs(300),
-        child.wait_with_output(),
-    )
-    .await
-    .context("ffmpeg timed out")??;
+    // Keep only the start of stderr, but keep draining it so FFmpeg never blocks.
+    let errors = tokio::spawn(async move {
+        let mut kept = Vec::new();
+        let mut buf = [0u8; 4_096];
+        while let Ok(n) = stderr.read(&mut buf).await {
+            if n == 0 {
+                break;
+            }
+            let room = STDERR_LIMIT.saturating_sub(kept.len());
+            kept.extend_from_slice(&buf[..n.min(room)]);
+        }
+        String::from_utf8_lossy(&kept).into_owned()
+    });
+    let limit = max_ms.saturating_mul(PCM_BYTES_PER_MS) as usize;
+    let read = async {
+        let mut pcm = Vec::with_capacity(limit.min(8 << 20));
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            let n = stdout.read(&mut buf).await?;
+            if n == 0 {
+                return Ok::<_, anyhow::Error>(Some(pcm));
+            }
+            if pcm.len() + n > limit {
+                return Ok(None);
+            }
+            pcm.extend_from_slice(&buf[..n]);
+        }
+    };
+    let outcome = tokio::time::timeout(DECODE_TIMEOUT, read).await;
+    let pcm = match outcome {
+        Err(_) => {
+            let _ = child.kill().await;
+            bail!(
+                "decoding the chunk took longer than {} s",
+                DECODE_TIMEOUT.as_secs()
+            );
+        }
+        Ok(Err(e)) => {
+            let _ = child.kill().await;
+            return Err(e);
+        }
+        Ok(Ok(None)) => {
+            let _ = child.kill().await;
+            bail!("the chunk contains more than {max_ms} ms of audio, more than it declared");
+        }
+        Ok(Ok(Some(pcm))) => pcm,
+    };
+    let status = child.wait().await?;
     let _ = writer.await;
-    if !out.status.success() {
+    let stderr_text = errors.await.unwrap_or_default();
+    if !status.success() {
         bail!(
             "ffmpeg could not decode the chunk: {}",
-            String::from_utf8_lossy(&out.stderr)
-                .chars()
-                .take(300)
-                .collect::<String>()
+            stderr_text.chars().take(300).collect::<String>()
         );
     }
-    Ok(out
-        .stdout
+    Ok(pcm
         .chunks_exact(4)
         .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         .collect())
@@ -338,9 +389,13 @@ mod local {
             &self,
             input: &ChunkInput<'_>,
         ) -> Result<ChunkTranscript, TranscribeError> {
-            let pcm = decode_pcm16k(&self.ffmpeg, input.bytes)
-                .await
-                .map_err(|e| TranscribeError::Permanent(e.to_string()))?;
+            let pcm = decode_pcm16k(
+                &self.ffmpeg,
+                input.bytes,
+                input.duration_ms + DECODE_SLACK_MS,
+            )
+            .await
+            .map_err(|e| TranscribeError::Permanent(e.to_string()))?;
             let _permit = self
                 .gate
                 .acquire()
