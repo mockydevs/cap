@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import { Archivo } from "next/font/google";
+import localFont from "next/font/local";
 import "./styles.css";
 
-// Self-hosted at build time, so the product's type never waits on a third
-// party. 400 sets body copy, 600 the labels, 800 every heading.
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["400", "600", "800"],
+// Vendored Archivo Latin variable font: no third-party request during builds
+// or rendering. 400 sets body copy, 600 the labels, 800 every heading.
+const archivo = localFont({
+  src: "./fonts/archivo-latin-normal.woff2",
+  weight: "100 900",
+  style: "normal",
   variable: "--font-archivo",
   display: "swap",
 });
