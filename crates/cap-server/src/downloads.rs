@@ -484,6 +484,36 @@ async fn css() -> impl IntoResponse {
     )
 }
 
+async fn editorial_large() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/webp"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        include_bytes!("../../../apps/site/assets/cap-recording-editorial-v1-1200.webp").as_slice(),
+    )
+}
+
+async fn editorial_small() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/webp"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        include_bytes!("../../../apps/site/assets/cap-recording-editorial-v1-640.webp").as_slice(),
+    )
+}
+
+async fn calari_wordmark() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        include_bytes!("../../../apps/site/assets/calari-wordmark-navy.svg").as_slice(),
+    )
+}
+
 pub fn router<S: Clone + Send + Sync + 'static>(
     catalog: Arc<Catalog>,
     portal_url: Option<String>,
@@ -492,6 +522,15 @@ pub fn router<S: Clone + Send + Sync + 'static>(
         .route("/", get(homepage))
         .route("/index.html", get(homepage))
         .route("/styles.css", get(css))
+        .route(
+            "/assets/cap-recording-editorial-v1-1200.webp",
+            get(editorial_large),
+        )
+        .route(
+            "/assets/cap-recording-editorial-v1-640.webp",
+            get(editorial_small),
+        )
+        .route("/assets/calari-wordmark-navy.svg", get(calari_wordmark))
         .route("/portal", get(portal))
         .route("/api/downloads", get(self::catalog))
         .route("/downloads/{filename}", get(download));
@@ -512,5 +551,5 @@ pub fn router<S: Clone + Send + Sync + 'static>(
         .layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")))
         .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
         .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
-        .layer(tower_http::set_header::SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
+        .layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
 }
