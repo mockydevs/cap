@@ -71,9 +71,10 @@ developer account, payment and legal acceptance are root/Don steps (see "Steps")
 - Homepage / support URL: to be supplied by root (publisher site and a support contact).
 - Assets: `screenshots/1-sign-in.png`, `2-ready.png`, `3-recording.png`, `4-options.png`
   (1280x800, real extension pages with synthetic data, popup shown enlarged on a plain
-  background). Store icon: `src/icon.png` (128x128 PNG). It is a plain red circle;
-  a branded icon (96x96 artwork, 16 px transparent padding) is recommended but is a brand
-  decision. Promo tiles (440x280, 1400x560) are optional and not made.
+  background). Store icon: `src/icon.png` (128x128 PNG), the Cap mark
+  (`assets/branding/cap-mark.svg`: navy tile, white speech bubble, magenta bar) at 96x96
+  with 16 px transparent padding as the Store recommends. Toolbar sizes 16/32/48 are the
+  same mark, full bleed. Promo tiles (440x280, 1400x560) are optional and not made.
 
 ## Privacy practices tab
 
