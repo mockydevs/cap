@@ -1,12 +1,10 @@
-// Service worker: owns pairing, recording lifecycle and calendar reminders.
+// Service worker: owns sign-in, the recording lifecycle and delivery.
 // Chrome only allows tab capture after the user invokes the extension (popup,
-// toolbar click or keyboard shortcut), so a scheduled meeting gets a
-// reminder with one click to start, never a silent recording.
+// toolbar click or keyboard shortcut), so Cap never starts recording on its own.
 
 import { CALARI_ORIGIN, CAP_SERVER, CONNECT_PATH } from "./config.js";
 import {
   ApiError,
-  MARKER,
   SIGNAL,
   acceptableGaps,
   api,
@@ -116,6 +114,22 @@ async function signInWithCalari({ mode }) {
   return pair({ code, deviceName: "Chrome extension", verifier });
 }
 
+const MIC_BLOCKED =
+  "Cap is set to record your microphone, but Chrome has not allowed it. Open Options and click Allow microphone, or untick Record my microphone to record the meeting tab only.";
+
+// The recorder runs in a hidden page that cannot ask for the microphone, so
+// check before a meeting is created rather than silently recording the tab
+// alone. A recorder page opened before the person allowed the microphone
+// keeps being refused, so a refusal is retried once in a new page.
+async function checkMicrophone() {
+  await ensureOffscreen();
+  if ((await toOffscreen({ type: "mic-check" }))?.ok) return;
+  await chrome.offscreen.closeDocument().catch(() => {});
+  await ensureOffscreen();
+  if (!(await toOffscreen({ type: "mic-check" }))?.ok)
+    throw new Error(MIC_BLOCKED);
+}
+
 async function startRecording({ tabId, streamId, mode }) {
   const d = await device();
   if (!d) throw new Error("Sign in with Calari and choose a client first.");
@@ -123,6 +137,8 @@ async function startRecording({ tabId, streamId, mode }) {
   const server = await get("server");
   const tab = await chrome.tabs.get(tabId);
   const options = (await get("options")) ?? {};
+  const useMic = options.useMic !== false;
+  if (useMic) await checkMicrophone();
   const meeting = await api(server, d.token, "/v1/meetings", {
     method: "POST",
     json: {
@@ -149,7 +165,7 @@ async function startRecording({ tabId, streamId, mode }) {
     meetingId: meeting.id,
     server,
     token: d.token,
-    useMic: options.useMic !== false,
+    useMic,
   });
   if (!res?.ok) throw new Error(res?.error || "Could not start recording");
   // The meeting keeps the credential it was created with, so pairing with
@@ -343,79 +359,6 @@ async function recover() {
   }
 }
 
-// ---- Calendar: "[Cap: record audio|video]" in an event's description ----
-
-async function calendarToken(interactive) {
-  const r = await chrome.identity.getAuthToken({ interactive });
-  return typeof r === "string" ? r : r?.token;
-}
-
-async function syncCalendar(interactive = false) {
-  if (!(await get("calendarConnected")) && !interactive) return;
-  const token = await calendarToken(interactive).catch(() => null);
-  if (!token) return;
-  const now = new Date();
-  const url = new URL(
-    "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-  );
-  url.search = new URLSearchParams({
-    timeMin: now.toISOString(),
-    timeMax: new Date(now.getTime() + 24 * 3600_000).toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: "50",
-  });
-  const res = await fetch(url, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return;
-  await set({ calendarConnected: true });
-  const { items = [] } = await res.json();
-  const scheduled = {};
-  for (const ev of items) {
-    const m = MARKER.exec(ev.description || "");
-    const start = ev.start?.dateTime;
-    if (!m || !start) continue;
-    scheduled[ev.id] = {
-      title: ev.summary || "Meeting",
-      start,
-      mode: m[1].toLowerCase(),
-      link: ev.hangoutLink || null,
-    };
-    chrome.alarms.create(`meeting:${ev.id}`, {
-      when: Math.max(Date.now() + 1000, new Date(start).getTime() - 60_000),
-    });
-  }
-  await set({ scheduled });
-}
-
-async function remind(eventId) {
-  const ev = (await get("scheduled"))?.[eventId];
-  if (!ev) return;
-  await set({ pendingMode: ev.mode });
-  chrome.notifications.create(`remind:${eventId}`, {
-    type: "basic",
-    iconUrl: "src/icon.png",
-    requireInteraction: true,
-    title: `${ev.title} is starting`,
-    message: `Cap is set to record ${ev.mode === "video" ? "video" : "audio + transcript"}. Open the meeting, then click the Cap icon and Start (or press Alt+Shift+R).`,
-    buttons: ev.link ? [{ title: "Open meeting" }] : [],
-  });
-  if (ev.link) {
-    for (const tab of await chrome.tabs.query({
-      url: "https://meet.google.com/*",
-    })) {
-      chrome.tabs
-        .sendMessage(tab.id, {
-          type: "cap-scheduled",
-          mode: ev.mode,
-          title: ev.title,
-        })
-        .catch(() => {});
-    }
-  }
-}
-
 // ---- Events ----
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -441,10 +384,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       device: await device(),
       active: (await get("active")) ?? null,
       server: await get("server"),
-      pendingMode: await get("pendingMode"),
       unfinishedCount: Object.keys(await unfinished()).length,
     }),
-    "connect-calendar": () => syncCalendar(true),
     "offscreen-stopped": () => stopped(msg),
     "offscreen-save-failed": async () => {
       const active = await get("active");
@@ -511,9 +452,6 @@ chrome.notifications.onButtonClicked.addListener(async (id, index) => {
     if (canKeep && index === 0)
       await toOffscreen({ type: "signal", code: SIGNAL.keepRecording });
     else await toOffscreen({ type: "stop", reason: "user_stopped" });
-  } else if (id.startsWith("remind:")) {
-    const ev = (await get("scheduled"))?.[id.slice(7)];
-    if (ev?.link) chrome.tabs.create({ url: ev.link });
   }
 });
 
@@ -541,10 +479,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   const streamId = await chrome.tabCapture.getMediaStreamId({
     targetTabId: target.id,
   });
-  const mode =
-    (await get("pendingMode")) ??
-    (await get("options"))?.defaultMode ??
-    "audio";
+  const mode = (await get("options"))?.defaultMode ?? "audio";
   await startRecording({ tabId: target.id, streamId, mode }).catch((e) =>
     chrome.notifications.create({
       type: "basic",
@@ -556,14 +491,18 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "calendar-sync") syncCalendar();
-  else if (alarm.name === "retry-uploads") recover();
-  else if (alarm.name.startsWith("meeting:")) remind(alarm.name.slice(8));
+  if (alarm.name === "retry-uploads") recover();
 });
 
 chrome.runtime.onStartup.addListener(recover);
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create("calendar-sync", { periodInMinutes: 5 });
+  // Earlier builds also synced Google Calendar; that feature is removed.
+  chrome.alarms.clear("calendar-sync").catch(() => {});
+  chrome.storage.local.remove([
+    "calendarConnected",
+    "scheduled",
+    "pendingMode",
+  ]);
   chrome.alarms.create("retry-uploads", { periodInMinutes: 5 });
   recover();
 });

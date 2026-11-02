@@ -3,8 +3,6 @@
 // need a browser API lives in Rust (detector.wasm).
 
 export const CHUNK_MS = 30_000;
-export const MARKER = /\[Cap:\s*record\s+(audio|video)\]/i;
-export const markerText = (mode) => `[Cap: record ${mode}]`;
 export const MEETING_HOSTS = [
   "meet.google.com",
   "zoom.us",

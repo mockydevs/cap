@@ -38,9 +38,6 @@ async function render() {
     $("client").textContent =
       `Connected for ${who}. Expires ${new Date(s.device.expiresAt).toLocaleString()}.`;
   }
-  if (s.pendingMode)
-    document.querySelector(`input[name=mode][value=${s.pendingMode}]`).checked =
-      true;
 }
 
 $("signinBtn").onclick = async () => {

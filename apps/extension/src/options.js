@@ -12,11 +12,6 @@ async function load() {
   $("micState").textContent = perm
     ? `Microphone permission: ${perm.state}`
     : "";
-  const { calendarConnected } =
-    await chrome.storage.local.get("calendarConnected");
-  $("calState").textContent = calendarConnected
-    ? "Connected."
-    : "Not connected.";
 }
 
 async function save() {
@@ -42,13 +37,6 @@ $("micBtn").onclick = async () => {
     return;
   }
   load();
-};
-
-$("calBtn").onclick = async () => {
-  const r = await chrome.runtime.sendMessage({ type: "connect-calendar" });
-  $("calState").textContent = r.ok
-    ? "Connected."
-    : `Could not connect: ${r.error}`;
 };
 
 $("unpairBtn").onclick = async () => {

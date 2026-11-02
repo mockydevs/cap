@@ -6,6 +6,10 @@
 # Local test builds can point at other servers (never use these overrides
 # for a release):
 #   CAP_SERVER_URL=http://127.0.0.1:8788 CALARI_ORIGIN=http://127.0.0.1:3000 ./build.sh
+#
+# Chrome Web Store upload: STORE=1 ./build.sh also writes
+# target/extension/cap-extension-store_<version>.zip without the manifest
+# "key" (the Store assigns the item's own ID; see docs/chrome-web-store/).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
@@ -36,3 +40,24 @@ rm -f "$out/cap-extension.zip"
 (cd "$out/unpacked" && zip -qr "$out/cap-extension.zip" . -x '*.DS_Store')
 echo "$out/unpacked"
 echo "$out/cap-extension.zip"
+if [[ -n "${STORE:-}" ]]; then
+  if [[ -n "${CAP_SERVER_URL:-}${CALARI_ORIGIN:-}" ]]; then
+    echo "STORE=1 cannot be combined with test server overrides" >&2
+    exit 1
+  fi
+  store="$out/store"
+  rm -rf "$store" && cp -r "$out/unpacked" "$store"
+  version="$(python3 - "$store/manifest.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m.pop("key", None)
+open(p, "w").write(json.dumps(m, indent=2) + "\n")
+print(m["version"])
+PY
+)"
+  zip_path="$out/cap-extension-store_${version}.zip"
+  rm -f "$zip_path"
+  (cd "$store" && TZ=UTC find . -type f ! -name '.DS_Store' -exec touch -d '2026-01-01T00:00:00Z' {} + && find . -type f ! -name '.DS_Store' | LC_ALL=C sort | zip -qX "$zip_path" -@)
+  echo "$zip_path"
+fi

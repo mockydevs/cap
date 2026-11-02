@@ -1,4 +1,4 @@
-// Records the captured tab (plus the user's microphone, if granted) in
+// Records the captured tab (plus the user's microphone, when asked for) in
 // standalone 30-second chunks, keeps the call audible, and asks the Rust
 // detector (detector.wasm) whether to warn or stop.
 
@@ -13,6 +13,8 @@ import {
 } from "./shared.js";
 
 let rec = null; // current recording session
+const MIC_FAILED =
+  "Cap could not open your microphone, so it did not start recording. Check the microphone in Cap options, or untick Record my microphone to record the meeting tab only.";
 const SAVE_FAILURE =
   "Recording stopped, but browser storage could not save all audio. Keep Chrome open, free disk space, then click Retry saving. Unsaved audio is kept in this browser session.";
 
@@ -65,13 +67,13 @@ async function start(msg) {
       mic = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
-      ctx.createMediaStreamSource(mic).connect(mix); // not to speakers: no echo
     } catch {
-      chrome.runtime.sendMessage({
-        type: "offscreen-notice",
-        text: "Microphone not available; recording the meeting tab only. Grant it in Cap options.",
-      });
+      // Never record the tab alone when the person asked for their voice too.
+      for (const t of tab.getTracks()) t.stop();
+      await ctx.close().catch(() => {});
+      throw new Error(MIC_FAILED);
     }
+    ctx.createMediaStreamSource(mic).connect(mix); // not to speakers: no echo
   }
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
@@ -281,6 +283,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       case "start":
         await start(msg);
         return { ok: true };
+      case "mic-check":
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          for (const t of s.getTracks()) t.stop();
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: String(e?.name ?? e) };
+        }
       case "signal":
         signal(msg.code);
         return { ok: true };

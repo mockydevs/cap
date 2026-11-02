@@ -10,6 +10,9 @@ let requests;
 let offscreenReply;
 let responseStatus;
 let fetchHandler;
+let toOffscreen;
+let offscreenOpen;
+let offscreenCreated;
 const event = () => ({ addListener() {} });
 globalThis.chrome = {
   storage: {
@@ -38,15 +41,25 @@ globalThis.chrome = {
     },
     onStartup: event(),
     onInstalled: event(),
-    async sendMessage() {
-      return offscreenReply;
+    async sendMessage(message) {
+      toOffscreen.push(message);
+      return typeof offscreenReply === "function"
+        ? offscreenReply(message)
+        : offscreenReply;
     },
   },
   notifications: { onButtonClicked: event() },
   action: { setBadgeText() {}, setBadgeBackgroundColor() {} },
   offscreen: {
     async hasDocument() {
-      return false;
+      return offscreenOpen;
+    },
+    async createDocument() {
+      offscreenOpen = true;
+      offscreenCreated++;
+    },
+    async closeDocument() {
+      offscreenOpen = false;
     },
   },
   tabs: {
@@ -100,6 +113,9 @@ beforeEach(() => {
   offscreenReply = { ok: true };
   responseStatus = 200;
   fetchHandler = null;
+  toOffscreen = [];
+  offscreenOpen = false;
+  offscreenCreated = 0;
 });
 
 test("Calari sign-in binds redemption to state, exact callback and S256 verifier", async () => {
@@ -293,4 +309,63 @@ test("crash recovery never finalizes a persisted unsaved-audio marker", async ()
     requests.map((r) => r.url.split("/").at(-1)),
     ["redeem"],
   );
+});
+
+// The recorder page cannot ask for the microphone, so Start checks first and
+// never creates a meeting that would silently record the tab alone.
+const meetingRequests = () =>
+  requests.filter((r) => String(r.url).endsWith("/v1/meetings"));
+function readyToStart(options) {
+  store.device = { token: "test-only", expiresAt: "2099-01-01" };
+  store.server = "https://meetings.calari.tech";
+  if (options) store.options = options;
+}
+
+test("Start refuses before creating a meeting when the microphone is not allowed", async () => {
+  readyToStart();
+  offscreenReply = (m) =>
+    m.type === "mic-check"
+      ? { ok: false, error: "NotAllowedError" }
+      : { ok: true };
+  const response = await send({ type: "start", tabId: 1, mode: "audio" });
+  assert.equal(response.ok, false);
+  assert.match(response.error, /has not allowed it/);
+  assert.equal(meetingRequests().length, 0);
+  // Retried once in a new recorder page, then gave up.
+  assert.equal(toOffscreen.filter((m) => m.type === "mic-check").length, 2);
+  assert.equal(offscreenCreated, 2);
+  assert.equal(
+    toOffscreen.some((m) => m.type === "start"),
+    false,
+  );
+  assert.equal(store.active, undefined);
+});
+
+test("a recorder page opened before the grant is replaced and recording starts", async () => {
+  readyToStart();
+  let checks = 0;
+  offscreenReply = (m) =>
+    m.type === "mic-check" ? { ok: ++checks > 1 } : { ok: true };
+  fetchHandler = async () =>
+    new Response(JSON.stringify({ id: "synthetic-meeting" }), { status: 200 });
+  const response = await send({ type: "start", tabId: 1, mode: "audio" });
+  assert.equal(response.ok, true);
+  assert.equal(offscreenCreated, 2);
+  assert.equal(meetingRequests().length, 1);
+  const start = toOffscreen.find((m) => m.type === "start");
+  assert.equal(start.useMic, true);
+  assert.equal(store.active.meetingId, "synthetic-meeting");
+});
+
+test("with the microphone turned off, Start records the tab without a check", async () => {
+  readyToStart({ useMic: false });
+  fetchHandler = async () =>
+    new Response(JSON.stringify({ id: "synthetic-meeting" }), { status: 200 });
+  const response = await send({ type: "start", tabId: 1, mode: "audio" });
+  assert.equal(response.ok, true);
+  assert.equal(
+    toOffscreen.some((m) => m.type === "mic-check"),
+    false,
+  );
+  assert.equal(toOffscreen.find((m) => m.type === "start").useMic, false);
 });
