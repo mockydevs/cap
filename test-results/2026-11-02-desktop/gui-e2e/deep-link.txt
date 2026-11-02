@@ -1,0 +1,13 @@
+== registered handler: cap-desktop-handler.desktop
+cap-desktop-handler.desktop
+mimeinfo.cache
+Exec="/usr/bin/cap-desktop" %u
+MimeType=x-scheme-handler/cap
+Exec=cap-desktop
+MimeType=x-scheme-handler/cap
+xdg-open=4
+1
+Default application for ?x-scheme-handler/cap?: cap-desktop-handler.desktop
+Registered applications:
+gio-open=0
+cap-desktop processes after link: 2
