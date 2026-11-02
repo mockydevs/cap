@@ -1,0 +1,24 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.63s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 2 tests
+test linux_records_the_microphone_and_the_speakers_through_pulse ... 
+thread 'linux_records_the_microphone_and_the_speakers_through_pulse' (580) panicked at crates/meeting-recorder/tests/capture.rs:858:5:
+audio 12713 ms runs past the meeting's 10302 ms: Calari would reject the transcript
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test linux_video_records_the_screen_microphone_and_speakers_through_pulse ... 
+thread 'linux_video_records_the_screen_microphone_and_speakers_through_pulse' (646) panicked at crates/meeting-recorder/tests/capture.rs:858:5:
+audio 13741 ms runs past the meeting's 10330 ms: Calari would reject the transcript
+FAILED
+
+failures:
+
+failures:
+    linux_records_the_microphone_and_the_speakers_through_pulse
+    linux_video_records_the_screen_microphone_and_speakers_through_pulse
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 14 filtered out; finished in 27.50s
+
+error: test failed, to rerun pass `-p cap-meeting-recorder --test capture`

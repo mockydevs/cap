@@ -485,13 +485,14 @@ impl Session {
         // device is reported without leaving an empty meeting behind.
         let (inputs, mut system_audio) = start_system_audio(&opts.inputs)?;
 
+        // The audio timeline starts when FFmpeg starts, so the meeting starts
+        // then too, not after the readiness wait below: otherwise the audio
+        // is longer than the meeting and Calari rejects its transcript.
+        let capture_started = chrono::Utc::now();
         // Several PulseAudio streams start at different times; align them on
-        // the wall clock from just before FFmpeg starts.
-        let origin = ffmpeg::wants_alignment(&inputs, opts.mode).then(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0.0, |d| d.as_secs_f64())
-        });
+        // the wall clock from that same instant.
+        let origin = ffmpeg::wants_alignment(&inputs, opts.mode)
+            .then(|| capture_started.timestamp_micros() as f64 / 1_000_000.0);
         let mut child = Command::new(&opts.ffmpeg)
             .args(ffmpeg::args_aligned(
                 &inputs,
@@ -545,7 +546,7 @@ impl Session {
         let meeting = match opts.client.create_meeting(&CreateMeetingRequest {
             title: opts.title.chars().take(200).collect(),
             idempotency_key: uuid::Uuid::new_v4().to_string(),
-            started_at: chrono::Utc::now(),
+            started_at: capture_started,
             capture_mode: opts.mode,
             provider_hint: None,
             meeting_url: None,

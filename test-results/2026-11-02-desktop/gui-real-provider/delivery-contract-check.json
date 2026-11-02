@@ -1,0 +1,33 @@
+{
+  "accepted": false,
+  "issues": [
+    {
+      "path": "",
+      "message": "Transcript segments are not complete and ordered"
+    }
+  ],
+  "meeting": {
+    "source": "desktop",
+    "stop_reason": "user_stopped",
+    "partial": false,
+    "duration_ms": 60074,
+    "started_at": "2026-11-02T03:24:36.575097Z",
+    "ended_at": "2026-11-02T03:25:36.649765Z",
+    "cap_url_https": true,
+    "title": "Desktop real-provider briefing",
+    "provider_hint": null
+  },
+  "context": {
+    "pairing_kind": "staff_client",
+    "capture_mode": "audio"
+  },
+  "client_id": true,
+  "intake_receipt_id": null,
+  "transcript": {
+    "provider": "cap-whisper",
+    "model": "ggml-base.en",
+    "segments": 7,
+    "chars": 1044,
+    "last_end_ms": 62532
+  }
+}

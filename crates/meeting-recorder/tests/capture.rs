@@ -854,6 +854,13 @@ fn pulse_marker_case(
         .map(|s| (s.start_ms, s.end_ms))
         .collect();
     let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
+    // Calari's rule: the transcript may not run more than 1 s past the
+    // meeting's own length (ended_at - started_at), or it rejects it.
+    assert!(
+        recorded <= p.meeting.duration_ms + 1_000,
+        "audio {recorded} ms runs past the meeting's {} ms: Calari would reject the transcript",
+        p.meeting.duration_ms
+    );
     let samples = decoded_segments(&e.ffmpeg, &d);
     let at = |from: f64, to: f64| {
         let n = samples.len();

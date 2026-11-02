@@ -75,11 +75,11 @@ export function MeetingPanel({
           setWarning(null);
           dispatch({ type: "stopped", id: ev.meeting_id });
           setMessage(
-            `${stopText[ev.reason] ?? "Recording stopped."} Uploading to Calari…`,
+            `${stopText[ev.reason] ?? "Recording stopped."} Uploading to Cap…`,
           );
         } else if (ev.kind === "finalized") {
           setMessage(
-            "Sent to Calari. The transcript will appear in the client's portal.",
+            "Uploaded to Cap. The transcript is being made and then sent to Calari.",
           );
         } else if (ev.kind === "failed") {
           setMessage(
@@ -316,7 +316,7 @@ export function MeetingPanel({
             disabled={busy}
             onClick={() => void run(() => meeting.stop())}
           >
-            Stop and send to Calari
+            Stop and upload
           </button>
         </div>
       )}
