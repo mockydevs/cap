@@ -111,6 +111,36 @@
       store.clearAll();
     });
 
+  // ---- Expanded rows load their notes and transcript start on first open. ----
+  for (const det of document.querySelectorAll("details.meeting")) {
+    det.addEventListener("toggle", async () => {
+      const slot = det.querySelector("[data-preview]");
+      if (!det.open || !slot || slot.dataset.loaded) return;
+      slot.dataset.loaded = "1";
+      slot.setAttribute("aria-busy", "true");
+      slot.innerHTML = '<p class="muted small">Loading…</p>';
+      try {
+        const res = await fetch(slot.dataset.preview, {
+          credentials: "same-origin",
+        });
+        if (res.redirected) {
+          slot.innerHTML =
+            '<p class="muted">Your session ended. Reload to sign in again.</p>';
+        } else if (!res.ok) {
+          throw new Error(String(res.status));
+        } else {
+          // Server-rendered with every value escaped.
+          slot.innerHTML = await res.text();
+        }
+      } catch {
+        delete slot.dataset.loaded;
+        slot.innerHTML =
+          '<p class="muted">Could not load the preview. Open the meeting instead.</p>';
+      }
+      slot.removeAttribute("aria-busy");
+    });
+  }
+
   // ---- Player: plays a meeting's parts back to back as one timeline and
   // lets transcript timestamps jump to the right part. ----
   const box = document.getElementById("playlist");

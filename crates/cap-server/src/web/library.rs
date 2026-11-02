@@ -353,6 +353,8 @@ pub struct NewNoteForm {
 enum AddOutcome {
     Added(Uuid),
     Duplicate(Uuid),
+    /// The form's key was already used for a different note.
+    KeyReused,
     Archived,
     Full,
 }
@@ -422,15 +424,23 @@ pub async fn add_note(
         if archived {
             return Ok(AddOutcome::Archived);
         }
-        if let Some(existing) = sqlx::query_scalar::<_, Uuid>(
-            "SELECT id FROM library_notes WHERE meeting_id = $1 AND submit_key = $2",
+        // A replay of the same form (same text, same person) is the note
+        // already saved; anything else under that key is refused.
+        if let Some(existing) = sqlx::query(
+            "SELECT id, body, created_by FROM library_notes WHERE meeting_id = $1 AND submit_key = $2",
         )
         .bind(id)
         .bind(key)
         .fetch_optional(&mut *tx)
         .await?
         {
-            return Ok(AddOutcome::Duplicate(existing));
+            let same = existing.get::<String, _>("body") == body
+                && existing.get::<String, _>("created_by") == user.user_id;
+            return Ok(if same {
+                AddOutcome::Duplicate(existing.get("id"))
+            } else {
+                AddOutcome::KeyReused
+            });
         }
         let count: i64 = sqlx::query_scalar("SELECT count(*) FROM library_notes WHERE meeting_id = $1")
             .bind(id)
@@ -460,6 +470,7 @@ pub async fn add_note(
     .await;
     match res {
         Ok(AddOutcome::Added(n)) | Ok(AddOutcome::Duplicate(n)) => done(id, "note_added", &format!("note-{n}")),
+        Ok(AddOutcome::KeyReused) => problem(&state, &user, id, StatusCode::CONFLICT, "This form was already used to save a different note, so your text was not saved. It is kept in the box below; add it again.", draft()).await,
         Ok(AddOutcome::Archived) => problem(&state, &user, id, StatusCode::CONFLICT, "This meeting is archived. Restore it to add notes. Your text is kept below.", draft()).await,
         Ok(AddOutcome::Full) => problem(&state, &user, id, StatusCode::UNPROCESSABLE_ENTITY, &format!("A meeting can have at most {MAX_NOTES_PER_MEETING} notes. Add to an existing note instead."), draft()).await,
         Err(e) => ApiError::from(e).into_response(),

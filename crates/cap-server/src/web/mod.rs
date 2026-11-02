@@ -48,6 +48,7 @@ pub fn router() -> Router<AppState> {
         .route("/calendar/choice", post(crate::attendance::web::choice))
         .route("/meetings/{id}", get(pages::meeting))
         .route("/meetings/{id}/parts/{seq}", get(pages::part))
+        .route("/meetings/{id}/preview", get(pages::preview))
         .route("/meetings/{id}/title", post(library::rename))
         .route("/meetings/{id}/archive", post(library::archive))
         .route("/meetings/{id}/restore", post(library::restore))
@@ -67,11 +68,11 @@ pub fn router() -> Router<AppState> {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
         ))
-        // `same-origin`, not `no-referrer`: with `no-referrer` browsers send
-        // `Origin: null` on same-site form posts, which the CSRF origin check
-        // refuses. Other sites still receive no referrer.
         .layer(SetResponseHeaderLayer::overriding(
             header::REFERRER_POLICY,
+            // Not "no-referrer": with it Chromium sends `Origin: null` on
+            // same-origin form posts, and every Origin check refuses them.
+            // same-origin still sends nothing to other sites.
             HeaderValue::from_static("same-origin"),
         ))
         .layer(SetResponseHeaderLayer::overriding(

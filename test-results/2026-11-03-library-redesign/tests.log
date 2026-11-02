@@ -1,32 +1,32 @@
    Compiling cap-server v0.1.0 (/home/don/code/cap-library-redesign/crates/cap-server)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.04s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.37s
      Running unittests src/lib.rs (target/debug/deps/cap_server-f886e71ae3aa510e)
 
 running 26 tests
 test attendance::schedule::tests::pairing_request_ids_are_stable_per_version ... ok
-test calendar::tests::ambiguous_or_unknown_attendees_never_guess ... ok
-test attendance::crypto::tests::round_trip_and_binding ... ok
-test attendance::web::tz_tests::eastern_time_follows_daylight_saving ... ok
-test calendar::tests::worker_destination_is_a_meet_code_not_a_url ... ok
-test google_calendar::tests::cancelled_events_need_no_time_or_attendees ... ok
-test web::library::tests::notes_keep_lines_but_drop_controls ... ok
-test attendance::schedule::tests::plans ... ok
-test google_calendar::tests::timestamps_preserve_offsets_and_self_decline ... ok
-test attendance::schedule::tests::routing_is_explicit_or_unambiguous ... ok
 test attendance::sync::tests::run_tokens_round_trip ... ok
+test attendance::crypto::tests::round_trip_and_binding ... ok
+test calendar::tests::ambiguous_or_unknown_attendees_never_guess ... ok
+test attendance::web::tz_tests::eastern_time_follows_daylight_saving ... ok
+test attendance::schedule::tests::routing_is_explicit_or_unambiguous ... ok
+test config::tests::debug_output_redacts_secrets ... ok
+test config::tests::development_allows_local_http_and_test_fixture ... ok
+test google_calendar::event_tests::meet_link_falls_back_to_video_entry_point_and_self_is_excluded ... ok
+test config::tests::calendar_rules_fail_closed ... ok
+test attendance::schedule::tests::plans ... ok
+test google_calendar::tests::cancelled_events_need_no_time_or_attendees ... ok
 test calendar::tests::disconnect_cancel_decline_and_past_events_cancel ... ok
 test config::tests::production_rules_fail_loudly ... ok
-test google_calendar::event_tests::meet_link_falls_back_to_video_entry_point_and_self_is_excluded ... ok
-test config::tests::debug_output_redacts_secrets ... ok
+test calendar::tests::worker_destination_is_a_meet_code_not_a_url ... ok
 test meetings::worker::tests::backoff_grows_and_caps ... ok
-test config::tests::calendar_rules_fail_closed ... ok
-test web::pages::tests::repeated_lines_collapse_for_display ... ok
 test google_calendar::event_tests::only_accepted_or_organised_events_count ... ok
-test web::library::tests::titles_are_one_clean_line ... ok
-test web::pages::tests::byte_ranges ... ok
+test google_calendar::tests::timestamps_preserve_offsets_and_self_decline ... ok
 test meetings::worker::tests::prompt_tail_is_bounded ... ok
+test web::library::tests::titles_are_one_clean_line ... ok
+test web::library::tests::notes_keep_lines_but_drop_controls ... ok
 test web::pages::tests::only_web_links_are_clickable ... ok
-test config::tests::development_allows_local_http_and_test_fixture ... ok
+test web::pages::tests::repeated_lines_collapse_for_display ... ok
+test web::pages::tests::byte_ranges ... ok
 test web::pages::tests::eastern_times_name_the_zone ... ok
 test store::tests::filesystem_round_trip_and_rejects_traversal ... ok
 
@@ -42,72 +42,74 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 8 tests
 test calendar_is_admin_only_unless_widened ... ok
-test sync_resumes_pages_dedupes_reschedules_and_cancels ... ok
-test concurrent_reconcile_creates_one_attendance ... ok
 test oauth_is_bound_to_state_pkce_session_and_browser ... ok
-test revocation_refusal_and_crash_recovery_fail_closed ... ok
 test unanswered_invites_never_bring_the_bot_and_disconnect_forgets_events ... ok
 test scheduled_meeting_is_prepared_claimed_recorded_and_delivered ... ok
+test concurrent_reconcile_creates_one_attendance ... ok
+test sync_resumes_pages_dedupes_reschedules_and_cancels ... ok
+test revocation_refusal_and_crash_recovery_fail_closed ... ok
 test endless_recurring_series_stays_bounded_and_rolls_in ... ok
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.93s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
 
      Running tests/downloads.rs (target/debug/deps/downloads-5263b28d5adc132c)
 
 running 12 tests
 test missing_catalog_has_no_downloads_or_invented_versions ... ok
 test oversized_or_unknown_schema_manifest_fails_before_any_download_is_exposed ... ok
-test server_closes_public_credential_routes_and_preserves_universal_portal_target ... ok
-test manifest_and_installer_symlinks_are_rejected ... ok
 test editorial_assets_have_explicit_bounded_routes_without_directory_serving ... ok
-test pending_entries_publish_no_metadata_and_extension_is_not_an_artifact_platform ... ok
+test manifest_and_installer_symlinks_are_rejected ... ok
+test server_closes_public_credential_routes_and_preserves_universal_portal_target ... ok
 test server_rendered_hub_works_without_javascript_and_has_only_real_download_links ... ok
-test replaced_or_changed_published_file_fails_closed ... ok
-test actual_get_head_range_and_digest_match_verified_bytes ... ok
 test invalid_or_unlisted_names_never_browse_the_directory ... ok
+test pending_entries_publish_no_metadata_and_extension_is_not_an_artifact_platform ... ok
+test replaced_or_changed_published_file_fails_closed ... ok
 test available_windows_installer_discloses_unsigned_status_without_inventing_mac_readiness ... ok
+test actual_get_head_range_and_digest_match_verified_bytes ... ok
 test malformed_names_hash_sizes_duplicates_and_unknown_fields_are_rejected ... ok
 
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
      Running tests/library.rs (target/debug/deps/library-3057b816dd684dcf)
 
-running 12 tests
+running 14 tests
 test fixture_server_for_screenshots ... ignored, manual screenshot fixture
-test a_sign_in_without_a_cap_role_is_refused ... ok
-test staff_sign_in_through_calari_and_browse_meetings ... ok
 test an_idle_cookie_starts_a_fresh_sign_in ... ok
-test library_edits_are_refused_without_a_valid_form_role_or_tenant ... ok
-test every_request_is_checked_with_calari_and_fails_closed ... ok
-test the_list_filters_real_data_and_shows_eastern_time ... ok
-test notes_can_be_added_edited_and_deleted_with_version_checks ... ok
-test idle_sessions_expire_and_sign_out_needs_the_form_token ... ok
 test sign_in_codes_and_states_are_single_use_and_bound ... ok
+test a_sign_in_without_a_cap_role_is_refused ... ok
+test the_list_filters_real_data_and_shows_eastern_time ... ok
+test a_reused_note_form_with_different_text_is_refused ... ok
+test idle_sessions_expire_and_sign_out_needs_the_form_token ... ok
+test staff_sign_in_through_calari_and_browse_meetings ... ok
 test a_callback_link_only_works_in_the_browser_that_started_it ... ok
+test notes_can_be_added_edited_and_deleted_with_version_checks ... ok
+test library_edits_are_refused_without_a_valid_form_role_or_tenant ... ok
 test rename_archive_and_restore_never_touch_the_recording ... ok
+test the_list_pages_with_a_stable_cursor_and_previews_are_checked ... ok
+test every_request_is_checked_with_calari_and_fails_closed ... ok
 
-test result: ok. 11 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.61s
+test result: ok. 13 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.88s
 
      Running tests/meetings.rs (target/debug/deps/meetings-4baf6d43401ec464)
 
 running 15 tests
 test overlong_compressed_audio_is_rejected_while_decoding ... ok
-test pkce_bound_pairings_need_the_verifier ... ok
-test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
-test full_flow_delivers_a_signed_ordered_transcript ... ok
-test an_expired_worker_lease_is_fenced_out ... ok
-test only_a_same_client_re_pairing_can_adopt_an_expired_meeting ... ok
-test transcription_retries_never_repeat_finished_chunks ... ok
-test chunks_are_validated_and_finalize_reports_gaps ... ok
-test pairing_retries_are_idempotent_and_codes_single_use ... ok
 test pairing_requests_are_authenticated_fresh_and_tenant_bound ... ok
-test delivery_retries_resend_identical_bytes_with_fresh_nonces ... ok
+test transcription_retries_never_repeat_finished_chunks ... ok
+test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
 test device_tokens_only_reach_their_own_meetings ... ok
+test pairing_retries_are_idempotent_and_codes_single_use ... ok
+test delivery_retries_resend_identical_bytes_with_fresh_nonces ... ok
+test only_a_same_client_re_pairing_can_adopt_an_expired_meeting ... ok
+test pkce_bound_pairings_need_the_verifier ... ok
 test internal_team_meetings_carry_no_client ... ok
+test an_expired_worker_lease_is_fenced_out ... ok
+test full_flow_delivers_a_signed_ordered_transcript ... ok
+test chunks_are_validated_and_finalize_reports_gaps ... ok
 test rejected_delivery_fails_visibly_and_operator_can_retry ... ok
 test an_upload_racing_finalize_or_abandon_is_refused ... ok
 
-test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s
 
    Doc-tests cap_server
 

@@ -1278,8 +1278,22 @@ async fn the_list_filters_real_data_and_shows_eastern_time() {
     let (_, _, list) = h.get("/meetings", Some(&cookie)).await;
     assert!(list.contains("2 meetings"));
     assert!(list.contains("<details class=\"meeting\">"), "rows expand");
-    assert!(list.contains("×3"), "repeated lines collapse");
-    assert_eq!(list.matches("Thank you.").count(), 1);
+    assert!(
+        !list.contains("Thank you.") && !list.contains("photos"),
+        "transcripts are not prefetched into the list"
+    );
+    assert!(list.contains(&format!("data-preview=\"/meetings/{a}/preview\"")));
+    let (s, hd, preview) = h
+        .get(&format!("/meetings/{a}/preview"), Some(&cookie))
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(hd[header::CONTENT_TYPE]
+        .to_str()
+        .unwrap()
+        .starts_with("text/html"));
+    assert!(preview.contains("×3"), "repeated lines collapse");
+    assert_eq!(preview.matches("Thank you.").count(), 1);
+    assert!(preview.contains("No notes yet") && !preview.contains("<html"));
     assert!(
         list.contains("Wednesday, Jul 1") && list.contains("9:05 AM EDT"),
         "Eastern time"
@@ -1510,5 +1524,125 @@ async fn fixture_server_for_screenshots() {
     let app = router(h.state.clone());
     let secs: u64 = std::env::var("CAP_FIXTURE_SECS").map_or(120, |s| s.parse().unwrap());
     let _ = tokio::time::timeout(Duration::from_secs(secs), axum::serve(l, app)).await;
+    h.drop_db().await;
+}
+
+#[tokio::test]
+async fn the_list_pages_with_a_stable_cursor_and_previews_are_checked() {
+    let Some(h) = H::new().await else { return };
+    let mut all = std::collections::BTreeSet::new();
+    for i in 0..(cap_page_size() + 5) {
+        all.insert(seed_meeting(&h, TENANT, &format!("Meeting {i}")).await);
+    }
+    // Same start time for all: the id breaks ties, so nothing repeats or drops.
+    sqlx::query("UPDATE meeting_sessions SET started_at = '2026-10-01T14:00:00Z'")
+        .execute(&h.state.db)
+        .await
+        .unwrap();
+    let theirs = seed_meeting(&h, OTHER_TENANT, "Theirs").await;
+    let cookie = h.sign_in().await;
+    let ids = |page: &str| -> Vec<Uuid> {
+        page.split("data-preview=\"/meetings/")
+            .skip(1)
+            .map(|s| Uuid::parse_str(&s[..36]).unwrap())
+            .collect()
+    };
+    let (_, _, first) = h.get("/meetings?q=Meeting", Some(&cookie)).await;
+    let page1 = ids(&first);
+    assert_eq!(page1.len() as i64, cap_page_size());
+    assert!(first.contains(&format!(
+        "{} of {} meetings match",
+        cap_page_size() + 5,
+        cap_page_size() + 5
+    )));
+    let older = first
+        .split("href=\"")
+        .find(|s| s.contains("before="))
+        .unwrap()
+        .split('"')
+        .next()
+        .unwrap()
+        .replace("&amp;", "&");
+    assert!(older.contains("q=Meeting"), "filters are kept: {older}");
+    let (_, _, second) = h.get(&older, Some(&cookie)).await;
+    let page2 = ids(&second);
+    assert_eq!(page2.len(), 5);
+    assert!(!second.contains("Older meetings") && second.contains("Newest"));
+    let seen: std::collections::BTreeSet<Uuid> = page1.iter().chain(&page2).copied().collect();
+    assert_eq!(seen, all, "every meeting exactly once across pages");
+    assert!(!seen.contains(&theirs));
+    // A garbage cursor is ignored, not an error.
+    assert_eq!(
+        h.get("/meetings?before=nonsense", Some(&cookie)).await.0,
+        StatusCode::OK
+    );
+
+    // Previews: other tenant 404, staff 403, signed out to sign-in.
+    assert_eq!(
+        h.get(&format!("/meetings/{theirs}/preview"), Some(&cookie))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        h.get(&format!("/meetings/{}/preview", page1[0]), None)
+            .await
+            .0,
+        StatusCode::SEE_OTHER
+    );
+    h.calari.lock().unwrap().status_role = "staff".into();
+    assert_eq!(
+        h.get(&format!("/meetings/{}/preview", page1[0]), Some(&cookie))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    h.drop_db().await;
+}
+
+fn cap_page_size() -> i64 {
+    50
+}
+
+#[tokio::test]
+async fn a_reused_note_form_with_different_text_is_refused() {
+    let Some(h) = H::new().await else { return };
+    let id = seed_meeting(&h, TENANT, "Kickoff").await;
+    let cookie = h.sign_in().await;
+    let (_, _, html) = h.get(&format!("/meetings/{id}"), Some(&cookie)).await;
+    let csrf = field(&html, "csrf");
+    let key = field(&html, "submit_key");
+    let add = |body: &'static str| {
+        let (csrf, key, cookie) = (csrf.clone(), key.clone(), cookie.clone());
+        let h = &h;
+        async move {
+            h.post(
+                &format!("/meetings/{id}/notes"),
+                &cookie,
+                &[("csrf", &csrf), ("submit_key", &key), ("body", body)],
+                None,
+            )
+            .await
+        }
+    };
+    assert_eq!(add("First text").await.0, StatusCode::SEE_OTHER);
+    assert_eq!(
+        add("First text").await.0,
+        StatusCode::SEE_OTHER,
+        "same text replays"
+    );
+    let (s, _, page) = add("Different <text>").await;
+    assert_eq!(s, StatusCode::CONFLICT);
+    assert!(
+        page.contains("already used to save a different note")
+            && page.contains("Different &lt;text&gt;")
+    );
+    assert_eq!(note_count(&h, id).await, 1);
+    let body: String = sqlx::query_scalar("SELECT body FROM library_notes WHERE meeting_id = $1")
+        .bind(id)
+        .fetch_one(&h.state.db)
+        .await
+        .unwrap();
+    assert_eq!(body, "First text");
     h.drop_db().await;
 }

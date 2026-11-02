@@ -302,6 +302,9 @@ pub struct ListQuery {
     kind: String,
     #[serde(default)]
     view: String,
+    /// Cursor: `<started_at micros>_<meeting id>` of the last row seen.
+    #[serde(default)]
+    before: String,
 }
 
 const STATUS_FILTERS: [(&str, &str); 4] = [
@@ -322,7 +325,59 @@ fn status_states(filter: &str) -> Vec<String> {
     s.iter().map(|s| (*s).to_owned()).collect()
 }
 
-const LIST_LIMIT: i64 = 200;
+/// Meetings per page. Older ones are reached with a stable cursor, so none
+/// are hidden however many there are.
+pub(crate) const PAGE_SIZE: i64 = 50;
+
+fn cursor(started: DateTime<Utc>, id: Uuid) -> String {
+    format!("{}_{id}", started.timestamp_micros())
+}
+
+fn parse_cursor(raw: &str) -> Option<(DateTime<Utc>, Uuid)> {
+    let (t, id) = raw.split_once('_')?;
+    Some((
+        DateTime::from_timestamp_micros(t.parse().ok()?)?,
+        Uuid::parse_str(id).ok()?,
+    ))
+}
+
+/// Shared by the page and its count: tenant, view and filters ($1–$6).
+const LIST_FILTERS: &str = "FROM meeting_sessions m JOIN meeting_pairings p ON p.id = m.pairing_id
+     LEFT JOIN library_meetings lm ON lm.meeting_id = m.id
+     LEFT JOIN meeting_transcripts t ON t.meeting_id = m.id
+     WHERE p.tenant_id = $1
+       AND (lm.archived_at IS NOT NULL) = $2
+       AND ($3 = '' OR m.title ILIKE $4 OR lm.display_title ILIKE $4 OR p.client_display_name ILIKE $4
+            OR t.text ILIKE $4
+            OR EXISTS (SELECT 1 FROM library_notes n WHERE n.meeting_id = m.id AND n.body ILIKE $4))
+       AND (cardinality($5::text[]) = 0 OR m.state = ANY($5))
+       AND ($6 = '' OR (p.pairing_kind = 'internal_team') = ($6 = 'internal'))";
+
+fn list_url(archived: bool, q: &str, status: &str, kind: &str, before: Option<&str>) -> String {
+    let mut u = reqwest::Url::parse("http://x/meetings").unwrap_or_else(|_| unreachable!());
+    {
+        let mut qp = u.query_pairs_mut();
+        if archived {
+            qp.append_pair("view", "archived");
+        }
+        if !q.is_empty() {
+            qp.append_pair("q", q);
+        }
+        if !status.is_empty() {
+            qp.append_pair("status", status);
+        }
+        if !kind.is_empty() {
+            qp.append_pair("kind", kind);
+        }
+        if let Some(b) = before {
+            qp.append_pair("before", b);
+        }
+    }
+    match u.query() {
+        Some(qs) if !qs.is_empty() => format!("/meetings?{qs}"),
+        _ => "/meetings".to_owned(),
+    }
+}
 
 pub async fn meetings(
     State(state): State<AppState>,
@@ -343,6 +398,7 @@ pub async fn meetings(
         "client" | "internal" => query.kind.as_str(),
         _ => "",
     };
+    let before = parse_cursor(&query.before);
     let filtered = !q.is_empty() || !status.is_empty() || !kind.is_empty();
     let pattern = format!(
         "%{}%",
@@ -364,39 +420,55 @@ pub async fn meetings(
         Ok(r) => (r.get::<i64, _>("active"), r.get::<i64, _>("archived")),
         Err(e) => return crate::error::ApiError::from(e).into_response(),
     };
-    let rows = match sqlx::query(
+    let matching: i64 = if filtered {
+        match sqlx::query_scalar(&format!("SELECT count(*) {LIST_FILTERS}"))
+            .bind(&user.tenant_id)
+            .bind(archived)
+            .bind(&q)
+            .bind(&pattern)
+            .bind(status_states(status))
+            .bind(kind)
+            .fetch_one(&state.db)
+            .await
+        {
+            Ok(n) => n,
+            Err(e) => return crate::error::ApiError::from(e).into_response(),
+        }
+    } else if archived {
+        counts.1
+    } else {
+        counts.0
+    };
+    // Only what a collapsed row shows; notes and transcript load when opened.
+    let mut rows = match sqlx::query(&format!(
         "SELECT m.id, m.title, lm.display_title, m.state, m.capture_mode, m.source, m.started_at, m.ended_at,
                 p.pairing_kind, p.client_display_name,
-                (SELECT jsonb_agg(e) FROM (SELECT e FROM jsonb_array_elements(t.segments) e LIMIT 40) x) AS head,
-                (SELECT count(*) FROM library_notes n WHERE n.meeting_id = m.id) AS notes,
-                ln.body AS note_body, ln.updated_by_name AS note_by, ln.updated_at AS note_at
-         FROM meeting_sessions m JOIN meeting_pairings p ON p.id = m.pairing_id
-         LEFT JOIN library_meetings lm ON lm.meeting_id = m.id
-         LEFT JOIN meeting_transcripts t ON t.meeting_id = m.id
-         LEFT JOIN LATERAL (SELECT body, updated_by_name, updated_at FROM library_notes
-                            WHERE meeting_id = m.id ORDER BY updated_at DESC LIMIT 1) ln ON true
-         WHERE p.tenant_id = $1
-           AND (lm.archived_at IS NOT NULL) = $2
-           AND ($3 = '' OR m.title ILIKE $4 OR lm.display_title ILIKE $4 OR p.client_display_name ILIKE $4
-                OR t.text ILIKE $4
-                OR EXISTS (SELECT 1 FROM library_notes n WHERE n.meeting_id = m.id AND n.body ILIKE $4))
-           AND (cardinality($5::text[]) = 0 OR m.state = ANY($5))
-           AND ($6 = '' OR (p.pairing_kind = 'internal_team') = ($6 = 'internal'))
-         ORDER BY m.started_at DESC LIMIT $7",
-    )
+                (SELECT count(*) FROM library_notes n WHERE n.meeting_id = m.id) AS notes
+         {LIST_FILTERS}
+           AND ($7::timestamptz IS NULL OR (m.started_at, m.id) < ($7, $8))
+         ORDER BY m.started_at DESC, m.id DESC LIMIT $9"
+    ))
     .bind(&user.tenant_id)
     .bind(archived)
     .bind(&q)
     .bind(&pattern)
     .bind(status_states(status))
     .bind(kind)
-    .bind(LIST_LIMIT)
+    .bind(before.map(|b| b.0))
+    .bind(before.map(|b| b.1).unwrap_or_default())
+    .bind(PAGE_SIZE + 1)
     .fetch_all(&state.db)
     .await
     {
         Ok(r) => r,
         Err(e) => return crate::error::ApiError::from(e).into_response(),
     };
+    let more = rows.len() as i64 > PAGE_SIZE;
+    rows.truncate(PAGE_SIZE as usize);
+    let next = more
+        .then(|| rows.last())
+        .flatten()
+        .map(|r| cursor(r.get("started_at"), r.get("id")));
     let now = Utc::now();
     let mut days: Vec<(String, Vec<&sqlx::postgres::PgRow>)> = Vec::new();
     for r in &rows {
@@ -412,17 +484,16 @@ pub async fn meetings(
         "Meetings"
     };
     let total = if archived { counts.1 } else { counts.0 };
+    let plural = |n: i64| if n == 1 { "meeting" } else { "meetings" };
+    let clear = list_url(archived, "", "", "", None);
     let body = html! {
         header.page-head {
             div {
                 h1 { (heading) }
                 p.muted.small {
-                    @if filtered {
-                        (rows.len()) @if rows.len() as i64 >= LIST_LIMIT { "+" } " of " (total) " " (if total == 1 { "meeting" } else { "meetings" }) " match"
-                    } @else {
-                        (total) " " (if total == 1 { "meeting" } else { "meetings" })
-                        @if rows.len() as i64 >= LIST_LIMIT { " · showing the newest " (LIST_LIMIT) }
-                    }
+                    @if filtered { (matching) " of " (total) " " (plural(total)) " match" }
+                    @else { (total) " " (plural(total)) }
+                    @if before.is_some() { " · older meetings" }
                 }
             }
         }
@@ -452,13 +523,16 @@ pub async fn meetings(
                 }
             }
             button.btn.secondary type="submit" { "Search" }
-            @if filtered { a.btn.ghost href={ "/meetings" @if archived { "?view=archived" } } { "Clear" } }
+            @if filtered { a.btn.ghost href=(clear) { "Clear" } }
         }
         @if rows.is_empty() {
             div.empty {
-                @if filtered {
+                @if before.is_some() {
+                    p.empty-title { "No older meetings." }
+                    p.muted { a href=(list_url(archived, &q, status, kind, None)) { "Back to the newest" } }
+                } @else if filtered {
                     p.empty-title { "No meetings match these filters." }
-                    p.muted { "Try fewer words, or " a href={ "/meetings" @if archived { "?view=archived" } } { "clear the filters" } "." }
+                    p.muted { "Try fewer words, or " a href=(clear) { "clear the filters" } "." }
                 } @else if archived {
                     p.empty-title { "Nothing is archived." }
                     p.muted { "Archiving hides a finished meeting from the main list without deleting anything. Restore it any time." }
@@ -471,6 +545,12 @@ pub async fn meetings(
             @for (day, group) in &days {
                 h2.day { (day) }
                 ul.list { @for r in group { (row(r)) } }
+            }
+            @if next.is_some() || before.is_some() {
+                nav.pager aria-label="More meetings" {
+                    @if before.is_some() { a.btn.ghost href=(list_url(archived, &q, status, kind, None)) { "Newest" } }
+                    @if let Some(n) = &next { a.btn.secondary href=(list_url(archived, &q, status, kind, Some(n))) { "Older meetings" } }
+                }
             }
         }
     };
@@ -499,18 +579,12 @@ fn row(r: &sqlx::postgres::PgRow) -> Markup {
     let title = r
         .get::<Option<String>, _>("display_title")
         .unwrap_or_else(|| recorded.clone());
-    let head: Vec<Seg> = r
-        .get::<Option<serde_json::Value>, _>("head")
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
-    let lines = collapse(&head);
     let notes: i64 = r.get("notes");
-    let note_body: Option<String> = r.get("note_body");
     let panel = format!("m-{}", id.simple());
     html! {
         li {
             details.meeting {
-                summary.row aria-describedby=(panel) {
+                summary.row {
                     span.icon.video[video] { (PreEscaped(if video { ICON_VIDEO } else { ICON_AUDIO })) }
                     span.main {
                         span.title { (title) }
@@ -528,38 +602,9 @@ fn row(r: &sqlx::postgres::PgRow) -> Markup {
                     }
                 }
                 div.panel id=(panel) {
-                    div.panel-grid {
-                        section aria-label="Latest note" {
-                            h3 { "Notes" }
-                            @if let Some(b) = &note_body {
-                                p.note-excerpt { (excerpt(b, 280)) }
-                                p.muted.small {
-                                    (r.get::<Option<String>, _>("note_by").unwrap_or_default())
-                                    @if let Some(t) = r.get::<Option<DateTime<Utc>>, _>("note_at") { " · " (fmt_eastern(t)) }
-                                    @if notes > 1 { " · " (notes - 1) " more" }
-                                }
-                            } @else {
-                                p.muted { "No notes yet." }
-                            }
-                        }
-                        section aria-label="Transcript start" {
-                            h3 { "Transcript" }
-                            @if lines.is_empty() {
-                                p.muted { @match st.as_str() {
-                                    "recording" => "Recording now. The transcript follows when it ends.",
-                                    "delivered" => "No speech was detected.",
-                                    "failed" => "No transcript. Open the meeting to see what went wrong.",
-                                    _ => "The transcript appears here when it is ready.",
-                                } }
-                            } @else {
-                                ol.excerpt-lines {
-                                    @for l in lines.iter().take(3) {
-                                        li { span.ts-label { (fmt_duration(l.start_ms as i64)) } span { (excerpt(&l.text, 160)) @if l.repeats > 1 { span.repeat { " ×" (l.repeats) } } } }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // Filled from /meetings/{id}/preview when opened (script);
+                    // without the script the buttons below still work.
+                    div.preview-slot data-preview={ "/meetings/" (id) "/preview" } aria-live="polite" {}
                     div.panel-actions {
                         a.btn.primary href={ "/meetings/" (id) } { "Open meeting" }
                         a.btn.secondary href={ "/meetings/" (id) "#notes" } { "Notes" }
@@ -569,6 +614,85 @@ fn row(r: &sqlx::postgres::PgRow) -> Markup {
             }
         }
     }
+}
+
+/// GET /meetings/{id}/preview: the expanded row's latest note and transcript
+/// start, loaded only when a row is opened. Same checks as the meeting page.
+pub async fn preview(
+    State(state): State<AppState>,
+    user: WebUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    if let Some(r) = library_denied(&user) {
+        return r;
+    }
+    let r = match sqlx::query(
+        "SELECT m.state,
+                (SELECT jsonb_agg(e) FROM (SELECT e FROM jsonb_array_elements(t.segments) e LIMIT 40) x) AS head,
+                (SELECT count(*) FROM library_notes n WHERE n.meeting_id = m.id) AS notes,
+                ln.body AS note_body, ln.updated_by_name AS note_by, ln.updated_at AS note_at
+         FROM meeting_sessions m JOIN meeting_pairings p ON p.id = m.pairing_id
+         LEFT JOIN meeting_transcripts t ON t.meeting_id = m.id
+         LEFT JOIN LATERAL (SELECT body, updated_by_name, updated_at FROM library_notes
+                            WHERE meeting_id = m.id ORDER BY updated_at DESC LIMIT 1) ln ON true
+         WHERE m.id = $1 AND p.tenant_id = $2",
+    )
+    .bind(id)
+    .bind(&user.tenant_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return crate::error::ApiError::from(e).into_response(),
+    };
+    let st: String = r.get("state");
+    let head: Vec<Seg> = r
+        .get::<Option<serde_json::Value>, _>("head")
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+    let lines = collapse(&head);
+    let notes: i64 = r.get("notes");
+    let note_body: Option<String> = r.get("note_body");
+    let fragment = html! {
+        div.panel-grid {
+            section aria-label="Latest note" {
+                h3 { "Notes" }
+                @if let Some(b) = &note_body {
+                    p.note-excerpt { (excerpt(b, 280)) }
+                    p.muted.small {
+                        (r.get::<Option<String>, _>("note_by").unwrap_or_default())
+                        @if let Some(t) = r.get::<Option<DateTime<Utc>>, _>("note_at") { " · " (fmt_eastern(t)) }
+                        @if notes > 1 { " · " (notes - 1) " more" }
+                    }
+                } @else {
+                    p.muted { "No notes yet." }
+                }
+            }
+            section aria-label="Transcript start" {
+                h3 { "Transcript" }
+                @if lines.is_empty() {
+                    p.muted { @match st.as_str() {
+                        "recording" => "Recording now. The transcript follows when it ends.",
+                        "delivered" => "No speech was detected.",
+                        "failed" => "No transcript. Open the meeting to see what went wrong.",
+                        _ => "The transcript appears here when it is ready.",
+                    } }
+                } @else {
+                    ol.excerpt-lines {
+                        @for l in lines.iter().take(3) {
+                            li { span.ts-label { (fmt_duration(l.start_ms as i64)) } span { (excerpt(&l.text, 160)) @if l.repeats > 1 { span.repeat { " ×" (l.repeats) } } } }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        fragment.into_string(),
+    )
+        .into_response()
 }
 
 /// Which form a kept draft belongs to.

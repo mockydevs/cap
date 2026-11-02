@@ -517,6 +517,15 @@ textarea {
   font-size: 12px;
   white-space: nowrap;
 }
+.preview-slot:empty {
+  display: none;
+}
+.pager {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
 .panel-actions {
   display: flex;
   flex-wrap: wrap;

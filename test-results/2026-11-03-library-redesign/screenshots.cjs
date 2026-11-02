@@ -30,6 +30,7 @@ const m = fx.meetings;
     // Expand the first row with the keyboard.
     await page.focus("summary.row");
     await page.keyboard.press("Enter");
+    await page.waitForSelector("details.meeting[open] .panel-grid");
     await shot("02-list-expanded");
     await page.goto(`${fx.base}/meetings?status=attention`);
     await shot("03-filter-needs-attention");

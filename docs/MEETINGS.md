@@ -115,8 +115,10 @@ and deliveries carry no Cap link. It is not part of the phase-1 release.
 
 ### Notes, titles and archive
 
-Each meeting row expands in place (keyboard or click) to show the latest note
-and the start of the transcript; the meeting page puts notes first, beside the
+The list shows 50 meetings a page with an "Older meetings" link (a cursor on
+start time and id, so none are skipped or repeated). Each row expands in place
+(keyboard or click) and only then loads its latest note and the start of the
+transcript from `/meetings/{id}/preview`; the meeting page puts notes first, beside the
 player and transcript. Times are US Eastern with EST/EDT. Repeated identical
 transcript lines (a speech-to-text artefact) are shown once with a count; the
 stored transcript is unchanged.
@@ -132,7 +134,8 @@ nothing is deleted and the audio stays playable.
 Every edit is a same-origin form with the session's token, checked with
 Calari like any page, limited to the signed-in tenant, and version-checked: a
 stale form gets a 409 page that keeps the user's text. A note form sent twice
-creates one note. Limits: titles 200 characters, notes 20,000 characters, 100
+with the same text creates one note; reusing it with different text is refused
+(409) and the text is kept. Limits: titles 200 characters, notes 20,000 characters, 100
 notes per meeting. `library_audit` records who changed what, never note text.
 Pages send `Referrer-Policy: same-origin`; with `no-referrer` browsers send
 `Origin: null` on form posts and the origin check would refuse them.
