@@ -1,0 +1,5 @@
+thread 'a_device_that_never_starts_fails_cleanly' (2910783) panicked at crates/meeting-recorder/tests/capture.rs:659:30:
+start must fail
+thread 'recording_starts_only_once_audio_arrives_and_keeps_the_first_sound' (2910784) panicked at crates/meeting-recorder/tests/capture.rs:603:5:
+reported recording after 8.245625ms, before any audio
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.16s

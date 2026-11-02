@@ -794,12 +794,13 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
     let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
     eprintln!("pulse recorded {recorded} ms of ~10 s, inputs ready after {ready_ms} ms: {spans:?}");
     assert!(p.transcript.segments.len() >= 3, "{spans:?}");
-    // Everything from when the inputs deliver audio until Stop must be kept
-    // (1 s tolerance for process start and segment rounding).
-    let floor = 10_000u64.saturating_sub(ready_ms + 1_000);
+    // Session::start returns (Recording) only once the inputs deliver
+    // audio, so the whole 10 s until Stop must be kept (1 s tolerance for
+    // segment rounding). The measured input start-up is printed for context.
+    let floor = 9_000u64;
     assert!(
         recorded >= floor,
-        "only {recorded} ms kept; inputs were ready after {ready_ms} ms, so at least {floor} ms expected"
+        "only {recorded} ms kept of 10 s after Recording (inputs start-up {ready_ms} ms); at least {floor} ms expected"
     );
     e.rt.block_on(e.state.db.close());
 }
