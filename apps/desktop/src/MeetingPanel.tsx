@@ -1,3 +1,4 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useReducer, useState } from "react";
 import {
@@ -28,6 +29,7 @@ export function MeetingPanel({
 }: {
   sources: { id: string; name: string; kind: string }[];
 }) {
+  const nativeAvailable = isTauri();
   const [device, setDevice] = useState<PairInfo | null>(null);
   const [code, setCode] = useState("");
   const [mode, setMode] = useState<"audio" | "video">("audio");
@@ -46,6 +48,7 @@ export function MeetingPanel({
   const screens = sources.filter((s) => s.kind === "MONITOR");
 
   useEffect(() => {
+    if (!isTauri()) return;
     void meeting
       .device()
       .then(setDevice)
@@ -54,6 +57,18 @@ export function MeetingPanel({
       .recording()
       .then((id) => id && dispatch({ type: "started", id }))
       .catch(() => {});
+    void meeting
+      .audioDevices()
+      .then((available) => {
+        setDevices(available);
+        setMicrophone(available.microphones[0]?.id ?? "");
+        if (!available.systemAudioAvailable) setSystemAudio(false);
+      })
+      .catch(() =>
+        setMessage(
+          "Audio devices could not be loaded. Check your system audio permissions and reopen Cap.",
+        ),
+      );
     void meeting
       .pendingLink()
       .then((l) => l && setLink(l))
@@ -152,9 +167,9 @@ export function MeetingPanel({
       : device?.clientName || "this client";
 
   return (
-    <section className="card">
+    <section className="card meeting-card">
       <div className="card-header">
-        <div className="card-title">Meeting notes for Calari</div>
+        <div className="card-title">Your meeting assistant</div>
       </div>
 
       {link && !recording && (
@@ -166,10 +181,10 @@ export function MeetingPanel({
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button
                 className="btn btn-primary"
-                disabled={busy}
+                disabled={busy || !nativeAvailable}
                 onClick={() => void acceptLink()}
               >
-                {busy ? "Starting…" : "Start recording"}
+                {busy ? "Starting…" : "Start taking notes"}
               </button>
               <button className="btn btn-ghost" onClick={() => setLink(null)}>
                 Not now
@@ -180,21 +195,23 @@ export function MeetingPanel({
       )}
 
       {!device && !link && (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div className="meeting-body">
           <p className="card-subtitle">
-            Enter the pairing code from the Calari intake receipt or client
-            page.
+            Connect this recording to a client using the code on their Calari
+            intake receipt or client page.
           </p>
           <input
-            className="record-title-input"
+            className="control"
             placeholder="XXXX-XXXX"
+            autoComplete="off"
+            spellCheck={false}
             value={code}
             onChange={(e) => setCode(e.target.value)}
             aria-label="Pairing code"
           />
           <button
             className="btn btn-primary"
-            disabled={busy}
+            disabled={busy || !nativeAvailable}
             onClick={() =>
               void run(async () => setDevice(await meeting.pair(code)))
             }
@@ -205,30 +222,35 @@ export function MeetingPanel({
       )}
 
       {device && !recording && (
-        <div style={{ display: "grid", gap: 8 }}>
-          <p className="card-subtitle">Connected for {who}.</p>
+        <div className="meeting-body">
+          <div className="client-context">
+            <span className="eyebrow">Recording destination</span>
+            <strong>{who}</strong>
+          </div>
           <input
-            className="record-title-input"
+            className="control"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             aria-label="Meeting title"
           />
-          <label>
-            <input
-              type="radio"
-              checked={mode === "audio"}
-              onChange={() => setMode("audio")}
-            />{" "}
-            Audio + transcript (meeting notes)
-          </label>
-          <label>
-            <input
-              type="radio"
-              checked={mode === "video"}
-              onChange={() => setMode("video")}
-            />{" "}
-            Video + transcript
-          </label>
+          <div className="capture-modes">
+            <label className="capture-choice">
+              <input
+                type="radio"
+                checked={mode === "audio"}
+                onChange={() => setMode("audio")}
+              />{" "}
+              Audio notes
+            </label>
+            <label className="capture-choice">
+              <input
+                type="radio"
+                checked={mode === "video"}
+                onChange={() => setMode("video")}
+              />{" "}
+              Video and notes
+            </label>
+          </div>
           {mode === "video" && (
             <select
               value={screen}
@@ -272,7 +294,7 @@ export function MeetingPanel({
             </p>
           )}
           <input
-            className="record-title-input"
+            className="control"
             placeholder="Stop when this window closes, e.g. Zoom Meeting (optional)"
             value={watchWindow}
             onChange={(e) => setWatchWindow(e.target.value)}
@@ -280,10 +302,10 @@ export function MeetingPanel({
           />
           <button
             className="btn btn-primary"
-            disabled={busy}
+            disabled={busy || !nativeAvailable}
             onClick={() => void start()}
           >
-            {busy ? "Starting…" : "Start recording"}
+            {busy ? "Starting…" : "Start taking notes"}
           </button>
           <button
             className="btn btn-ghost"
@@ -295,7 +317,7 @@ export function MeetingPanel({
       )}
 
       {recording && (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div className="meeting-body">
           <p className="card-subtitle">
             ● Recording for {who}. Cap stops by itself when the meeting ends or
             after a long silence, with a warning first.
@@ -313,7 +335,7 @@ export function MeetingPanel({
           )}
           <button
             className="btn btn-danger"
-            disabled={busy}
+            disabled={busy || !nativeAvailable}
             onClick={() => void run(() => meeting.stop())}
           >
             Stop and upload
@@ -321,7 +343,11 @@ export function MeetingPanel({
         </div>
       )}
 
-      {message && <p className="card-subtitle">{message}</p>}
+      {message && (
+        <p className="meeting-status" role="status">
+          {message}
+        </p>
+      )}
     </section>
   );
 }

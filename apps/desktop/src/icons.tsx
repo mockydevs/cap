@@ -11,9 +11,7 @@ const base = {
 
 export function CapMarkIcon({ className }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="12" cy="12" r="6.5" />
-    </svg>
+    <img className={className} src="/cap-mark.svg" alt="" aria-hidden="true" />
   );
 }
 

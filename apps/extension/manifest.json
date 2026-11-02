@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cap Meeting Recorder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Record a meeting tab (audio or video) with a visible indicator and send the transcript to the Calari portal.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzrkGYkXbI8xZWu8ck/2fsYaOyzpNKrG42UB4+kIThY6Jg1+qeeb5WPhRe6wZMP0/RrgU08i+j0A5UW4ByYO/j9LmO6d9RETN3m9uZMo1IbjTSC6J2MzRpEuXbiM7xLchL3UYfuK3+9M/b4rSX4ZIFr0XxSW5NQmxubtxctbRtydJ2omleeptInpcwbfaHGHhcD2jJe6ZTwhMk5eEDV3wuhCKAMqi2P8TBRs5HDO31jm7MHK8/1LR/PbNr+FQZS/+bRaLMHDOUobei2b5H94WapGqc60Otk2aKpVNV+kp5gd66/QawaNSzh1Y1MdsAWZ3CLNvE101/aB+r8rmywUNmQIDAQAB",
   "minimum_chrome_version": "116",
@@ -9,6 +9,9 @@
     "default_popup": "src/popup.html",
     "default_title": "Cap",
     "default_icon": {
+      "16": "src/icon16.png",
+      "32": "src/icon32.png",
+      "48": "src/icon48.png",
       "128": "src/icon.png"
     }
   },
@@ -60,6 +63,9 @@
   },
   "web_accessible_resources": [],
   "icons": {
+    "16": "src/icon16.png",
+    "32": "src/icon32.png",
+    "48": "src/icon48.png",
     "128": "src/icon.png"
   }
 }

@@ -20,7 +20,6 @@ import {
   MonitorIcon,
   PauseIcon,
   PlayIcon,
-  PuzzleIcon,
   SpeakerIcon,
   StopIcon,
   TrashIcon,
@@ -234,20 +233,32 @@ export function App() {
           <span className="brand-mark">
             <CapMarkIcon />
           </span>
-          <span className="brand-name">Cap</span>
+          <div className="brand-copy">
+            <span className="brand-name">Cap</span>
+            <span className="brand-owner">CALARI SOLUTIONS</span>
+          </div>
         </div>
         <div className="topbar-spacer" />
-        <span
-          className="account-chip"
-          style={{ cursor: "default" }}
-          title="The Cap browser extension is not available yet."
-        >
-          <PuzzleIcon className="icon" />
-          Browser extension: coming soon
-        </span>
+        <span className="app-kind">Meeting assistant</span>
       </div>
 
       <main className="main">
+        <div className="workspace-heading">
+          <div className="eyebrow">Your workspace</div>
+          <h1>Meeting notes</h1>
+          <p>Capture a meeting and send its transcript to Calari.</p>
+        </div>
+        <ol className="workflow" aria-label="Meeting notes workflow">
+          <li>
+            <span>1</span>Connect your client
+          </li>
+          <li>
+            <span>2</span>Record the meeting
+          </li>
+          <li>
+            <span>3</span>Review notes in Calari
+          </li>
+        </ol>
         {tauriUnavailable && (
           <div className="banner">
             <AlertIcon className="icon" />
@@ -288,247 +299,259 @@ export function App() {
 
         <MeetingPanel sources={sources} />
 
-        <section className="card record-card">
-          <div className="record-title-row">
-            <FilmIcon className="icon" />
-            <input
-              className="record-title-input"
-              value={options.title}
-              disabled={recording}
-              onChange={(e) =>
-                setOptions({ ...options, title: e.target.value })
-              }
-              aria-label="Recording title"
-            />
-            {recording && (
-              <div className="timer">
-                <span className="rec-dot" />
-                {formatDuration(elapsed)}
-              </div>
-            )}
-          </div>
-
-          <div className="field-grid">
-            <label className="field">
-              <span className="field-label">
-                <MonitorIcon className="icon" />
-                Display or window
-              </span>
-              <select
-                className="control"
-                disabled={recording}
-                value={options.videoSourceId}
-                onChange={(e) =>
-                  setOptions({ ...options, videoSourceId: e.target.value })
-                }
-              >
-                {monitorsAndWindows.length === 0 && (
-                  <option value="">No sources found</option>
-                )}
-                {monitorsAndWindows.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">
-                <MicIcon className="icon" />
-                Microphone
-              </span>
-              <select
-                className="control"
-                disabled={recording}
-                value={options.microphoneId ?? ""}
-                onChange={(e) =>
-                  setOptions(
-                    e.target.value
-                      ? { ...options, microphoneId: e.target.value }
-                      : (Object.fromEntries(
-                          Object.entries(options).filter(
-                            ([key]) => key !== "microphoneId",
-                          ),
-                        ) as CaptureOptions),
-                  )
-                }
-              >
-                <option value="">None</option>
-                {microphones.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field-label">
-                <GaugeIcon className="icon" />
-                Frame rate
-              </span>
-              <select
-                className="control"
-                disabled={recording}
-                value={options.frameRate}
-                onChange={(e) =>
-                  setOptions({ ...options, frameRate: Number(e.target.value) })
-                }
-              >
-                <option value={30}>30 fps</option>
-                <option value={60}>60 fps</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="switch-row" style={{ marginTop: 16 }}>
-            <Switch
-              label="System audio"
-              icon={<SpeakerIcon className="icon" />}
-              checked={options.systemAudio}
-              disabled={recording}
-              onChange={(checked) =>
-                setOptions({ ...options, systemAudio: checked })
-              }
-            />
-            <Switch
-              label="Capture cursor"
-              icon={<CursorIcon className="icon" />}
-              checked={options.cursor}
-              disabled={recording}
-              onChange={(checked) =>
-                setOptions({ ...options, cursor: checked })
-              }
-            />
-          </div>
-
-          <div className="record-footer">
-            <div className="shortcut-hint">
-              <span className="shortcut-group">
-                <kbd>⌘/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> start/stop
-              </span>
-              <span className="shortcut-group">
-                <kbd>⌘/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> pause/resume
-              </span>
+        <details className="screen-tools" open={recording || undefined}>
+          <summary>
+            <MonitorIcon className="icon" />
+            <div>
+              Screen recorder
+              <small>Record a walkthrough, demo, or screen clip.</small>
             </div>
-            <div className="record-actions">
-              {recording ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => void desktop.pause()}
-                  >
-                    <PauseIcon className="icon" />
-                    Pause
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => void desktop.resume()}
-                  >
-                    <PlayIcon className="icon" />
-                    Resume
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => void stop()}
-                  >
-                    <StopIcon className="icon" />
-                    Stop
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-lg"
-                  disabled={!options.videoSourceId || tauriUnavailable}
-                  onClick={() => void start()}
-                >
-                  <PlayIcon className="icon" />
-                  Start recording
-                </button>
+          </summary>
+          <section className="card record-card">
+            <div className="record-title-row">
+              <FilmIcon className="icon" />
+              <input
+                className="record-title-input"
+                value={options.title}
+                disabled={recording}
+                onChange={(e) =>
+                  setOptions({ ...options, title: e.target.value })
+                }
+                aria-label="Recording title"
+              />
+              {recording && (
+                <div className="timer">
+                  <span className="rec-dot" />
+                  {formatDuration(elapsed)}
+                </div>
               )}
             </div>
-          </div>
-        </section>
 
-        <section className="card">
-          <div className="card-header">
-            <h2 className="card-title">
-              <FolderIcon className="icon" />
-              Local recordings
-            </h2>
-            {projects.length > 0 && (
-              <span className="card-subtitle">
-                {projects.length} recording{projects.length === 1 ? "" : "s"}
-              </span>
-            )}
-          </div>
-          {projects.length === 0 ? (
-            <div className="empty">
-              <FilmIcon className="icon" />
-              <span className="empty-title">No recordings yet</span>
-              <span className="empty-hint">
-                Recordings are saved to this device first, even offline, and
-                stay here until you delete them.
-              </span>
+            <div className="field-grid">
+              <label className="field">
+                <span className="field-label">
+                  <MonitorIcon className="icon" />
+                  Display or window
+                </span>
+                <select
+                  className="control"
+                  disabled={recording}
+                  value={options.videoSourceId}
+                  onChange={(e) =>
+                    setOptions({ ...options, videoSourceId: e.target.value })
+                  }
+                >
+                  {monitorsAndWindows.length === 0 && (
+                    <option value="">No sources found</option>
+                  )}
+                  {monitorsAndWindows.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">
+                  <MicIcon className="icon" />
+                  Microphone
+                </span>
+                <select
+                  className="control"
+                  disabled={recording}
+                  value={options.microphoneId ?? ""}
+                  onChange={(e) =>
+                    setOptions(
+                      e.target.value
+                        ? { ...options, microphoneId: e.target.value }
+                        : (Object.fromEntries(
+                            Object.entries(options).filter(
+                              ([key]) => key !== "microphoneId",
+                            ),
+                          ) as CaptureOptions),
+                    )
+                  }
+                >
+                  <option value="">None</option>
+                  {microphones.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="field-label">
+                  <GaugeIcon className="icon" />
+                  Frame rate
+                </span>
+                <select
+                  className="control"
+                  disabled={recording}
+                  value={options.frameRate}
+                  onChange={(e) =>
+                    setOptions({
+                      ...options,
+                      frameRate: Number(e.target.value),
+                    })
+                  }
+                >
+                  <option value={30}>30 fps</option>
+                  <option value={60}>60 fps</option>
+                </select>
+              </label>
             </div>
-          ) : (
-            <div className="recordings">
-              {projects.map((project) => {
-                const badge = statusBadge[project.status];
-                return (
-                  <div className="recording-row" key={project.id}>
-                    <span className="recording-thumb">
-                      <FilmIcon className="icon" />
-                    </span>
-                    <div className="recording-info">
-                      <span className="recording-title">{project.title}</span>
-                      <span className="recording-meta">
-                        <span className={`badge ${badge.className}`}>
-                          <span className="status-dot" />
-                          {badge.label}
-                        </span>
-                        <span>{formatClipLength(project.durationMs)}</span>
-                        <span>{formatRelative(project.createdAt)}</span>
+
+            <div className="switch-row" style={{ marginTop: 16 }}>
+              <Switch
+                label="System audio"
+                icon={<SpeakerIcon className="icon" />}
+                checked={options.systemAudio}
+                disabled={recording}
+                onChange={(checked) =>
+                  setOptions({ ...options, systemAudio: checked })
+                }
+              />
+              <Switch
+                label="Capture cursor"
+                icon={<CursorIcon className="icon" />}
+                checked={options.cursor}
+                disabled={recording}
+                onChange={(checked) =>
+                  setOptions({ ...options, cursor: checked })
+                }
+              />
+            </div>
+
+            <div className="record-footer">
+              <div className="shortcut-hint">
+                <span className="shortcut-group">
+                  <kbd>⌘/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> start/stop
+                </span>
+                <span className="shortcut-group">
+                  <kbd>⌘/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> pause/resume
+                </span>
+              </div>
+              <div className="record-actions">
+                {recording ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void desktop.pause()}
+                    >
+                      <PauseIcon className="icon" />
+                      Pause
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => void desktop.resume()}
+                    >
+                      <PlayIcon className="icon" />
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => void stop()}
+                    >
+                      <StopIcon className="icon" />
+                      Stop
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-lg"
+                    disabled={!options.videoSourceId || tauriUnavailable}
+                    onClick={() => void start()}
+                  >
+                    <PlayIcon className="icon" />
+                    Start recording
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-header">
+              <h2 className="card-title">
+                <FolderIcon className="icon" />
+                Local recordings
+              </h2>
+              {projects.length > 0 && (
+                <span className="card-subtitle">
+                  {projects.length} recording{projects.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            {projects.length === 0 ? (
+              <div className="empty">
+                <FilmIcon className="icon" />
+                <span className="empty-title">No recordings yet</span>
+                <span className="empty-hint">
+                  Recordings are saved to this device first, even offline, and
+                  stay here until you delete them.
+                </span>
+              </div>
+            ) : (
+              <div className="recordings">
+                {projects.map((project) => {
+                  const badge = statusBadge[project.status];
+                  return (
+                    <div className="recording-row" key={project.id}>
+                      <span className="recording-thumb">
+                        <FilmIcon className="icon" />
                       </span>
-                      {project.uploadProgress !== undefined && (
-                        <span className="recording-progress">
-                          <span
-                            style={{ width: `${project.uploadProgress}%` }}
-                          />
+                      <div className="recording-info">
+                        <span className="recording-title">{project.title}</span>
+                        <span className="recording-meta">
+                          <span className={`badge ${badge.className}`}>
+                            <span className="status-dot" />
+                            {badge.label}
+                          </span>
+                          <span>{formatClipLength(project.durationMs)}</span>
+                          <span>{formatRelative(project.createdAt)}</span>
                         </span>
-                      )}
+                        {project.uploadProgress !== undefined && (
+                          <span className="recording-progress">
+                            <span
+                              style={{ width: `${project.uploadProgress}%` }}
+                            />
+                          </span>
+                        )}
+                      </div>
+                      <div className="recording-actions">
+                        <button
+                          type="button"
+                          className="btn btn-icon btn-ghost"
+                          title="Show file"
+                          aria-label="Show file"
+                          onClick={() => void desktop.reveal(project.id)}
+                        >
+                          <FolderIcon className="icon" />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-icon btn-danger"
+                          title="Delete"
+                          aria-label="Delete"
+                          onClick={() =>
+                            void desktop.remove(project.id).then(refresh)
+                          }
+                        >
+                          <TrashIcon className="icon" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="recording-actions">
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-ghost"
-                        title="Show file"
-                        aria-label="Show file"
-                        onClick={() => void desktop.reveal(project.id)}
-                      >
-                        <FolderIcon className="icon" />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-icon btn-danger"
-                        title="Delete"
-                        aria-label="Delete"
-                        onClick={() =>
-                          void desktop.remove(project.id).then(refresh)
-                        }
-                      >
-                        <TrashIcon className="icon" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </details>
       </main>
     </div>
   );
