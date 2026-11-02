@@ -17,11 +17,11 @@ unpublished (`/downloads/latest.json` 404).
 
 1. Staging (root, only after the final audited CI 41383982100 receipt; not done yet): create
    `/data/cap/downloads/.release-41383982100/` with that run's `manifest.json` and the two files
-   above, inside `/data/cap/downloads` (same filesystem). The live catalog must still be the
-   pending-only one (or this exact release); the script refuses any other published catalog.
-2. Record the live manifest state: `sha256sum /data/cap/downloads/manifest.json` (or note that it is
-   absent). Dry run on the host, then read the output:
-   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads --expect-current-sha <that sha256 | absent>`
+   above, inside `/data/cap/downloads` (same filesystem). The live catalog must exist and still be
+   the pending-only one (or this exact release); the script refuses a missing or any other catalog.
+2. Record the live manifest state: `sha256sum /data/cap/downloads/manifest.json` (it must exist and
+   be the pending-only catalog; a missing manifest is refused). Dry run on the host, then read the output:
+   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads --expect-current-sha <that sha256>`
    It must say the live manifest matches, "staged release OK" and "will be added" (or "identical
    bytes, kept") for both files. Any "REFUSED" stops here; nothing was changed.
 3. Apply: the same command with `--apply`. It holds an exclusive lock (`.publish.lock`), re-checks

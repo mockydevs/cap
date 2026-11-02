@@ -8,12 +8,12 @@ It never restarts anything: the Cap service restart is a separate, explicit step
     python3 -I publish-combined-ci.py \
         --stage /data/cap/downloads/.release-41383982100 \
         --live  /data/cap/downloads \
-        --expect-current-sha <sha256 of the live manifest.json | absent>   [--apply]
+        --expect-current-sha <sha256 of the live manifest.json>   [--apply]
 
 Takes an exclusive lock (<live>/.publish.lock) so two runs never overlap, and refuses unless the
-live manifest.json is exactly the one the operator expects (--expect-current-sha) AND is either
-absent, a catalog with nothing available (all pending / signing_pending), or byte-identical to this
-release (idempotent re-run). Any live catalog that already offers a download and is not this exact
+live manifest.json exists, is exactly the one the operator expects (--expect-current-sha) AND is
+either a catalog with nothing available (all pending / signing_pending) or byte-identical to this
+release (idempotent re-run). A missing live manifest is refused. Any live catalog that already offers a download and is not this exact
 release is refused before any file or manifest is touched.
 
 What --apply does, in order (stops at the first problem, before any change):
@@ -155,7 +155,7 @@ def main() -> None:
     ap.add_argument("--stage", required=True, type=pathlib.Path)
     ap.add_argument("--live", required=True, type=pathlib.Path)
     ap.add_argument("--expect-current-sha", required=True,
-                    help="sha256 of the live manifest.json the operator expects, or 'absent'")
+                    help="sha256 of the live manifest.json the operator expects")
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     for p, (_, size, digest) in EXPECTED.items():
@@ -167,8 +167,8 @@ def main() -> None:
     if stage.parent != live:
         fail("stage must be a directory inside the live download directory (same filesystem)")
     expect = args.expect_current_sha
-    if expect != "absent" and not re.fullmatch(r"[0-9a-f]{64}", expect):
-        fail("--expect-current-sha must be a sha256 or 'absent'")
+    if not re.fullmatch(r"[0-9a-f]{64}", expect):
+        fail("--expect-current-sha must be the sha256 of the live manifest.json")
 
     # Exclusive lock for the whole run (released when the process exits).
     lock_fd = os.open(live / ".publish.lock", os.O_WRONLY | os.O_CREAT, 0o600)
@@ -179,6 +179,8 @@ def main() -> None:
 
     current = live / "manifest.json"
     current_sha, current_raw = snapshot(current)
+    if current_raw is None:
+        fail("live manifest.json is missing; this release only replaces the known pending catalog")
     if current_sha != expect:
         fail(f"live manifest is {current_sha}, operator expected {expect}")
     print("live manifest matches the expected state:", current_sha)
@@ -191,7 +193,7 @@ def main() -> None:
     require_exact_platforms(staged)
 
     # Only a not-yet-published catalog, or this same release, may be replaced.
-    if current_raw is not None and current_raw != staged_raw:
+    if current_raw != staged_raw:
         try:
             live_catalog = json.loads(current_raw.decode("utf-8"))
             offered = [a.get("platform") for a in live_catalog.get("artifacts", [])
@@ -201,8 +203,6 @@ def main() -> None:
         if offered:
             fail(f"live catalog already offers {offered} and is not this release; refusing (no rollback or overwrite)")
         print("live catalog offers nothing yet (pending only): may be replaced")
-    elif current_raw is None:
-        print("no live catalog yet")
     else:
         print("live catalog is this exact release")
     available = {a["platform"]: a for a in staged["artifacts"] if a["status"] == "available"}
@@ -231,22 +231,21 @@ def main() -> None:
     if not to_copy and current_raw == staged_raw:
         print("already published: live files and manifest match this release; nothing to do")
         return
-    print("live manifest:", "absent" if current_raw is None else "present -> will be backed up")
+    print("live manifest: present -> will be backed up")
 
     if not args.apply:
         print("DRY RUN: nothing changed. Re-run with --apply.")
         return
 
     # 3. Backup (of the exact snapshot that was checked).
-    if current_raw is not None:
-        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-        backup = live / f"manifest.json.bak-{stamp}-{os.getpid()}"
-        fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "wb") as out:
-            out.write(current_raw)
-            out.flush()
-            os.fsync(out.fileno())
-        print("backed up live manifest to", backup.name)
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    backup = live / f"manifest.json.bak-{stamp}-{os.getpid()}"
+    fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    with os.fdopen(fd, "wb") as out:
+        out.write(current_raw)
+        out.flush()
+        os.fsync(out.fileno())
+    print("backed up live manifest to", backup.name)
 
     # 4. Installers.
     for src, target, digest in to_copy:
