@@ -1,5 +1,5 @@
-decoded 23.9 s of audio
-  330 Hz level      816.4  <- microphone tone
-  550 Hz level      816.5  <- speakers tone
-  440 Hz level        0.3  (control, not played)
- 1000 Hz level        0.1  (control, not played)
+decoded 12.6 s of audio
+  330 Hz level      837.6  microphone tone
+  550 Hz level      836.6  speakers tone
+  440 Hz level        0.3  control, not played
+ 1000 Hz level        0.2  control, not played
