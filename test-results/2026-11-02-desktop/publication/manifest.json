@@ -5,13 +5,17 @@
       "platform": "linux-x86_64",
       "version": "0.2.0-beta.6",
       "filename": "cap-desktop_0.2.0-beta.6_linux-x86_64.deb",
-      "bytes": 7933604,
-      "sha256": "e95919ccb9ee4291f96aa4aaf8f8acd8e81a310343bffbb7cf858d7f55e32541",
+      "bytes": 7935440,
+      "sha256": "e39cd10aa8dccb8d9325a56ee570425b3b8ff98c98dbb21ee744c53dd80e6fa6",
       "status": "available"
     },
     {
       "platform": "windows-x86_64",
-      "status": "pending"
+      "version": "0.2.0-beta.6",
+      "filename": "cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe",
+      "bytes": 44976241,
+      "sha256": "f76fba04b4cb93e407a69523d580b2cc1f8a42a73e2fbba2cc71ab522f684906",
+      "status": "available"
     },
     {
       "platform": "macos-aarch64",
