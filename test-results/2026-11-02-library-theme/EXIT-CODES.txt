@@ -1,0 +1,4 @@
+source base b3314d239b22a2f2b953f31adc2f75de46af7d4e + theme diff (app.css only)
+prettier-check exit=0
+server-clippy exit=0
+server-tests exit=0
