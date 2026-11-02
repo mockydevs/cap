@@ -1,0 +1,14 @@
+source 082cff3d3d07387c821f0f5f08b119717e1e430b
+ws-fmt exit=0 (6.1.1-3ubuntu5)
+ws-clippy exit=0 (6.1.1-3ubuntu5)
+recorder-tests-ffmpeg61 exit=0 (6.1.1-3ubuntu5)
+pulse-smoke-1 exit=101 (6.1.1-3ubuntu5)
+pulse-smoke-2 exit=101 (6.1.1-3ubuntu5)
+pulse-smoke-3 exit=101 (6.1.1-3ubuntu5)
+desktop-fmt exit=0 (6.1.1-3ubuntu5)
+desktop-clippy exit=0 (6.1.1-3ubuntu5)
+desktop-tests exit=0 (6.1.1-3ubuntu5)
+recorder-tests-ffmpeg8 exit=0 (8.0.1-3ubuntu2 native)
+win-recorder-clippy exit=0
+win-desktop-clippy exit=0
+actionlint exit=0
