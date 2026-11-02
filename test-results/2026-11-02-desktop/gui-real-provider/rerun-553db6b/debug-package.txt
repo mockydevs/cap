@@ -1,1 +1,8 @@
-DEBUG TEST package from 3179b12294c1f55f4ccd99fc4af36966e76cc8c8 (runtime 553db6b), never publish, unapproved until runtime CLEAR: 5ea8c104762e5ebd80c2213eaf55cf675aff4b1c977c2ad412e48cc7a4722a3f 95476838
+DEBUG TEST package (never publish): /tmp/claude-1000/-home-don-code-cap/f3f9f78c-5e41-4350-b453-b746857c0f74/scratchpad/gui-e2e/cap-debug-553db6b.deb
+package sha256: 5ea8c104762e5ebd80c2213eaf55cf675aff4b1c977c2ad412e48cc7a4722a3f  bytes: 95476838
+built from clean 3179b12294c1f55f4ccd99fc4af36966e76cc8c8 (runtime 553db6bee952914865ddf8df3705e6df9f6f4252)
+extracted package /usr/bin/cap-desktop sha256: b8e0e9d1e0c97507de5052d3e5fac5d7a65245e67588da2fc26b0a38672dc514
+installed /usr/bin/cap-desktop during the GUI run (container cap-gui-real2, since removed): prefix b8e0e9d1e0c97507 observed (full value not recorded before removal)
+fresh apt install of the same package in a clean cap-gui-test container, /usr/bin/cap-desktop sha256: b8e0e9d1e0c97507de5052d3e5fac5d7a65245e67588da2fc26b0a38672dc514
+extracted == fresh install: yes
+prefix match with run observation: yes
