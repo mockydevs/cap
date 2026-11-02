@@ -295,8 +295,12 @@ mod tests {
         let joined = a.join(" ");
         assert!(joined.contains("[0:a][1:a]amix=inputs=2"));
         assert!(joined.contains("-segment_time 30"));
-        assert!(joined.contains("/m/seg_%06d.ogg"));
-        assert!(joined.contains("-segment_list /m/segments.csv"));
+        // Native separators: the same paths are backslashed on Windows.
+        let dir = Path::new("/m");
+        let segments = dir.join("seg_%06d.ogg");
+        let list = dir.join("segments.csv");
+        assert!(joined.contains(&*segments.to_string_lossy()));
+        assert!(joined.contains(&format!("-segment_list {}", list.to_string_lossy())));
         assert!(joined.ends_with("-f s16le pipe:1"));
         assert!(!joined.contains("libvpx"));
     }
