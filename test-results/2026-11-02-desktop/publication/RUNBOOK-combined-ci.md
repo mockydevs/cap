@@ -1,5 +1,8 @@
 # Publish the combined CI installers (Linux + Windows)
 
+**HOLD: the pinned 49c installers below contain the started_at bug fixed in 553db6b. Update the
+table and `EXPECTED` in `publish-combined-ci.py` to the new CI run before any use.**
+
 Root release owner only, after the desktop GUI provider gate passes. Replaces the older
 Linux-only OPERATOR-STEPS.md (obsolete; its e959 owner build stays unpublished).
 
