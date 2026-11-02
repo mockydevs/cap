@@ -1,0 +1,21 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.16s
+     Running tests/web_browser.rs (target/debug/deps/web_browser-471e3a4af8e3462d)
+
+running 1 test
+after Connect: http://127.0.0.1:34213/calendar ("Calendar · Cap"); after Sign out: http://127.0.0.1:34213/logout
+
+thread 'calendar_connect_and_sign_out_work_in_a_real_browser' (801042) panicked at crates/meeting-bot/tests/web_browser.rs:91:5:
+Connect reached Google's consent: http://127.0.0.1:34213/calendar
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test calendar_connect_and_sign_out_work_in_a_real_browser ... FAILED
+
+failures:
+
+failures:
+    calendar_connect_and_sign_out_work_in_a_real_browser
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.09s
+
+error: test failed, to rerun pass `-p cap-meeting-bot --test web_browser`

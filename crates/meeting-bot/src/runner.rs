@@ -358,6 +358,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         pulse_sink: &cfg.pulse_sink,
         pulse_source: None,
         no_sandbox: cfg.no_sandbox,
+        headless: false,
     }) {
         Ok(b) => b,
         Err(e) => return Outcome::Failed(format!("browser: {e}")),

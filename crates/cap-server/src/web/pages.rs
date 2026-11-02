@@ -23,7 +23,7 @@ pub(crate) fn layout(title: &str, user: Option<&WebUser>, body: Markup) -> Marku
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                meta name="referrer" content="no-referrer";
+                meta name="referrer" content="same-origin";
                 title { (title) " · Cap" }
                 link rel="stylesheet" href="/static/app.css";
                 script src="/static/app.js" defer {}

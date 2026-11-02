@@ -309,7 +309,18 @@ pub async fn page(State(state): State<AppState>, user: WebUser) -> Response {
             }
         }
     };
-    pages::layout("Calendar", Some(&user), body).into_response()
+    // The Connect form redirects to Google's consent page; Chromium checks
+    // that redirect against form-action, so this page allows exactly the
+    // configured Google sign-in origin (and nothing else) as a form target.
+    let google = reqwest::Url::parse(&cal.google.auth_url)
+        .map(|u| u.origin().ascii_serialization())
+        .unwrap_or_default();
+    let csp = crate::web::csp_with_form_action(&google);
+    let mut res = pages::layout("Calendar", Some(&user), body).into_response();
+    if let Ok(v) = axum::http::HeaderValue::from_str(&csp) {
+        res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, v);
+    }
+    res
 }
 
 #[derive(Deserialize)]

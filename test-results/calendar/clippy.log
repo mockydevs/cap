@@ -1,6 +1,5 @@
-    Checking cap-meeting-protocol v0.1.0 (/home/don/code/cap-calendar/crates/meeting-protocol)
+    Checking cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
     Checking cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
     Checking cap-meeting-recorder v0.1.0 (/home/don/code/cap-calendar/crates/meeting-recorder)
-    Checking cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.45s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.15s
 exit=0

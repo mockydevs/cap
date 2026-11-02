@@ -100,6 +100,7 @@ fn run(a: Args) -> i32 {
             std::env::var("CAP_BOT_CHROME_NO_SANDBOX").as_deref(),
             Ok("1")
         ),
+        headless: false,
     }) {
         Ok(b) => b,
         Err(e) => {

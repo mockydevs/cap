@@ -1,0 +1,2 @@
+after Connect: http://127.0.0.1:44315/calendar ("Calendar · Cap"); after Sign out: http://127.0.0.1:44315/login/signed-out
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.86s

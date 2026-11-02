@@ -1174,3 +1174,51 @@ async fn unanswered_invites_never_bring_the_bot_and_disconnect_forgets_events() 
     assert_eq!(n, 0);
     w.drop_db().await;
 }
+
+#[tokio::test]
+async fn staff_pages_send_origin_and_only_calendar_may_post_to_google() {
+    let Some(w) = world().await else { return };
+    let don = w.sign_in(DON).await;
+    let get = |path: &str| {
+        let req = w
+            .http
+            .get(format!("{}{path}", w.cap))
+            .header("cookie", &don.cookie);
+        async move { req.send().await.unwrap() }
+    };
+    let res = get("/calendar").await;
+    assert_eq!(res.status(), 200);
+    let h = res.headers();
+    // Not no-referrer: Chromium would send `Origin: null` on our own forms.
+    assert_eq!(h["referrer-policy"], "same-origin");
+    let csp = h["content-security-policy"].to_str().unwrap().to_owned();
+    assert!(
+        csp.contains("form-action 'self' https://accounts.google.test;"),
+        "{csp}"
+    );
+    assert!(!csp.contains('*') && !csp.contains("unsafe"), "{csp}");
+    let body = res.text().await.unwrap();
+    assert!(body.contains(r#"<meta name="referrer" content="same-origin">"#));
+    // Every other staff page keeps the base policy.
+    let res = get("/meetings").await;
+    let csp = res.headers()["content-security-policy"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(csp, cap_server::web::BASE_CSP);
+    assert_eq!(res.headers()["referrer-policy"], "same-origin");
+    // Origin and CSRF stay strict: a null or foreign Origin is refused.
+    for origin in ["null", "https://evil.test"] {
+        let res = w
+            .http
+            .post(format!("{}/calendar/connect", w.cap))
+            .header("cookie", &don.cookie)
+            .header("origin", origin)
+            .form(&[("csrf", don.csrf.as_str())])
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 403, "{origin}");
+    }
+    w.drop_db().await;
+}

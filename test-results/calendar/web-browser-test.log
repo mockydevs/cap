@@ -1,0 +1,11 @@
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.55s
+     Running tests/web_browser.rs (target/debug/deps/web_browser-471e3a4af8e3462d)
+
+running 1 test
+after Connect: http://127.0.0.1:46233/o/oauth2/v2/auth?client_id=google-client-id&redirect_uri=http%3A%2F%2F127.0.0.1%3A34561%2Fcalendar%2Fgoogle%2Fcallback&response_type=code&scope=openid+email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.events.readonly&access_type=offline&prompt=consent&include_granted_scopes=false&login_hint=don%40calari.test&state=qo62Pf-bcCyJYSt1d6fSqWKbWug7DRaeZHBe70iVvNu&code_challenge=NWjnWpmkx1az84HU07ZUjDHN-_pkLsF9iOPbtIYiJ8Q&code_challenge_method=S256 ("Fake Google consent"); after Sign out: http://127.0.0.1:34561/login/signed-out
+test calendar_connect_and_sign_out_work_in_a_real_browser ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+

@@ -11,9 +11,22 @@ use axum::{
 };
 use tower_http::set_header::SetResponseHeaderLayer;
 
-pub fn router() -> Router<AppState> {
-    let csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
+/// Every staff page. A page may send its own, narrower variant (see
+/// [`csp_with_form_action`]); otherwise this one applies.
+pub const BASE_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
                media-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+
+/// The base policy with one more exact origin allowed as a form target
+/// (Chromium applies form-action to the redirects after a form submission).
+pub fn csp_with_form_action(origin: &str) -> String {
+    BASE_CSP.replace(
+        "form-action 'self'",
+        &format!("form-action 'self' {origin}"),
+    )
+}
+
+pub fn router() -> Router<AppState> {
+    let csp = BASE_CSP;
     Router::new()
         .route("/login", get(auth::start))
         .route("/login/signed-out", get(pages::signed_out))
@@ -36,7 +49,7 @@ pub fn router() -> Router<AppState> {
         .route("/meetings/{id}/parts/{seq}", get(pages::part))
         .route("/static/app.css", get(pages::css))
         .route("/static/app.js", get(pages::js))
-        .layer(SetResponseHeaderLayer::overriding(
+        .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(csp),
         ))
@@ -46,7 +59,10 @@ pub fn router() -> Router<AppState> {
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::REFERRER_POLICY,
-            HeaderValue::from_static("no-referrer"),
+            // Not "no-referrer": with it Chromium sends `Origin: null` on
+            // same-origin form posts, and every Origin check refuses them.
+            // same-origin still sends nothing to other sites.
+            HeaderValue::from_static("same-origin"),
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::X_CONTENT_TYPE_OPTIONS,

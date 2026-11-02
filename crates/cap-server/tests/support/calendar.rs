@@ -155,6 +155,10 @@ async fn spawn_google(g: Arc<Mutex<Google>>) -> String {
             }),
         )
         .route(
+            "/o/oauth2/v2/auth",
+            get(|| async { axum::response::Html("<!doctype html><title>Fake Google consent</title><p>consent fixture</p>") }),
+        )
+        .route(
             "/revoke",
             post(move |Form(f): Form<HashMap<String, String>>| {
                 let g = g2.clone();
@@ -467,12 +471,17 @@ impl World {
         Self::with_settings(transcription, allow_staff, 90).await
     }
 
+    /// Google's consent page is served by the fixture (for real-browser tests).
+    pub async fn with_local_google_auth(transcription: TranscriptionConfig) -> Option<Self> {
+        Self::build(transcription, true, 90, None, true).await
+    }
+
     pub async fn with_settings(
         transcription: TranscriptionConfig,
         allow_staff: bool,
         bot_lease_seconds: i64,
     ) -> Option<Self> {
-        Self::build(transcription, allow_staff, bot_lease_seconds, None).await
+        Self::build(transcription, allow_staff, bot_lease_seconds, None, false).await
     }
 
     /// Against a real (local) Calari instead of the stand-in. Google stays a
@@ -482,7 +491,14 @@ impl World {
         bot_lease_seconds: i64,
         external: External,
     ) -> Option<Self> {
-        Self::build(transcription, false, bot_lease_seconds, Some(external)).await
+        Self::build(
+            transcription,
+            false,
+            bot_lease_seconds,
+            Some(external),
+            false,
+        )
+        .await
     }
 
     async fn build(
@@ -490,6 +506,7 @@ impl World {
         allow_staff: bool,
         bot_lease_seconds: i64,
         external: Option<External>,
+        local_google_auth: bool,
     ) -> Option<Self> {
         let Ok(admin_url) = std::env::var("CAP_TEST_DATABASE_URL") else {
             eprintln!("SKIPPED: set CAP_TEST_DATABASE_URL to run calendar tests");
@@ -565,7 +582,11 @@ impl World {
                 google_client_id: "google-client-id".into(),
                 google_client_secret: Secret(GOOGLE_CLIENT_SECRET.into()),
                 google: GoogleEndpoints {
-                    auth_url: "https://accounts.google.test/o/oauth2/v2/auth".into(),
+                    auth_url: if local_google_auth {
+                        format!("{g}/o/oauth2/v2/auth")
+                    } else {
+                        "https://accounts.google.test/o/oauth2/v2/auth".into()
+                    },
                     token_url: format!("{g}/token"),
                     revoke_url: format!("{g}/revoke"),
                     api_base: g.clone(),

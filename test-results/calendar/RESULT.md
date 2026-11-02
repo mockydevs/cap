@@ -1,5 +1,26 @@
 # Cap calendar attendance: implementation result
 
+## Live Connect 403 (root 22:27Z)
+
+- Cause 1: Referrer-Policy/meta `no-referrer` makes Chromium send
+  `Origin: null` on same-origin form POSTs, so the strict Origin check
+  refused Connect (and the library's Sign out). Now `same-origin` (header and
+  meta); Origin/CSRF checks unchanged and still refuse `null`/foreign.
+- Cause 2: CSP `form-action 'self'` also applies to the redirect after a form
+  post, blocking Connect -> Google consent. The base CSP layer is now
+  if-not-present and only `/calendar` sends a variant adding exactly the
+  configured Google sign-in origin to form-action (no wildcards).
+- Real-browser regression `crates/meeting-bot/tests/web_browser.rs` (headless
+  Chrome): before the fix Connect stayed on /calendar and Sign out stayed on
+  /logout (`counter-evidence-web-origin.log`); with only the referrer fix,
+  Sign out works but Connect is still blocked (`web-browser-csp-only-experiment.log`);
+  with both, Connect reaches the Google consent fixture with PKCE and Sign out
+  works (`web-browser-test.log`, 5/5 repeat runs). Header test pins
+  same-origin, the exact calendar form-action and the base CSP elsewhere.
+- Library test assertion updated (no-referrer -> same-origin); library owner
+  6647394a notified of the two shared lines.
+- Workspace 150 passed / 0 failed (incl. browser test); clippy 0; fmt; prettier.
+
 ## Empty recordings (review-empty-recordings.md, 22:22Z)
 
 - POST /v1/meetings/{id}/cancel (device token; body {"reason":

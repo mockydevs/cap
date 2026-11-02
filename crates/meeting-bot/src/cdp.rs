@@ -122,6 +122,8 @@ pub struct LaunchOptions<'a> {
     pub pulse_source: Option<&'a str>,
     /// Only for container runtimes without user namespaces.
     pub no_sandbox: bool,
+    /// Tests on a workstation: no window.
+    pub headless: bool,
 }
 
 impl Browser {
@@ -168,6 +170,9 @@ impl Browser {
             .stderr(Stdio::null());
         if o.no_sandbox {
             cmd.arg("--no-sandbox");
+        }
+        if o.headless {
+            cmd.arg("--headless=new");
         }
         let mut child = cmd
             .spawn()
@@ -249,6 +254,12 @@ impl Browser {
             });
         }
         Ok(r["result"].get("value").cloned().unwrap_or(Value::Null))
+    }
+
+    /// Any page-scoped DevTools command (tests use it to set cookies).
+    pub fn command(&mut self, method: &str, params: Value) -> Result<Value> {
+        let session = self.session.clone();
+        self.cdp.call(Some(&session), method, params)
     }
 
     /// A real (trusted) mouse click at page coordinates.

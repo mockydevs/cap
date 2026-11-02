@@ -372,7 +372,9 @@ async fn staff_sign_in_through_calari_and_browse_meetings() {
         "Calari display name, escaped"
     );
     assert_eq!(hd[header::CACHE_CONTROL], "no-store");
-    assert_eq!(hd[header::REFERRER_POLICY], "no-referrer");
+    // same-origin, not no-referrer: Chromium sends `Origin: null` on our own
+    // forms under no-referrer, which the Origin checks refuse.
+    assert_eq!(hd[header::REFERRER_POLICY], "same-origin");
     assert!(hd[header::CONTENT_SECURITY_POLICY]
         .to_str()
         .unwrap()
