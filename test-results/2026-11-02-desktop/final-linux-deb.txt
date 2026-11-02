@@ -1,6 +1,6 @@
-source head: d43981dca0707d675593edaec59ebc0be8a0537f (clean at build)
+source head: 5179a45ebd2528f5113b2e21b6202d875e1fd36f (clean at build)
 package: /home/don/code/cap-desktop-shipping/dist/desktop/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
-sha256: d9da06f8c7ad6e988dd644615a0390e675d164b71d11b13b894abe24c7320afd  bytes: 7919054
+sha256: 7cbdb79c2b5f06052a4bacbdcfaa70e158d1ecdfd75be9b05caab02a5ea1bdd5  bytes: 7919562
 build: release profile, CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech, release-config {createUpdaterArtifacts:false}, no updater pubkey/endpoint
 Package: cap
 Version: 0.2.0-beta.6
@@ -10,6 +10,7 @@ cap-desktop: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamicall
 production origin in binary: 1
 CAP_DEV_SERVER_URL in binary (must be 0): 0
 test server 127.0.0.1:87xx in binary (must be 0): 0
+supersedes: d9da06f8... (d43981d) and 23b7fe4b... (4b93215); do not publish those
 install=0
 missing shared libraries: 0
 app-running-after-12s
