@@ -1,6 +1,6 @@
-source head: 4b93215e1fc6fd8a557dfb5c956eb1142ea23ed2 (clean)
+source head: d43981dca0707d675593edaec59ebc0be8a0537f (clean at build)
 package: /home/don/code/cap-desktop-shipping/dist/desktop/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
-sha256: 23b7fe4b0a2684e8cc339ad170b1ea1476b0cbb0be4973b775d97cb34ca6105a  bytes: 7918224
+sha256: d9da06f8c7ad6e988dd644615a0390e675d164b71d11b13b894abe24c7320afd  bytes: 7919054
 build: release profile, CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech, release-config {createUpdaterArtifacts:false}, no updater pubkey/endpoint
 Package: cap
 Version: 0.2.0-beta.6
@@ -9,8 +9,7 @@ Depends: ffmpeg, libwebkit2gtk-4.1-0, libgtk-3-0
 cap-desktop: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, 
 production origin in binary: 1
 CAP_DEV_SERVER_URL in binary (must be 0): 0
-127.0.0.1:8797 / test server in binary (must be 0): 0
-updater endpoint in config (must be none): 
+test server 127.0.0.1:87xx in binary (must be 0): 0
 install=0
 missing shared libraries: 0
 app-running-after-12s
