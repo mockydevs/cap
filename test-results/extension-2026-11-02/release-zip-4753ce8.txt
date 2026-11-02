@@ -1,0 +1,48 @@
+source: 4753ce807c574a847e8820493b60f9f9301cf9b5 (clean tree)
+zip: /home/don/code/cap-extension/target/extension/cap-extension_0.1.0_4753ce8.zip
+sha256: 86a0dc6065512f72d3442d302076908a75c9ccf861395bc415ebc6ba126f0fbf  bytes: 33844
+manifest version: 0.1.0
+--- files (zip listing)
+manifest.json
+src/
+src/background.js
+src/calendar.js
+src/chunker.js
+src/config.js
+src/detector.wasm
+src/icon.png
+src/meet.js
+src/offscreen.html
+src/offscreen.js
+src/options.html
+src/options.js
+src/popup.html
+src/popup.js
+src/shared.js
+src/ui.css
+--- every packaged file equals source (except detector.wasm, built)
+same manifest.json
+same src/background.js
+same src/calendar.js
+same src/chunker.js
+same src/config.js
+src/detector.wasm built 3f72d3de6272d899
+same src/icon.png
+same src/meet.js
+same src/offscreen.html
+same src/offscreen.js
+same src/options.html
+same src/options.js
+same src/popup.html
+same src/popup.js
+same src/shared.js
+same src/ui.css
+--- production origins
+4:export const CAP_SERVER = "https://meetings.calari.tech";
+5:export const CALARI_ORIGIN = "https://calarisolutions.com";
+localhost/127.0.0.1 anywhere in package (must be 0): 0
+host_permissions: ['https://meet.google.com/*', 'https://calendar.google.com/*', 'https://meetings.calari.tech/*']
+oauth2 client_id placeholder: True
+meet.js has re-arm fix: 1
+stable ID (from manifest key): edoidpfmflnlhjkmaimdamkmokaphcba
+supersedes (never publish): 722 ZIP 3245aa4e (72226b5)
