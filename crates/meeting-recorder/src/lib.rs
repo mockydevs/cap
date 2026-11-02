@@ -463,7 +463,8 @@ pub struct Session {
 
 impl Session {
     pub fn start(opts: StartOptions) -> Result<Self> {
-        std::fs::create_dir_all(&opts.dir)?;
+        // Private before anything is written: it will hold client audio.
+        private_dir(&opts.dir)?;
         // Before the meeting exists on the server, so a missing output
         // device is reported without leaving an empty meeting behind.
         let (inputs, system_audio) = start_system_audio(&opts.inputs)?;
@@ -673,6 +674,47 @@ struct ControlCtx {
     system_audio: Vec<system_audio::Loopback>,
 }
 
+/// Creates a meeting's folder so only this user can open it: it holds client
+/// audio and the journal. Parents are created as usual (they belong to the
+/// app); the meeting folder itself is created with mode 0700, or, if it
+/// already exists, must be a real directory (not a symlink) and is
+/// restricted to 0700. Windows relies on the per-user profile's ACL.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+        let meta = std::fs::symlink_metadata(dir)?;
+        if !meta.file_type().is_dir() {
+            return Err(std::io::Error::other(
+                "the meeting folder is not a plain directory",
+            ));
+        }
+        // The umask can strip bits from the create mode; set it exactly.
+        if meta.permissions().mode() & 0o777 != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        let mode = std::fs::symlink_metadata(dir)?.permissions().mode() & 0o777;
+        if mode != 0o700 {
+            return Err(std::io::Error::other(
+                "could not make the meeting folder private",
+            ));
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(dir)
+    }
+}
+
 /// Starts native system-audio captures and points FFmpeg at their pipes.
 fn start_system_audio(
     inputs: &[ffmpeg::Input],
@@ -789,6 +831,52 @@ fn map_reason(r: cap_meeting_detector::StopReason) -> StopReason {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Runs in a child process with umask 000 (a permissive desktop setup),
+    /// so this test never changes the umask of the shared test process.
+    #[cfg(unix)]
+    #[test]
+    fn meeting_folders_are_private_even_with_a_permissive_umask() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let mode = |p: &Path| std::fs::symlink_metadata(p).unwrap().permissions().mode() & 0o777;
+        if std::env::var_os("CAP_PRIVATE_DIR_CHILD").is_none() {
+            let status = Command::new("sh")
+                .arg("-c")
+                .arg("umask 000; exec \"$0\" --exact tests::meeting_folders_are_private_even_with_a_permissive_umask --test-threads=1")
+                .arg(std::env::current_exe().unwrap())
+                .env("CAP_PRIVATE_DIR_CHILD", "1")
+                .status()
+                .unwrap();
+            assert!(status.success(), "child run failed");
+            return;
+        }
+        let root = std::env::temp_dir().join(format!("cap-private-{}", uuid::Uuid::new_v4()));
+        // New folder: 0700 although the umask would allow 0777.
+        let fresh = root.join("meetings").join("one");
+        private_dir(&fresh).unwrap();
+        assert_eq!(mode(&fresh), 0o700);
+        // Files written inside are unreachable for others through the folder.
+        std::fs::write(fresh.join("journal.json"), b"{}").unwrap();
+        assert_eq!(mode(&fresh), 0o700);
+        // An existing world-readable folder is restricted.
+        let old = root.join("meetings").join("two");
+        std::fs::create_dir(&old).unwrap();
+        assert_eq!(mode(&old), 0o777);
+        private_dir(&old).unwrap();
+        assert_eq!(mode(&old), 0o700);
+        // A symlink is refused, and its target is left untouched.
+        let target = root.join("elsewhere");
+        std::fs::create_dir(&target).unwrap();
+        let link = root.join("meetings").join("three");
+        symlink(&target, &link).unwrap();
+        assert!(private_dir(&link).is_err());
+        assert_eq!(mode(&target), 0o777);
+        // So is a file.
+        let file = root.join("meetings").join("four");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(private_dir(&file).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn only_confirmed_uploads_count_as_acknowledged() {
