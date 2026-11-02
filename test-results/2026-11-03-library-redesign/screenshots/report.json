@@ -1,0 +1,170 @@
+[
+  {
+    "label": "desktop",
+    "file": "01-list",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "02-list-expanded",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "03-filter-needs-attention",
+    "url": "/meetings?status=attention",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "04-empty-search",
+    "url": "/meetings?q=zzzz-nothing",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "05-archived",
+    "url": "/meetings?view=archived",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "06-meeting",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "07-note-added",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f?done=note_added#note-cde84b4e-8c18-4e98-9459-7c49b4f04680",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "08-conflict-kept-draft",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f/notes/cde84b4e-8c18-4e98-9459-7c49b4f04680",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "09-confirm-archive",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f?confirm=archive#top",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "10-failed-meeting",
+    "url": "/meetings/06646fe5-6ccb-4442-87cf-6ec15d856244",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "11-recording-meeting",
+    "url": "/meetings/eb82e37a-5ea2-4156-b3e6-be880a4933fe",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "12-keyboard-focus",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "desktop",
+    "file": "other-tenant",
+    "status": 404
+  },
+  {
+    "label": "desktop",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  {
+    "label": "mobile",
+    "file": "01-list",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "02-list-expanded",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "03-filter-needs-attention",
+    "url": "/meetings?status=attention",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "04-empty-search",
+    "url": "/meetings?q=zzzz-nothing",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "05-archived",
+    "url": "/meetings?view=archived",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "06-meeting",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "07-note-added",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f?done=note_added#note-6a55d3a4-c547-4b70-8a4a-3cab886e8fc2",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "08-conflict-kept-draft",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f/notes/6a55d3a4-c547-4b70-8a4a-3cab886e8fc2",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "09-confirm-archive",
+    "url": "/meetings/5f246197-a5af-4035-b6fe-1b0cd353221f?confirm=archive#top",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "10-failed-meeting",
+    "url": "/meetings/06646fe5-6ccb-4442-87cf-6ec15d856244",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "11-recording-meeting",
+    "url": "/meetings/eb82e37a-5ea2-4156-b3e6-be880a4933fe",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "12-keyboard-focus",
+    "url": "/meetings",
+    "overflow": false
+  },
+  {
+    "label": "mobile",
+    "file": "other-tenant",
+    "status": 404
+  },
+  {
+    "label": "mobile",
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  }
+]

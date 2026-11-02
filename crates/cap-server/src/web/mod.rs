@@ -1,6 +1,7 @@
 //! Internal meetings library, signed in through Calari.
 
 pub mod auth;
+pub mod library;
 pub mod pages;
 
 use crate::AppState;
@@ -47,6 +48,15 @@ pub fn router() -> Router<AppState> {
         .route("/calendar/choice", post(crate::attendance::web::choice))
         .route("/meetings/{id}", get(pages::meeting))
         .route("/meetings/{id}/parts/{seq}", get(pages::part))
+        .route("/meetings/{id}/title", post(library::rename))
+        .route("/meetings/{id}/archive", post(library::archive))
+        .route("/meetings/{id}/restore", post(library::restore))
+        .route("/meetings/{id}/notes", post(library::add_note))
+        .route("/meetings/{id}/notes/{note}", post(library::edit_note))
+        .route(
+            "/meetings/{id}/notes/{note}/delete",
+            post(library::delete_note),
+        )
         .route("/static/app.css", get(pages::css))
         .route("/static/app.js", get(pages::js))
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -57,11 +67,11 @@ pub fn router() -> Router<AppState> {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
         ))
+        // `same-origin`, not `no-referrer`: with `no-referrer` browsers send
+        // `Origin: null` on same-site form posts, which the CSRF origin check
+        // refuses. Other sites still receive no referrer.
         .layer(SetResponseHeaderLayer::overriding(
             header::REFERRER_POLICY,
-            // Not "no-referrer": with it Chromium sends `Origin: null` on
-            // same-origin form posts, and every Origin check refuses them.
-            // same-origin still sends nothing to other sites.
             HeaderValue::from_static("same-origin"),
         ))
         .layer(SetResponseHeaderLayer::overriding(

@@ -113,6 +113,33 @@ integration (`login_authorize_url`, `login_exchange_url`, `login_status_url`).
 The library is disabled until they exist: `/login` says sign-in is not set up
 and deliveries carry no Cap link. It is not part of the phase-1 release.
 
+### Notes, titles and archive
+
+Each meeting row expands in place (keyboard or click) to show the latest note
+and the start of the transcript; the meeting page puts notes first, beside the
+player and transcript. Times are US Eastern with EST/EDT. Repeated identical
+transcript lines (a speech-to-text artefact) are shown once with a count; the
+stored transcript is unchanged.
+
+Admins can add, edit and delete notes, rename how a meeting is listed, and
+archive or restore a finished meeting. These live only in the `library_*`
+tables (migration `20261103200001_library_notes.sql`). The recorded title,
+transcript, audio and the frozen Calari delivery are never written, nothing
+is re-sent to Calari, and Calari's own summary and tasks are not changed.
+Archiving hides a meeting from the main list and makes its notes read-only;
+nothing is deleted and the audio stays playable.
+
+Every edit is a same-origin form with the session's token, checked with
+Calari like any page, limited to the signed-in tenant, and version-checked: a
+stale form gets a 409 page that keeps the user's text. A note form sent twice
+creates one note. Limits: titles 200 characters, notes 20,000 characters, 100
+notes per meeting. `library_audit` records who changed what, never note text.
+Pages send `Referrer-Policy: same-origin`; with `no-referrer` browsers send
+`Origin: null` on form posts and the origin check would refuse them.
+
+There is no Calari route for reading its AI notes yet, so the library shows
+none and links to the Calari portal (`CALARI_PORTAL_URL`) instead.
+
 ## Running the server
 
 ```bash
