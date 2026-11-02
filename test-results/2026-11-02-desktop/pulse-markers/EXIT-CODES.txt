@@ -1,0 +1,5 @@
+source: aligned Pulse mixing + marker test (committed next)
+pulse-markers-1 exit=0
+pulse-markers-2 exit=0
+pulse-markers-3 exit=0
+mutation-no-alignment exit=101

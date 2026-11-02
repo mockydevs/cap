@@ -1,0 +1,21 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 10283 ms (10.14 s decoded): [(0, 2016), (2016, 4016), (4016, 6015), (6015, 8015), (8015, 10015), (10015, 10283)]; Recording after 3.51 s; first words 330 Hz 0.0; quiet middle 330/550 Hz 0.5/388.0; last 1.5 s 550 Hz 1326.8
+per second 330/550 Hz: 0:0/0 1:0/0 2:1443/1 3:0/0 4:0/0 5:0/0 6:0/0 7:0/0 8:2/643 9:3/1573
+
+thread 'linux_records_the_microphone_and_the_speakers_through_pulse' (576) panicked at crates/meeting-recorder/tests/capture.rs:796:5:
+the first words after Recording are missing
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test linux_records_the_microphone_and_the_speakers_through_pulse ... FAILED
+
+failures:
+
+failures:
+    linux_records_the_microphone_and_the_speakers_through_pulse
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 14.08s
+
+error: test failed, to rerun pass `-p cap-meeting-recorder --test capture`

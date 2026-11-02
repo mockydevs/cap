@@ -673,48 +673,6 @@ fn a_device_that_never_starts_fails_cleanly() {
     e.rt.block_on(e.state.db.close());
 }
 
-/// Milliseconds until FFmpeg delivers the first audio from a Pulse source.
-fn pulse_first_audio_ms(ffmpeg: &str, source: &str) -> u64 {
-    use std::io::Read;
-    let started = Instant::now();
-    let mut child = std::process::Command::new(ffmpeg)
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-f",
-            "pulse",
-            "-i",
-            source,
-        ])
-        .args([
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-flush_packets",
-            "1",
-            "-f",
-            "s16le",
-            "-",
-        ])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut first = [0u8; 320];
-    child
-        .stdout
-        .as_mut()
-        .unwrap()
-        .read_exact(&mut first)
-        .unwrap();
-    let ms = started.elapsed().as_millis() as u64;
-    let _ = child.kill();
-    let _ = child.wait();
-    ms
-}
-
 /// Real PulseAudio capture with the inputs the app picks on Linux: the
 /// default microphone plus the speakers' monitor. Needs a running PulseAudio
 /// (or PipeWire-Pulse) with something playing on both; see
@@ -754,15 +712,19 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
             Input::LinuxMonitor
         ]
     );
-    // How long each Pulse input takes to deliver its first audio here (a
-    // fresh PulseAudio starts the speakers' monitor in about 2 s, the
-    // microphone in about 0.1 s). That start-up is not capturable audio.
-    let ready_ms = ["default", "@DEFAULT_MONITOR@"]
-        .iter()
-        .map(|source| pulse_first_audio_ms(&e.ffmpeg, source))
-        .max()
-        .unwrap();
+    // Both sources start muted; unmuting a capture source is instant, so the
+    // test controls exactly when sound exists.
+    let mute = |source: &str, on: bool| {
+        assert!(std::process::Command::new("pactl")
+            .args(["set-source-mute", source, if on { "1" } else { "0" }])
+            .status()
+            .unwrap()
+            .success());
+    };
+    mute("@DEFAULT_SOURCE@", true);
+    mute("@DEFAULT_MONITOR@", true);
     let (_, d) = dir();
+    let asked = Instant::now();
     let (mut session, events) = start_with(
         Client::new(&e.server, &e.token).unwrap(),
         &e.ffmpeg,
@@ -771,11 +733,19 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         CaptureMode::Audio,
         DetectorConfig::default(),
     );
-    // 10 s: a fresh PulseAudio (as in CI) takes about 2 s to start the
-    // speakers' monitor stream, which is not captured. Stopping keeps
-    // everything captured up to Stop (see stop_keeps_audio_up_to_stop...).
-    std::thread::sleep(Duration::from_secs(10));
+    // "First words": the microphone sounds for 0.7 s right after Recording
+    // is reported. They must be in the recording (no start-up gap).
+    // The recording starts when FFmpeg starts, so they sit about `starting` in.
+    let starting = asked.elapsed().as_secs_f64();
+    mute("@DEFAULT_SOURCE@", false);
+    std::thread::sleep(Duration::from_millis(700));
+    mute("@DEFAULT_SOURCE@", true);
+    // Silence, then the other side speaks in the last 1.5 s before Stop.
+    std::thread::sleep(Duration::from_millis(7_800));
+    mute("@DEFAULT_MONITOR@", false);
+    std::thread::sleep(Duration::from_millis(1_500));
     session.stop();
+    mute("@DEFAULT_MONITOR@", true);
     assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
@@ -792,15 +762,46 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         .map(|s| (s.start_ms, s.end_ms))
         .collect();
     let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
-    eprintln!("pulse recorded {recorded} ms of ~10 s, inputs ready after {ready_ms} ms: {spans:?}");
+    let samples = decoded_segments(&e.ffmpeg, &d);
+    let at = |from: f64, to: f64| {
+        let n = samples.len();
+        &samples[((from * 8000.0) as usize).min(n)..((to * 8000.0) as usize).min(n)]
+    };
+    let secs = samples.len() as f64 / 8000.0;
+    let first_words = tone_level(at(starting - 0.3, starting + 1.2), 330.0);
+    let quiet = (
+        tone_level(at(starting + 1.5, starting + 7.0), 330.0),
+        tone_level(at(starting + 1.5, starting + 7.0), 550.0),
+    );
+    let before_stop = tone_level(at(secs - 1.5, secs), 550.0);
+    eprintln!(
+        "pulse recorded {recorded} ms ({secs:.2} s decoded): {spans:?}; Recording after {starting:.2} s; first words 330 Hz {first_words:.1}; quiet middle 330/550 Hz {:.1}/{:.1}; last 1.5 s 550 Hz {before_stop:.1}",
+        quiet.0, quiet.1
+    );
+    let per_second: Vec<String> = (0..secs as usize)
+        .map(|i| {
+            let w = at(i as f64, i as f64 + 1.0);
+            format!(
+                "{i}:{:.0}/{:.0}",
+                tone_level(w, 330.0),
+                tone_level(w, 550.0)
+            )
+        })
+        .collect();
+    eprintln!("per second 330/550 Hz: {}", per_second.join(" "));
     assert!(p.transcript.segments.len() >= 3, "{spans:?}");
-    // Session::start returns (Recording) only once the inputs deliver
-    // audio, so the whole 10 s until Stop must be kept (1 s tolerance for
-    // segment rounding). The measured input start-up is printed for context.
-    let floor = 9_000u64;
     assert!(
-        recorded >= floor,
-        "only {recorded} ms kept of 10 s after Recording (inputs start-up {ready_ms} ms); at least {floor} ms expected"
+        recorded >= 9_000,
+        "only {recorded} ms kept of 10 s after Recording"
+    );
+    assert!(
+        first_words > 200.0,
+        "the first words after Recording are missing"
+    );
+    assert!(before_stop > 200.0, "the audio just before Stop is missing");
+    assert!(
+        quiet.0 < 50.0 && quiet.1 < 50.0,
+        "sound where there was none: markers misplaced"
     );
     e.rt.block_on(e.state.db.close());
 }

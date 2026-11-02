@@ -157,6 +157,32 @@ impl Input {
 
 /// Full argument list (without the `ffmpeg` program name).
 pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u32) -> Vec<String> {
+    args_aligned(inputs, mode, dir, segment_seconds, None)
+}
+
+/// Whether live PulseAudio inputs should be aligned on wall-clock time:
+/// audio mode with more than one input, all of them PulseAudio.
+pub fn wants_alignment(inputs: &[Input], mode: CaptureMode) -> bool {
+    mode == CaptureMode::Audio
+        && inputs.len() > 1
+        && inputs
+            .iter()
+            .all(|i| matches!(i, Input::LinuxPulse { .. } | Input::LinuxMonitor))
+}
+
+/// Like [`args`]; with `origin` (Unix seconds, taken just before FFmpeg
+/// starts) PulseAudio inputs keep their wall-clock timestamps and are each
+/// shifted to that origin and padded with silence until their stream starts.
+/// Otherwise the mixer pairs samples by count: a microphone stream that
+/// starts 2 s after the speakers' monitor ended up 2 s late in the mix, and
+/// its last 2 s before Stop were cut.
+pub fn args_aligned(
+    inputs: &[Input],
+    mode: CaptureMode,
+    dir: &Path,
+    segment_seconds: u32,
+    origin: Option<f64>,
+) -> Vec<String> {
     let mut out: Vec<String> = vec![
         "-hide_banner".into(),
         "-loglevel".into(),
@@ -167,6 +193,9 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
         "0.05".into(),
         "-y".into(),
     ];
+    if origin.is_some() {
+        out.push("-copyts".into());
+    }
     for input in inputs {
         out.extend(input.args());
     }
@@ -180,7 +209,19 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
         .iter()
         .position(Input::is_video)
         .filter(|_| mode == CaptureMode::Video);
-    let mix = if audio.len() > 1 {
+    let mix = if let (Some(origin), true) = (origin, audio.len() > 1) {
+        let mut graph = String::new();
+        for n in &audio {
+            graph.push_str(&format!(
+                "[{n}:a]asetpts=PTS-{origin:.6}/TB,aresample=async=1:first_pts=0[a{n}];"
+            ));
+        }
+        let labels: String = audio.iter().map(|n| format!("[a{n}]")).collect();
+        format!(
+            "{graph}{labels}amix=inputs={}:duration=longest:normalize=0,asplit=2[rec][vad]",
+            audio.len()
+        )
+    } else if audio.len() > 1 {
         let labels: String = audio.iter().map(|n| format!("[{n}:a]")).collect();
         format!(
             "{labels}amix=inputs={}:duration=longest:normalize=0,asplit=2[rec][vad]",
@@ -364,6 +405,47 @@ mod tests {
             SEGMENT_SECONDS,
         );
         assert!(!a.join(" ").contains("libvpx"));
+    }
+
+    #[test]
+    fn pulse_inputs_are_aligned_on_wall_clock_time() {
+        let pulse = [
+            Input::LinuxPulse {
+                source: "default".into(),
+            },
+            Input::LinuxMonitor,
+        ];
+        assert!(wants_alignment(&pulse, CaptureMode::Audio));
+        assert!(!wants_alignment(&pulse, CaptureMode::Video));
+        assert!(!wants_alignment(&pulse[..1], CaptureMode::Audio));
+        assert!(!wants_alignment(
+            &[
+                Input::WindowsDshow {
+                    device: "Mic".into()
+                },
+                Input::PcmPipe { path: "p".into() }
+            ],
+            CaptureMode::Audio
+        ));
+        let joined = args_aligned(
+            &pulse,
+            CaptureMode::Audio,
+            Path::new("/m"),
+            30,
+            Some(1_800_000_000.25),
+        )
+        .join(" ");
+        assert!(
+            joined.contains("-y -copyts -f pulse -i default"),
+            "{joined}"
+        );
+        assert!(joined
+            .contains("[0:a]asetpts=PTS-1800000000.250000/TB,aresample=async=1:first_pts=0[a0];"));
+        assert!(joined.contains("[a0][a1]amix=inputs=2"));
+        // Without an origin nothing changes.
+        assert!(!args(&pulse, CaptureMode::Audio, Path::new("/m"), 30)
+            .join(" ")
+            .contains("-copyts"));
     }
 
     #[test]

@@ -477,12 +477,20 @@ impl Session {
         // device is reported without leaving an empty meeting behind.
         let (inputs, mut system_audio) = start_system_audio(&opts.inputs)?;
 
+        // Several PulseAudio streams start at different times; align them on
+        // the wall clock from just before FFmpeg starts.
+        let origin = ffmpeg::wants_alignment(&inputs, opts.mode).then(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0.0, |d| d.as_secs_f64())
+        });
         let mut child = Command::new(&opts.ffmpeg)
-            .args(ffmpeg::args(
+            .args(ffmpeg::args_aligned(
                 &inputs,
                 opts.mode,
                 &opts.dir,
                 opts.segment_seconds,
+                origin,
             ))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
