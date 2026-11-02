@@ -402,12 +402,16 @@ fn a_paced_system_audio_pipe_mixes_with_the_microphone() {
         "{evs:?}"
     );
     let p = delivered(&e);
-    // 2-second segments over ~7 s: the mix kept running after the pipe went quiet.
+    // 2-second segments over ~7 s: the mix kept running after the pipe went
+    // quiet, and kept up in real time (FFmpeg 8 probing a raw pipe used to
+    // hold everything back, so the last seconds were lost at stop).
     assert!(
         p.transcript.segments.len() >= 3,
         "{:?}",
         p.transcript.segments
     );
+    let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
+    assert!(recorded >= 6_000, "only {recorded} ms of ~7 s recorded");
     e.rt.block_on(e.state.db.close());
 }
 

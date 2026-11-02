@@ -239,7 +239,12 @@ fn platform_input(
     } else if o.system_audio {
         // The computer's own sound via WASAPI loopback (no extra driver).
         let loopback = cap_meeting_recorder::system_audio::Loopback::start()?;
+        // Known raw format: no probing (it delays FFmpeg 8 by seconds).
         c.args([
+            "-probesize",
+            "32",
+            "-analyzeduration",
+            "0",
             "-thread_queue_size",
             "1024",
             "-f",
@@ -298,6 +303,10 @@ fn platform_input(
         //   32-bit float, little-endian, 48000 Hz, 2-channel interleaved.
         let (helper, fifo) = macos_spawn_system_audio_helper()?;
         c.args([
+            "-probesize",
+            "32",
+            "-analyzeduration",
+            "0",
             "-f",
             "f32le",
             "-ar",
