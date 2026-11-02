@@ -434,3 +434,99 @@ async fn hung_first_recording_report_stops_capture_before_server_lease() {
     drop(c);
     w.drop_db().await;
 }
+
+/// Coolify injects the whole app environment into every container. Inject
+/// fake secrets and check the real environment of every runner process
+/// (entrypoint allowlist; token only in the non-dumpable runner).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn injected_platform_secrets_never_reach_runner_processes() {
+    let Ok(image) = std::env::var("CAP_TEST_BOT_IMAGE") else {
+        eprintln!("SKIPPED: set CAP_TEST_BOT_IMAGE");
+        return;
+    };
+    let Some((w, att, _acme, _real)) = ready_world(90).await else {
+        return;
+    };
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let meet = fake_meet(seen.clone(), true).await;
+    let volume = Volume(format!("cap-bot-spool-{}", Uuid::new_v4().simple()));
+    let fakes = [
+        ("DATABASE_URL", "postgres://leak:FAKE-DB-SECRET-1@db/cap"),
+        ("AWS_SECRET_ACCESS_KEY", "FAKE-AWS-SECRET-2"),
+        (
+            "CAP_MEETING_INTEGRATIONS",
+            "[{\"secret\":\"FAKE-INTEGRATION-SECRET-3\"}]",
+        ),
+        ("GOOGLE_OAUTH_CLIENT_SECRET", "FAKE-GOOGLE-SECRET-4"),
+        ("CAP_CALENDAR_ENCRYPTION_KEY", "FAKE-ENCRYPTION-KEY-5"),
+        ("CAP_CALENDAR_BOT_TOKEN", "FAKE-SERVER-SIDE-COPY-6"),
+    ];
+    let c = start_runner_with(&image, &w.cap, &meet, &volume.0, &fakes);
+    assert_eq!(
+        wait_for(&w, att, &["recording"], 120).await,
+        "recording",
+        "{}",
+        logs(&c)
+    );
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    // Privileged exec only to read other processes' /proc/<pid>/environ
+    // (the runner is non-dumpable); the exec's own processes are skipped.
+    let script = r#"self=$$; for d in /proc/[0-9]*; do p=${d#/proc/}; [ "$p" = "$self" ] && continue;
+      pp=$(sed -n 's/^PPid:[[:space:]]*//p' $d/status 2>/dev/null); [ "$pp" = "$self" ] && continue;
+      printf '%s\t%s\t' "$p" "$(cat $d/comm 2>/dev/null)"; tr '\0' ' ' < $d/environ 2>/dev/null; echo; done"#;
+    let out = Command::new("docker")
+        .args(["exec", "--privileged", "-u", "0", &c.0, "sh", "-c", script])
+        .output()
+        .unwrap();
+    let dump = String::from_utf8_lossy(&out.stdout).into_owned();
+    let mut comms = Vec::new();
+    for line in dump.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let (pid, comm, env) = (
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or(""),
+        );
+        comms.push(comm.to_owned());
+        for (_, value) in &fakes {
+            let marker = value
+                .split("FAKE-")
+                .nth(1)
+                .map(|m| {
+                    format!(
+                        "FAKE-{}",
+                        &m[..m
+                            .find(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+                            .unwrap_or(m.len())]
+                    )
+                })
+                .unwrap();
+            assert!(
+                !env.contains(&marker),
+                "pid {pid} ({comm}) carries {marker}"
+            );
+        }
+        if pid != "1" {
+            assert!(
+                !env.contains(BOT_TOKEN),
+                "pid {pid} ({comm}) carries the runner token"
+            );
+            assert!(!env.contains("CAP_BOT_RUNNER_TOKEN"), "pid {pid} ({comm})");
+        }
+    }
+    eprintln!("processes inspected: {comms:?}");
+    for needed in [
+        "cap-meeting-bot",
+        "Xvfb",
+        "pulseaudio",
+        "ffmpeg",
+        "chromium",
+    ] {
+        assert!(
+            comms.iter().any(|c| c.starts_with(needed)),
+            "{needed} not running: {comms:?}"
+        );
+    }
+    drop(c);
+    w.drop_db().await;
+}

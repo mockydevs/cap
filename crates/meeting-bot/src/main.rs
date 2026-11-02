@@ -28,6 +28,9 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // Read once; children (FFmpeg) must not inherit it. Still single-threaded.
+    std::env::remove_var("CAP_BOT_RUNNER_TOKEN");
+    std::env::remove_var("CAP_BOT_RUNNER_TOKEN_FILE");
     // Browser profiles are throwaway; audio is not (see spool).
     let _ = std::fs::remove_dir_all(&cfg.profile_dir);
     if let Err(e) = cap_meeting_bot::spool::ensure(&cfg.spool_dir) {

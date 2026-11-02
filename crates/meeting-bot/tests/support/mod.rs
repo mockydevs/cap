@@ -228,6 +228,18 @@ impl Drop for Volume {
 }
 
 pub fn start_runner(image: &str, server: &str, meet: &str, volume: &str) -> Container {
+    start_runner_with(image, server, meet, volume, &[])
+}
+
+/// Like [`start_runner`], with extra environment (e.g. secrets a platform
+/// injects into every container).
+pub fn start_runner_with(
+    image: &str,
+    server: &str,
+    meet: &str,
+    volume: &str,
+    extra: &[(&str, &str)],
+) -> Container {
     let name = format!("cap-bot-e2e-{}", Uuid::new_v4().simple());
     let out = Command::new("docker")
         .args([
@@ -266,8 +278,13 @@ pub fn start_runner(image: &str, server: &str, meet: &str, volume: &str) -> Cont
             "CAP_BOT_HEARTBEAT_SECONDS=5",
             "-e",
             "CAP_BOT_WAITING_SECONDS=60",
-            image,
         ])
+        .args(
+            extra
+                .iter()
+                .flat_map(|(k, v)| ["-e".to_owned(), format!("{k}={v}")]),
+        )
+        .arg(image)
         .output()
         .unwrap();
     assert!(

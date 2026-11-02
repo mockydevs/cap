@@ -1,0 +1,20 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.62s
+     Running tests/attend.rs (target/debug/deps/attend-b57928efb7fa5515)
+
+running 1 test
+
+thread 'injected_platform_secrets_never_reach_runner_processes' (442161) panicked at crates/meeting-bot/tests/attend.rs:504:13:
+pid 1 (cap-meeting-bot) carries FAKE-DB-SECRET-1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test injected_platform_secrets_never_reach_runner_processes ... FAILED
+
+failures:
+
+failures:
+    injected_platform_secrets_never_reach_runner_processes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 10.57s
+
+error: test failed, to rerun pass `-p cap-meeting-bot --test attend`

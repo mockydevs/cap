@@ -166,7 +166,12 @@ Google Calendar API, add scope `calendar.events.readonly` to the consent screen.
 Runner container (`infra/calendar-bot/Dockerfile`, service `cap-meeting-bot`
 in `docker-compose.coolify.yml`): `CAP_BOT_ENABLED` (idles without
 credentials when off), `CAP_SERVER_URL` (https; the public Cap URL),
-`CAP_BOT_RUNNER_TOKEN` or `CAP_BOT_RUNNER_TOKEN_FILE`. The runner makes itself
+`CAP_BOT_RUNNER_TOKEN` or `CAP_BOT_RUNNER_TOKEN_FILE`. The entrypoint keeps
+only an explicit allowlist of variables (Coolify injects the whole app
+environment, including database, AWS, Google and integration secrets, into
+every container) before starting anything; Xvfb and PulseAudio start without
+the runner token, and the runner drops it from its environment after reading
+it, so FFmpeg never inherits it. The runner makes itself
 non-dumpable (`PR_SET_DUMPABLE=0`) and starts Chrome with a cleared
 environment, so a compromised renderer running as the same user cannot read
 the token from its environment or memory. The compose service is on its own

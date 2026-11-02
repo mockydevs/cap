@@ -1,5 +1,21 @@
 # Cap calendar attendance: implementation result
 
+## Runner environment hardening (root request 21:32Z)
+
+- Entrypoint keeps only an explicit allowlist of variables before starting
+  Xvfb/PulseAudio/the runner (no values in arguments); Xvfb and PulseAudio
+  start without the runner token; the runner drops it from its environment
+  after reading; Chrome keeps its cleared environment; runner non-dumpable.
+- Test `injected_platform_secrets_never_reach_runner_processes`: fake
+  DATABASE_URL, AWS_SECRET_ACCESS_KEY, CAP_MEETING_INTEGRATIONS,
+  GOOGLE_OAUTH_CLIENT_SECRET, CAP_CALENDAR_ENCRYPTION_KEY and
+  CAP_CALENDAR_BOT_TOKEN injected; during recording every process's real
+  /proc/<pid>/environ (runner, Xvfb, pulseaudio, ffmpeg, all chromium) has
+  none of them, and only PID 1 (runner) has the runner token. Fails on the
+  previous image (`counter-evidence-env-allowlist.log`: PID 1 carried
+  FAKE-DB-SECRET-1); passes now. All 6 container tests exit 0 with real
+  Whisper; workspace 142/0; clippy 0; fmt; prettier; prod image rebuilt.
+
 ## Composite gate (root addendum 2026-11-02 20:49Z)
 
 Real local Cap + real local Calari (portal head 2108496 on main 6330c28,
