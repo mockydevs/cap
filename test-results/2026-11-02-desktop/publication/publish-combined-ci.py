@@ -7,7 +7,11 @@ It never restarts anything: the Cap service restart is a separate, explicit step
 
     python3 -I publish-combined-ci.py \
         --stage /data/cap/downloads/.release-41383982100 \
-        --live  /data/cap/downloads            [--apply]
+        --live  /data/cap/downloads \
+        --expect-current-sha <sha256 of the live manifest.json | absent>   [--apply]
+
+Takes an exclusive lock (<live>/.publish.lock) so two runs never overlap, and refuses unless the
+live manifest.json is exactly the one the operator expects (--expect-current-sha).
 
 What --apply does, in order (stops at the first problem, before any change):
   1. Checks the staged manifest is strict hub v1 and lists exactly the expected
@@ -25,6 +29,7 @@ What --apply does, in order (stops at the first problem, before any change):
 
 import argparse
 import datetime
+import fcntl
 import hashlib
 import json
 import os
@@ -83,6 +88,18 @@ def fsync_dir(d: pathlib.Path) -> None:
         os.close(fd)
 
 
+def snapshot(path: pathlib.Path):
+    """(sha256, bytes) of a regular non-symlink manifest, or ("absent", None)."""
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return "absent", None
+    if not stat.S_ISREG(mode):
+        fail(f"{path} is not a regular file (symlink or other)")
+    data = path.read_bytes()
+    return hashlib.sha256(data).hexdigest(), data
+
+
 def validate_manifest(raw: bytes, where: pathlib.Path) -> dict:
     """Same rules as the hub: strict keys, one entry per platform, safe names, real files."""
     if len(raw) > MAX_MANIFEST:
@@ -120,10 +137,22 @@ def validate_manifest(raw: bytes, where: pathlib.Path) -> dict:
     return m
 
 
+def require_exact_platforms(m: dict) -> None:
+    """Exactly the four platforms; both macOS entries signing_pending."""
+    by = {a["platform"]: a for a in m["artifacts"]}
+    if set(by) != set(PLATFORMS) or len(m["artifacts"]) != len(PLATFORMS):
+        fail("staged manifest must list exactly the four platforms")
+    for mac in ("macos-aarch64", "macos-x86_64"):
+        if by[mac] != {"platform": mac, "status": "signing_pending"}:
+            fail(f"{mac} must be exactly signing_pending")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", required=True, type=pathlib.Path)
     ap.add_argument("--live", required=True, type=pathlib.Path)
+    ap.add_argument("--expect-current-sha", required=True,
+                    help="sha256 of the live manifest.json the operator expects, or 'absent'")
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     for p, (_, size, digest) in EXPECTED.items():
@@ -134,10 +163,29 @@ def main() -> None:
         fail(f"stage directory must be named .release-{RUN_ID}")
     if stage.parent != live:
         fail("stage must be a directory inside the live download directory (same filesystem)")
+    expect = args.expect_current_sha
+    if expect != "absent" and not re.fullmatch(r"[0-9a-f]{64}", expect):
+        fail("--expect-current-sha must be a sha256 or 'absent'")
+
+    # Exclusive lock for the whole run (released when the process exits).
+    lock_fd = os.open(live / ".publish.lock", os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fail("another publication run holds the lock")
+
+    current = live / "manifest.json"
+    current_sha, current_raw = snapshot(current)
+    if current_sha != expect:
+        fail(f"live manifest is {current_sha}, operator expected {expect}")
+    print("live manifest matches the expected state:", current_sha)
 
     # 1. Staged release.
-    staged_raw = (stage / "manifest.json").read_bytes()
+    staged_sha, staged_raw = snapshot(stage / "manifest.json")
+    if staged_raw is None:
+        fail("staged manifest.json is missing")
     staged = validate_manifest(staged_raw, stage)
+    require_exact_platforms(staged)
     available = {a["platform"]: a for a in staged["artifacts"] if a["status"] == "available"}
     if set(available) != set(EXPECTED):
         fail(f"staged manifest must list exactly {sorted(EXPECTED)} as available")
@@ -161,23 +209,22 @@ def main() -> None:
         else:
             to_copy.append((stage / name, target, digest))
             print(f"live {name}: will be added")
-    current = live / "manifest.json"
-    if not to_copy and current.exists() and current.read_bytes() == staged_raw:
+    if not to_copy and current_raw == staged_raw:
         print("already published: live files and manifest match this release; nothing to do")
         return
-    print("live manifest:", "present" if current.exists() else "absent", "-> will be backed up" if current.exists() else "")
+    print("live manifest:", "absent" if current_raw is None else "present -> will be backed up")
 
     if not args.apply:
         print("DRY RUN: nothing changed. Re-run with --apply.")
         return
 
-    # 3. Backup.
-    if current.exists():
+    # 3. Backup (of the exact snapshot that was checked).
+    if current_raw is not None:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
         backup = live / f"manifest.json.bak-{stamp}-{os.getpid()}"
         fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         with os.fdopen(fd, "wb") as out:
-            out.write(current.read_bytes())
+            out.write(current_raw)
             out.flush()
             os.fsync(out.fileno())
         print("backed up live manifest to", backup.name)
@@ -209,9 +256,13 @@ def main() -> None:
         os.fsync(out.fileno())
     os.chmod(tmp, 0o644)
     validate_manifest(tmp.read_bytes(), live)
+    # Nothing may have changed the live manifest since the checked snapshot.
+    if snapshot(current)[0] != current_sha:
+        tmp.unlink()
+        fail("live manifest changed during publication; nothing replaced")
     os.replace(tmp, current)
     fsync_dir(live)
-    print("manifest.json replaced atomically (0644). Now restart ONLY the Cap service (runbook step 4).")
+    print("manifest.json replaced atomically (0644). Now restart ONLY the cap-server container (runbook step 4).")
 
 
 if __name__ == "__main__":

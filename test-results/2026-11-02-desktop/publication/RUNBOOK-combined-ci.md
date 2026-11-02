@@ -17,18 +17,22 @@ unpublished (`/downloads/latest.json` 404).
 
 1. Staging (already done by root): `/data/cap/downloads/.release-41383982100/` holds `manifest.json`
    and the two files above. It must sit inside `/data/cap/downloads` (same filesystem).
-2. Dry run on the host, then read the output:
-   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads`
-   It must say "staged release OK" and "will be added" (or "identical bytes, kept") for both files.
-   Any "REFUSED" stops here; nothing was changed.
-3. Apply: the same command with `--apply`. It backs up the current manifest to
-   `manifest.json.bak-<UTC>-<pid>`, adds the installers by temp-copy + fsync + re-hash + 0644 +
-   hard link (never overwrites), then swaps in the new manifest atomically (temp, fsync, 0644,
-   re-validated against the live directory, rename, directory fsync). Running it again prints
-   "already published".
-4. Restart ONLY the Cap Rust service (Coolify "Restart" on the Cap application, or
-   `docker restart <cap-server container>`). The manifest is validated only at startup; if it is
-   wrong the service refuses to start (then do step 6).
+2. Record the live manifest state: `sha256sum /data/cap/downloads/manifest.json` (or note that it is
+   absent). Dry run on the host, then read the output:
+   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads --expect-current-sha <that sha256 | absent>`
+   It must say the live manifest matches, "staged release OK" and "will be added" (or "identical
+   bytes, kept") for both files. Any "REFUSED" stops here; nothing was changed.
+3. Apply: the same command with `--apply`. It holds an exclusive lock (`.publish.lock`), re-checks
+   the live manifest against `--expect-current-sha`, backs that exact snapshot up to
+   `manifest.json.bak-<UTC>-<pid>`, adds the installers by temp-copy + fsync + re-hash + 0644 + hard
+   link (never overwrites), then swaps in the new manifest atomically (temp, fsync, 0644, re-validated
+   against the live directory, live manifest re-checked unchanged, rename, directory fsync). Running
+   it again prints "already published".
+4. Restart ONLY the cap-server container (the Rust service that mounts `/srv/downloads`), not the
+   whole Coolify application: root first verifies the exact container name for the Cap server service
+   (e.g. `docker ps --filter "label=coolify.serviceName=cap-server"` or the Coolify service view), then
+   `docker restart <that exact container>` or Coolify's per-service restart for that one service. The
+   manifest is validated only at startup; if it is wrong the service refuses to start (then do step 6).
 5. Verify: `GET https://cap.calari.tech/healthz` 200; `GET /api/downloads` shows Linux and Windows
    `available` with the sizes/hashes above, macOS signing_pending, updates not_published; HEAD each
    `/downloads/<file>` returns 200 with `X-Artifact-Sha256` equal to the table; `/downloads/latest.json`
@@ -36,7 +40,7 @@ unpublished (`/downloads/latest.json` 404).
    login (CORS) still works.
 6. Roll back (manual, only if step 4/5 fails): atomically restore the backup
    (`cp manifest.json.bak-<...> .manifest.json.rollback && mv .manifest.json.rollback manifest.json`),
-   restart the Cap service again, re-check `/healthz`. Leave the added installer files in place
+   restart that same cap-server container again, re-check `/healthz`. Leave the added installer files in place
    (the hub only serves files listed in the manifest). Do not delete or edit live installers.
 
 Tested against copies of the real CI files in a scratch directory
