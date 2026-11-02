@@ -1,7 +1,5 @@
 {
-  "URLBlocklist": [
-    "*"
-  ],
+  "URLBlocklist": ["*"],
   "URLAllowlist": [
     "about:blank",
     "meet.google.com",
@@ -11,9 +9,7 @@
     "127.0.0.1"
   ],
   "DownloadRestrictions": 3,
-  "ExtensionInstallBlocklist": [
-    "*"
-  ],
+  "ExtensionInstallBlocklist": ["*"],
   "PasswordManagerEnabled": false,
   "AutofillAddressEnabled": false,
   "AutofillCreditCardEnabled": false,

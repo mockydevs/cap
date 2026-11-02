@@ -1,6 +1,12 @@
 {
   "URLBlocklist": ["*"],
-  "URLAllowlist": ["about:blank", "meet.google.com", "google.com", "gstatic.com", "googleapis.com"],
+  "URLAllowlist": [
+    "about:blank",
+    "meet.google.com",
+    "google.com",
+    "gstatic.com",
+    "googleapis.com"
+  ],
   "DownloadRestrictions": 3,
   "ExtensionInstallBlocklist": ["*"],
   "PasswordManagerEnabled": false,

@@ -1,6 +1,7 @@
 # Cap calendar attendance: implementation result
 
 ## Review round 3 (fix for review-round-2.md)
+
 - P1 lease control-thread gap: the join/record thread no longer makes any
   network call while a browser or capture is live; "waiting" and the first
   "recording" report only update state and wake the heartbeat thread. An
@@ -16,6 +17,7 @@
   workspace 140 passed / 0 failed; clippy 0; fmt clean; prod image rebuilt.
 
 ## Review round 2 (fixes for review-round-1.md)
+
 - P1 #1 lease: runner keeps a local fail-closed deadline (send time of last
   confirmed report + granted lease − min(10 s, lease/4)); failed/hung reports
   never extend it; it stops capture and leaves by then; heartbeat thread is
@@ -45,7 +47,6 @@
 - Workspace 138 passed / 0 failed; clippy 0 warnings; fmt clean; prod image
   rebuilt (`bot-image-prod-*.log`).
 
-
 Owner: claude:9bd968c2-5830-42fd-a3fc-673ac2d8d96e (Claude Desktop)
 Worktree: /home/don/code/cap-calendar, branch codex/cap-calendar, base 4350356.
 Commits: 1d81430 (implementation), merge of origin/main 4c722b4 (root privacy
@@ -56,6 +57,7 @@ client data was touched. Root's dirty calendar.rs/google_calendar.rs/lib.rs/docs
 were kept and extended.
 
 ## What was built
+
 - cap-server `attendance/` module: per-staff Google OAuth (state + PKCE bound
   to Cap session, Calari user id, HttpOnly browser cookie; single use),
   ChaCha20-Poly1305 encryption at rest (row/purpose/key-id AAD), bounded
@@ -78,14 +80,15 @@ were kept and extended.
 - Docs: docs/integrations/calari/CALENDAR.md, CALENDAR-PORTAL-CONTRACT.md.
 
 ## Evidence (test-results/calendar/)
-| Command | Exit | Result |
-| --- | --- | --- |
-| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet` | 0 | 140 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below) |
-| `… CAP_TEST_BOT_IMAGE=cap-meeting-bot:calendar-test CAP_TEST_WHISPER_MODEL=ggml-tiny.en cargo test -p cap-meeting-bot --features fake-meet,cap-server/local-whisper --test attend` | 0 | real runner container joined local Meet stand-in, trusted clicks, name "Calari Notetaker", mic/cam off, waited, admitted, recorded synthetic speech, left on end (31 s); real Whisper transcript; signed delivery verified; client routed; receipt rcpt-1; device revoked (`bot-e2e-real-whisper.log`) |
-| `cargo clippy --workspace --all-targets --features cap-meeting-bot/fake-meet` | 0 | 0 warnings (`clippy.log`) |
-| `cargo fmt --all -- --check` | 0 | (`fmt.log`) |
-| `docker build -f infra/calendar-bot/Dockerfile` (prod, no test features) | 0 | runs as uid 10002, policy has no localhost, refuses http server (`bot-image-prod-build.log`, `bot-image-prod-check.log`) |
-| `docker compose -f docker-compose.coolify.yml config --quiet` (placeholder values) | 0 | (`compose-config.log`) |
+
+| Command                                                                                                                                                                            | Exit | Result                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet`                                                                                              | 0    | 140 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below)                                                                                                                                                                                                   |
+| `… CAP_TEST_BOT_IMAGE=cap-meeting-bot:calendar-test CAP_TEST_WHISPER_MODEL=ggml-tiny.en cargo test -p cap-meeting-bot --features fake-meet,cap-server/local-whisper --test attend` | 0    | real runner container joined local Meet stand-in, trusted clicks, name "Calari Notetaker", mic/cam off, waited, admitted, recorded synthetic speech, left on end (31 s); real Whisper transcript; signed delivery verified; client routed; receipt rcpt-1; device revoked (`bot-e2e-real-whisper.log`) |
+| `cargo clippy --workspace --all-targets --features cap-meeting-bot/fake-meet`                                                                                                      | 0    | 0 warnings (`clippy.log`)                                                                                                                                                                                                                                                                              |
+| `cargo fmt --all -- --check`                                                                                                                                                       | 0    | (`fmt.log`)                                                                                                                                                                                                                                                                                            |
+| `docker build -f infra/calendar-bot/Dockerfile` (prod, no test features)                                                                                                           | 0    | runs as uid 10002, policy has no localhost, refuses http server (`bot-image-prod-build.log`, `bot-image-prod-check.log`)                                                                                                                                                                               |
+| `docker compose -f docker-compose.coolify.yml config --quiet` (placeholder values)                                                                                                 | 0    | (`compose-config.log`)                                                                                                                                                                                                                                                                                 |
 
 Calendar integration tests (crates/cap-server/tests/calendar.rs, 8): OAuth
 binding/CSRF/cross-user/replay/wrong account/missing scope; page-cursor
@@ -106,11 +109,12 @@ token length, bounded Calari read). Root early-review items fixed: bounded
 window sync; Claim/Report/pairing-response Debug redacted.
 
 ## Limits / remaining (root)
+
 1. Portal endpoints (worker cbd574a6) must ship first; until then pairing
    fails closed. Calari must also accept `meeting.source = "calendar_bot"`.
 2. Google OAuth app is Testing: refresh tokens expire in 7 days until
    branding + publishing. Register redirect URI above; scopes `openid email
-   calendar.events.readonly`.
+calendar.events.readonly`.
 3. Chrome sandbox off in Docker (default seccomp); container isolation +
    non-dumpable runner instead. Follow-up: ship Chrome seccomp profile.
 4. Real Google Meet DOM not tested (stand-in only); needs root's controlled

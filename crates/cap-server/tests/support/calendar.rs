@@ -393,6 +393,20 @@ async fn spawn_calari(c: Arc<Mutex<Calari>>) -> String {
 
 // ---------------- World ----------------
 
+/// A real local Calari: where it listens and the Cap integration it expects.
+pub struct External {
+    pub cap_port: u16,
+    pub key_id: String,
+    pub tenant_id: String,
+    pub secret: Vec<u8>,
+    pub delivery_url: String,
+    pub authorize_url: String,
+    pub exchange_url: String,
+    pub status_url: String,
+    pub resolve_url: String,
+    pub pairing_url: String,
+}
+
 pub struct Session {
     pub cookie: String,
     pub csrf: String,
@@ -458,6 +472,25 @@ impl World {
         allow_staff: bool,
         bot_lease_seconds: i64,
     ) -> Option<Self> {
+        Self::build(transcription, allow_staff, bot_lease_seconds, None).await
+    }
+
+    /// Against a real (local) Calari instead of the stand-in. Google stays a
+    /// fixture. Cap listens on `external.cap_port` so Calari can call it.
+    pub async fn with_external(
+        transcription: TranscriptionConfig,
+        bot_lease_seconds: i64,
+        external: External,
+    ) -> Option<Self> {
+        Self::build(transcription, false, bot_lease_seconds, Some(external)).await
+    }
+
+    async fn build(
+        transcription: TranscriptionConfig,
+        allow_staff: bool,
+        bot_lease_seconds: i64,
+        external: Option<External>,
+    ) -> Option<Self> {
         let Ok(admin_url) = std::env::var("CAP_TEST_DATABASE_URL") else {
             eprintln!("SKIPPED: set CAP_TEST_DATABASE_URL to run calendar tests");
             return None;
@@ -479,7 +512,10 @@ impl World {
         let calari = Arc::new(Mutex::new(Calari::default()));
         let g = spawn_google(google.clone()).await;
         let c = spawn_calari(calari.clone()).await;
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = external.as_ref().map(|e| e.cap_port).unwrap_or(0);
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .unwrap();
         let cap = format!("http://{}", listener.local_addr().unwrap());
         calari.lock().unwrap().cap_url = Some(cap.clone());
         let dir = std::env::temp_dir().join(format!("cap-cal-{}", Uuid::new_v4().simple()));
@@ -494,16 +530,29 @@ impl World {
             public_base_url: cap.clone(),
             production: false,
             trusted_proxy_hops: 0,
-            integrations: vec![Integration {
-                key_id: "calari-test".into(),
-                tenant_id: TENANT.into(),
-                secret: SECRET.to_vec(),
-                delivery_url: format!("{c}/deliver"),
-                login_authorize_url: Some("https://calari.test/authorize".into()),
-                login_exchange_url: Some(format!("{c}/exchange")),
-                login_status_url: Some(format!("{c}/status")),
-                calendar_resolve_url: Some(format!("{c}/calendar/resolve")),
-                calendar_pairing_url: Some(format!("{c}/calendar/pairing")),
+            integrations: vec![match &external {
+                Some(e) => Integration {
+                    key_id: e.key_id.clone(),
+                    tenant_id: e.tenant_id.clone(),
+                    secret: e.secret.clone(),
+                    delivery_url: e.delivery_url.clone(),
+                    login_authorize_url: Some(e.authorize_url.clone()),
+                    login_exchange_url: Some(e.exchange_url.clone()),
+                    login_status_url: Some(e.status_url.clone()),
+                    calendar_resolve_url: Some(e.resolve_url.clone()),
+                    calendar_pairing_url: Some(e.pairing_url.clone()),
+                },
+                None => Integration {
+                    key_id: "calari-test".into(),
+                    tenant_id: TENANT.into(),
+                    secret: SECRET.to_vec(),
+                    delivery_url: format!("{c}/deliver"),
+                    login_authorize_url: Some("https://calari.test/authorize".into()),
+                    login_exchange_url: Some(format!("{c}/exchange")),
+                    login_status_url: Some(format!("{c}/status")),
+                    calendar_resolve_url: Some(format!("{c}/calendar/resolve")),
+                    calendar_pairing_url: Some(format!("{c}/calendar/pairing")),
+                },
             }],
             transcription,
             abandon_after: Duration::from_secs(3600),
@@ -618,6 +667,33 @@ impl World {
         );
         Session {
             cookie,
+            csrf,
+            user_id: user_id.into(),
+        }
+    }
+
+    /// A Cap web session for a real Calari staff id, written straight to the
+    /// test database (the interactive Calari sign-in is not automated). Every
+    /// request still asks the real Calari whether this staff member is active.
+    pub async fn seed_session(&self, user_id: &str, email: &str, admin: bool) -> Session {
+        let token = ids::random_token(43);
+        sqlx::query(
+            "INSERT INTO cap_web_sessions (token_hash, tenant_id, calari_user_id, email, display_name, role, expires_at)
+             VALUES ($1, $2, $3, $4, $4, $5, now() + interval '8 hours')",
+        )
+        .bind(ids::sha256_hex(token.as_bytes()))
+        .bind(&self.state.cfg.integrations[0].tenant_id)
+        .bind(user_id)
+        .bind(email)
+        .bind(if admin { "admin" } else { "staff" })
+        .execute(&self.state.db)
+        .await
+        .unwrap();
+        let csrf = ids::sha256_hex(
+            format!("cap.csrf.v1:{}", ids::sha256_hex(token.as_bytes())).as_bytes(),
+        );
+        Session {
+            cookie: format!("cap_web={token}"),
             csrf,
             user_id: user_id.into(),
         }

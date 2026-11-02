@@ -1,0 +1,222 @@
+
+> cap@ build /home/don/code/cap-calendar
+> turbo build
+
+• turbo 2.10.9
+
+   • Packages in scope: @cap/ai, @cap/ai-worker, @cap/config, @cap/crypto, @cap/desktop, @cap/domain, @cap/e2e, @cap/editor-domain, @cap/extension, @cap/media-worker, @cap/outbound-http, @cap/postgres, @cap/queue, @cap/recording, @cap/render-worker, @cap/storage, @cap/transcription, @cap/transcription-worker, @cap/web, @cap/webhook-worker
+   • Running build in 20 packages
+   • Remote caching disabled, using shared worktree cache
+
+@cap/editor-domain:build: cache hit, replaying logs d52ef76dcc586a6f
+@cap/postgres:build: cache hit, replaying logs 6bc4d893ef825c9b
+@cap/postgres:build: 
+@cap/postgres:build: > @cap/postgres@0.0.0 build /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/postgres:build: > tsc --noEmit
+@cap/editor-domain:build: 
+@cap/postgres:build: 
+@cap/editor-domain:build: > @cap/editor-domain@0.0.0 build /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/editor-domain:build: > tsc --noEmit
+@cap/editor-domain:build: 
+@cap/transcription:build: cache hit, replaying logs 911b0adde040c427
+@cap/transcription:build: 
+@cap/transcription:build: > @cap/transcription@0.0.0 build /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:build: > tsc --noEmit
+@cap/transcription:build: 
+@cap/ai:build: cache hit, replaying logs 3f52fb06dc7fabad
+@cap/ai:build: 
+@cap/ai:build: > @cap/ai@0.0.0 build /home/don/code/cap-dependency-hardening/packages/ai
+@cap/ai:build: > tsc --noEmit
+@cap/ai:build: 
+@cap/domain:build: cache hit, replaying logs e8fa23fa1cd8885f
+@cap/domain:build: 
+@cap/domain:build: > @cap/domain@0.0.0 build /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:build: > tsc --noEmit
+@cap/crypto:build: cache hit, replaying logs 3841c0f689bdad12
+@cap/domain:build: 
+@cap/crypto:build: 
+@cap/crypto:build: > @cap/crypto@0.0.0 build /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:build: > tsc --noEmit
+@cap/crypto:build: 
+@cap/recording:build: cache hit, replaying logs 8ebf0df5ec3a0aaf
+@cap/outbound-http:build: cache hit, replaying logs e9a5a26ff2345e67
+@cap/recording:build: 
+@cap/recording:build: > @cap/recording@0.0.0 build /home/don/code/cap-dependency-hardening/packages/recording
+@cap/recording:build: > tsc --noEmit
+@cap/outbound-http:build: 
+@cap/outbound-http:build: > @cap/outbound-http@0.0.0 build /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/recording:build: 
+@cap/outbound-http:build: > tsc --noEmit
+@cap/outbound-http:build: 
+@cap/desktop:build: cache miss, executing c588859a245eea4f
+@cap/storage:build: cache hit, replaying logs 1543f0dc1cd60a74
+@cap/storage:build: 
+@cap/storage:build: > @cap/storage@0.0.0 build /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:build: > tsc --noEmit
+@cap/storage:build: 
+@cap/web:build: cache miss, executing 5c4ded5995501d16
+@cap/render-worker:build: cache hit, replaying logs 0d31073d0c088fb1
+@cap/render-worker:build: 
+@cap/render-worker:build: > @cap/render-worker@0.0.0 build /home/don/code/cap-dependency-hardening/apps/render-worker
+@cap/render-worker:build: > tsc --noEmit
+@cap/render-worker:build: 
+@cap/config:build: cache hit, replaying logs 26f8aa2dc68fd3f9
+@cap/config:build: 
+@cap/config:build: > @cap/config@0.0.0 build /home/don/code/cap-dependency-hardening/packages/config
+@cap/config:build: > tsc --noEmit
+@cap/config:build: 
+@cap/media-worker:build: cache hit, replaying logs 651ae9f711dcb178
+@cap/media-worker:build: 
+@cap/media-worker:build: > @cap/media-worker@0.0.0 build /home/don/code/cap-dependency-hardening/apps/media-worker
+@cap/media-worker:build: > tsc --noEmit
+@cap/media-worker:build: 
+@cap/transcription-worker:build: cache hit, replaying logs ffc334a580e3243a
+@cap/transcription-worker:build: 
+@cap/transcription-worker:build: > @cap/transcription-worker@0.0.0 build /home/don/code/cap-dependency-hardening/apps/transcription-worker
+@cap/transcription-worker:build: > tsc --noEmit
+@cap/transcription-worker:build: 
+@cap/webhook-worker:build: cache hit, replaying logs 98f9bad3b7a8d834
+@cap/webhook-worker:build: 
+@cap/webhook-worker:build: > @cap/webhook-worker@0.0.0 build /home/don/code/cap-dependency-hardening/apps/webhook-worker
+@cap/webhook-worker:build: > tsc --noEmit
+@cap/webhook-worker:build: 
+@cap/ai-worker:build: cache hit, replaying logs 5de2fab6f5ec0f6c
+@cap/ai-worker:build: 
+@cap/ai-worker:build: > @cap/ai-worker@0.0.0 build /home/don/code/cap-dependency-hardening/apps/ai-worker
+@cap/ai-worker:build: > tsc --noEmit
+@cap/ai-worker:build: 
+@cap/desktop:build: 
+@cap/desktop:build: > @cap/desktop@0.2.0-beta.6 build /home/don/code/cap-calendar/apps/desktop
+@cap/desktop:build: > tsc --noEmit && vite build
+@cap/desktop:build: 
+@cap/web:build: 
+@cap/web:build: > @cap/web@0.0.0 build /home/don/code/cap-calendar/apps/web
+@cap/web:build: > next build
+@cap/web:build: 
+@cap/web:build: ▲ Next.js 16.4.1 (Turbopack)
+@cap/web:build: ✓ Running next.config.ts took 63ms
+@cap/web:build: 
+@cap/web:build:   Creating an optimized production build ...
+@cap/desktop:build: vite v6.4.5 building for production...
+@cap/desktop:build: transforming...
+@cap/desktop:build: ✓ 37 modules transformed.
+@cap/desktop:build: rendering chunks...
+@cap/desktop:build: computing gzip size...
+@cap/desktop:build: dist/index.html                   0.17 kB │ gzip:  0.15 kB
+@cap/desktop:build: dist/assets/index-C1aiDshu.css   13.14 kB │ gzip:  3.26 kB
+@cap/desktop:build: dist/assets/index-DTjxZ4MJ.js   215.02 kB │ gzip: 66.94 kB │ map: 1,001.91 kB
+@cap/desktop:build: ✓ built in 500ms
+@cap/web:build: ✓ Compiled successfully in 2.7s
+@cap/web:build:   Running TypeScript ...
+@cap/web:build:   Finished TypeScript in 2.9s ...
+@cap/web:build:   Collecting page data using 27 workers ...
+@cap/web:build:   Generating static pages using 27 workers (0/46) ...
+@cap/web:build:   Generating static pages using 27 workers (11/46) 
+@cap/web:build:   Generating static pages using 27 workers (22/46) 
+@cap/web:build:   Generating static pages using 27 workers (34/46) 
+@cap/web:build: ✓ Generating static pages using 27 workers (46/46) in 146ms
+@cap/web:build:   Finalizing page optimization ...
+@cap/web:build: 
+@cap/web:build: Route (app)
+@cap/web:build: ┌ ○ /
+@cap/web:build: ├ ○ /_not-found
+@cap/web:build: ├ ƒ /admin
+@cap/web:build: ├ ƒ /api/ai/entitlement
+@cap/web:build: ├ ƒ /api/ai/policy
+@cap/web:build: ├ ƒ /api/ai/providers
+@cap/web:build: ├ ƒ /api/ai/providers/[connectionId]
+@cap/web:build: ├ ƒ /api/ai/providers/models
+@cap/web:build: ├ ƒ /api/ai/routes
+@cap/web:build: ├ ƒ /api/ai/search
+@cap/web:build: ├ ƒ /api/ai/usage
+@cap/web:build: ├ ƒ /api/auth/google
+@cap/web:build: ├ ƒ /api/auth/google/callback
+@cap/web:build: ├ ƒ /api/auth/login
+@cap/web:build: ├ ƒ /api/auth/logout
+@cap/web:build: ├ ƒ /api/auth/session
+@cap/web:build: ├ ƒ /api/auth/session/switch-workspace
+@cap/web:build: ├ ƒ /api/auth/signup
+@cap/web:build: ├ ƒ /api/billing
+@cap/web:build: ├ ƒ /api/billing/checkout
+@cap/web:build: ├ ƒ /api/billing/portal
+@cap/web:build: ├ ƒ /api/billing/webhook
+@cap/web:build: ├ ƒ /api/desktop/auth/google
+@cap/web:build: ├ ƒ /api/desktop/auth/google/config
+@cap/web:build: ├ ƒ /api/desktop/auth/login
+@cap/web:build: ├ ƒ /api/desktop/auth/logout
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/renders
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/renders/[renderJobId]
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/renders/[renderJobId]/download
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/revisions
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/templates
+@cap/web:build: ├ ƒ /api/editor-projects/[projectId]/templates/[templateId]/apply
+@cap/web:build: ├ ƒ /api/embeds/[recordingId]/playback
+@cap/web:build: ├ ƒ /api/health
+@cap/web:build: ├ ƒ /api/recordings
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/ai
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/ai/artifacts/[artifactId]
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/analytics
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/captions
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/comments
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/comments/[commentId]
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/comments/[commentId]/reactions
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/editor
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/embed-policy
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/linked-assets
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/playback
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/preview
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/purge
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/restore
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/sharing
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/star
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/transcript
+@cap/web:build: ├ ƒ /api/recordings/[recordingId]/transcript/segments/[segmentId]
+@cap/web:build: ├ ƒ /api/shares/[token]/comments
+@cap/web:build: ├ ƒ /api/shares/[token]/playback
+@cap/web:build: ├ ƒ /api/transcripts/search
+@cap/web:build: ├ ƒ /api/upload-sessions
+@cap/web:build: ├ ƒ /api/upload-sessions/[sessionId]
+@cap/web:build: ├ ƒ /api/upload-sessions/[sessionId]/complete
+@cap/web:build: ├ ƒ /api/upload-sessions/[sessionId]/parts/[partNumber]
+@cap/web:build: ├ ƒ /api/upload-sessions/[sessionId]/restart
+@cap/web:build: ├ ƒ /api/v1/recordings
+@cap/web:build: ├ ƒ /api/v1/recordings/[recordingId]
+@cap/web:build: ├ ƒ /api/v1/recordings/[recordingId]/transcript
+@cap/web:build: ├ ƒ /api/views/[grant]/events
+@cap/web:build: ├ ƒ /api/workspace/api-keys
+@cap/web:build: ├ ƒ /api/workspace/api-keys/[apiKeyId]
+@cap/web:build: ├ ƒ /api/workspace/audit-events
+@cap/web:build: ├ ƒ /api/workspace/invitations
+@cap/web:build: ├ ƒ /api/workspace/invitations/[invitationId]
+@cap/web:build: ├ ƒ /api/workspace/invitations/accept
+@cap/web:build: ├ ƒ /api/workspace/members
+@cap/web:build: ├ ƒ /api/workspace/members/[userId]
+@cap/web:build: ├ ƒ /api/workspace/overview
+@cap/web:build: ├ ƒ /api/workspace/retention-policy
+@cap/web:build: ├ ƒ /api/workspace/templates
+@cap/web:build: ├ ƒ /api/workspace/templates/[templateId]
+@cap/web:build: ├ ƒ /api/workspace/webhooks
+@cap/web:build: ├ ƒ /api/workspace/webhooks/[webhookId]
+@cap/web:build: ├ ○ /icon.svg
+@cap/web:build: ├ ○ /invitations/accept
+@cap/web:build: ├ ƒ /library
+@cap/web:build: ├ ƒ /library/[recordingId]
+@cap/web:build: ├ ƒ /library/[recordingId]/edit
+@cap/web:build: ├ ○ /login
+@cap/web:build: ├ ƒ /portal
+@cap/web:build: ├ ƒ /record
+@cap/web:build: ├ ƒ /share/[token]
+@cap/web:build: ├ ○ /signup
+@cap/web:build: └ ƒ /watch/[recordingId]
+@cap/web:build: 
+@cap/web:build: 
+@cap/web:build: ○  (Static)   prerendered as static content
+@cap/web:build: ƒ  (Dynamic)  server-rendered on demand
+@cap/web:build: 
+
+ Tasks:    17 successful, 17 total
+Cached:    15 cached, 17 total
+  Time:    8.58s 
+
+exit=0

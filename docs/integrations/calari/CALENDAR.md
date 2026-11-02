@@ -32,19 +32,19 @@ No paid bot service; everything runs on the existing server.
 
 ## Components
 
-| Piece | Where |
-| --- | --- |
-| Policy (routing, Meet code, decide) | `crates/cap-server/src/calendar.rs` |
-| Google transport (OAuth, events, revoke, userinfo) | `crates/cap-server/src/google_calendar.rs` |
-| Encryption at rest (ChaCha20-Poly1305, row-bound AAD) | `attendance/crypto.rs` |
-| Signed Calari calls (resolve, pairing) | `attendance/calari.rs` |
-| Sync with durable page cursor | `attendance/sync.rs` |
-| Reconcile/schedule/prepare/expire | `attendance/schedule.rs` |
-| Runner API (claim, fenced reports) | `attendance/bot_api.rs` |
-| Staff settings UI + OAuth | `attendance/web.rs` (`/calendar`) |
-| Schema | `migrations/20261103000001_calendar.sql` |
-| Runner (Chrome over CDP, recorder reuse) | `crates/meeting-bot` |
-| Runner image | `infra/calendar-bot/` |
+| Piece                                                 | Where                                      |
+| ----------------------------------------------------- | ------------------------------------------ |
+| Policy (routing, Meet code, decide)                   | `crates/cap-server/src/calendar.rs`        |
+| Google transport (OAuth, events, revoke, userinfo)    | `crates/cap-server/src/google_calendar.rs` |
+| Encryption at rest (ChaCha20-Poly1305, row-bound AAD) | `attendance/crypto.rs`                     |
+| Signed Calari calls (resolve, pairing)                | `attendance/calari.rs`                     |
+| Sync with durable page cursor                         | `attendance/sync.rs`                       |
+| Reconcile/schedule/prepare/expire                     | `attendance/schedule.rs`                   |
+| Runner API (claim, fenced reports)                    | `attendance/bot_api.rs`                    |
+| Staff settings UI + OAuth                             | `attendance/web.rs` (`/calendar`)          |
+| Schema                                                | `migrations/20261103000001_calendar.sql`   |
+| Runner (Chrome over CDP, recorder reuse)              | `crates/meeting-bot`                       |
+| Runner image                                          | `infra/calendar-bot/`                      |
 
 ### Flow
 
@@ -140,22 +140,22 @@ an operator.
 
 Cap server (all required when `CAP_CALENDAR_ENABLED=1`; boot fails otherwise):
 
-| Variable | Meaning |
-| --- | --- |
-| `CAP_CALENDAR_ENABLED` | `1` to enable; unset = feature fully off |
-| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | existing Google OAuth client |
-| `CAP_CALENDAR_ENCRYPTION_KEY` | base64url (no padding), 32 random bytes |
-| `CAP_CALENDAR_ENCRYPTION_KEY_ID` | label stored with ciphertexts (default `v1`); changing it forces reconnects |
-| `CAP_CALENDAR_BOT_TOKEN` | runner bearer token (≥ 32 random chars; only its hash is kept) |
-| `CAP_CALENDAR_MAX_CONCURRENT` | 1–4 (default 1) |
-| `CAP_CALENDAR_JOIN_LEAD_SECONDS` | default 120 |
-| `CAP_CALENDAR_SYNC_SECONDS` | default 300 |
-| `CAP_CALENDAR_HORIZON_DAYS` | default 14 |
-| `CAP_CALENDAR_BOT_NAME` | name shown in the meeting (default "Calari Notetaker") |
-| `CAP_CALENDAR_REQUIRE_SAME_EMAIL` | default on; `0` allows a different Google account |
-| `CAP_DISPLAY_TIMEZONE` | zone for times on `/calendar` (default `America/New_York`, shown with EST/EDT); storage stays UTC |
-| `CAP_CALENDAR_ALLOW_STAFF` | default off: only Calari admins may use `/calendar` until the meetings library enforces per-staff ownership (separate phase) |
-| `CAP_MEETING_INTEGRATIONS[].calendar_resolve_url`, `.calendar_pairing_url` | Calari endpoints (both, https) |
+| Variable                                                                   | Meaning                                                                                                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `CAP_CALENDAR_ENABLED`                                                     | `1` to enable; unset = feature fully off                                                                                     |
+| `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`                     | existing Google OAuth client                                                                                                 |
+| `CAP_CALENDAR_ENCRYPTION_KEY`                                              | base64url (no padding), 32 random bytes                                                                                      |
+| `CAP_CALENDAR_ENCRYPTION_KEY_ID`                                           | label stored with ciphertexts (default `v1`); changing it forces reconnects                                                  |
+| `CAP_CALENDAR_BOT_TOKEN`                                                   | runner bearer token (≥ 32 random chars; only its hash is kept)                                                               |
+| `CAP_CALENDAR_MAX_CONCURRENT`                                              | 1–4 (default 1)                                                                                                              |
+| `CAP_CALENDAR_JOIN_LEAD_SECONDS`                                           | default 120                                                                                                                  |
+| `CAP_CALENDAR_SYNC_SECONDS`                                                | default 300                                                                                                                  |
+| `CAP_CALENDAR_HORIZON_DAYS`                                                | default 14                                                                                                                   |
+| `CAP_CALENDAR_BOT_NAME`                                                    | name shown in the meeting (default "Calari Notetaker")                                                                       |
+| `CAP_CALENDAR_REQUIRE_SAME_EMAIL`                                          | default on; `0` allows a different Google account                                                                            |
+| `CAP_DISPLAY_TIMEZONE`                                                     | zone for times on `/calendar` (default `America/New_York`, shown with EST/EDT); storage stays UTC                            |
+| `CAP_CALENDAR_ALLOW_STAFF`                                                 | default off: only Calari admins may use `/calendar` until the meetings library enforces per-staff ownership (separate phase) |
+| `CAP_MEETING_INTEGRATIONS[].calendar_resolve_url`, `.calendar_pairing_url` | Calari endpoints (both, https)                                                                                               |
 
 Google endpoint overrides (`CAP_CALENDAR_GOOGLE_*`) are refused in production.
 

@@ -1,0 +1,22 @@
+Scope: all 21 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +522
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 522, reused 522, downloaded 0, added 522, done
+
+devDependencies:
++ @types/node 22.20.1
++ prettier 3.9.6
++ turbo 2.10.9
++ typescript 5.9.3
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: esbuild, msgpackr-extract, unrs-resolver.           │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Done in 725ms using pnpm v10.14.0

@@ -1,0 +1,81 @@
+
+> cap@ lint /home/don/code/cap-calendar
+> turbo lint
+
+• turbo 2.10.9
+
+   • Packages in scope: @cap/ai, @cap/ai-worker, @cap/config, @cap/crypto, @cap/desktop, @cap/domain, @cap/e2e, @cap/editor-domain, @cap/extension, @cap/media-worker, @cap/outbound-http, @cap/postgres, @cap/queue, @cap/recording, @cap/render-worker, @cap/storage, @cap/transcription, @cap/transcription-worker, @cap/web, @cap/webhook-worker
+   • Running lint in 20 packages
+   • Remote caching disabled, using shared worktree cache
+
+@cap/outbound-http:lint: cache hit, replaying logs 1420ac20a1f95a46
+@cap/ai:lint: cache hit, replaying logs 39fe0cc5825b85b9
+@cap/outbound-http:lint: 
+@cap/outbound-http:lint: > @cap/outbound-http@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/outbound-http:lint: > tsc --noEmit
+@cap/outbound-http:lint: 
+@cap/ai:lint: 
+@cap/ai:lint: > @cap/ai@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/ai
+@cap/ai:lint: > tsc --noEmit
+@cap/ai:lint: 
+@cap/editor-domain:lint: cache hit, replaying logs 354659c228bf86f1
+@cap/editor-domain:lint: 
+@cap/editor-domain:lint: > @cap/editor-domain@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/editor-domain:lint: > tsc --noEmit
+@cap/editor-domain:lint: 
+@cap/postgres:lint: cache hit, replaying logs 303c5ee08933ffde
+@cap/postgres:lint: 
+@cap/postgres:lint: > @cap/postgres@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/postgres:lint: > tsc --noEmit
+@cap/postgres:lint: 
+@cap/transcription:lint: cache hit, replaying logs 8bde50b0690cb9df
+@cap/transcription:lint: 
+@cap/transcription:lint: > @cap/transcription@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:lint: > tsc --noEmit
+@cap/transcription:lint: 
+@cap/crypto:lint: cache hit, replaying logs b4a6b32a628c9d51
+@cap/crypto:lint: 
+@cap/crypto:lint: > @cap/crypto@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:lint: > tsc --noEmit
+@cap/crypto:lint: 
+@cap/config:lint: cache hit, replaying logs c4e08314c028cf3b
+@cap/domain:lint: cache hit, replaying logs 94a9214adfe5c029
+@cap/config:lint: 
+@cap/config:lint: > @cap/config@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/config
+@cap/domain:lint: 
+@cap/config:lint: > tsc --noEmit
+@cap/config:lint: 
+@cap/domain:lint: > @cap/domain@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:lint: > tsc --noEmit
+@cap/domain:lint: 
+@cap/recording:lint: cache hit, replaying logs 297da91bba297fa0
+@cap/recording:lint: 
+@cap/recording:lint: > @cap/recording@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/recording
+@cap/recording:lint: > tsc --noEmit
+@cap/recording:lint: 
+@cap/desktop:lint: cache miss, executing e9f0606218d5d896
+@cap/ai-worker:lint: cache hit, replaying logs cf9cf30ae2b8d967
+@cap/ai-worker:lint: 
+@cap/ai-worker:lint: > @cap/ai-worker@0.0.0 lint /home/don/code/cap-dependency-hardening/apps/ai-worker
+@cap/ai-worker:lint: > tsc --noEmit
+@cap/ai-worker:lint: 
+@cap/storage:lint: cache hit, replaying logs dad8f7f665d1e542
+@cap/storage:lint: 
+@cap/storage:lint: > @cap/storage@0.0.0 lint /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:lint: > tsc --noEmit
+@cap/storage:lint: 
+@cap/web:lint: cache miss, executing e76eaa07c8f15ad5
+@cap/web:lint: 
+@cap/web:lint: > @cap/web@0.0.0 lint /home/don/code/cap-calendar/apps/web
+@cap/web:lint: > eslint .
+@cap/web:lint: 
+@cap/desktop:lint: 
+@cap/desktop:lint: > @cap/desktop@0.2.0-beta.6 lint /home/don/code/cap-calendar/apps/desktop
+@cap/desktop:lint: > tsc --noEmit
+@cap/desktop:lint: 
+
+ Tasks:    13 successful, 13 total
+Cached:    11 cached, 13 total
+  Time:    3.41s 
+
+exit=0

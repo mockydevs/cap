@@ -7,6 +7,7 @@ handoff task), paths `/api/v1/integrations/cap/calendar/resolve` and
 no portal change made by Cap. Nothing here is enabled until both sides ship.
 
 ## Why
+
 Calari accepts a delivery only for a `CapPairing` it created (`cap-receiver.ts`
 checks pairing state, clientId, sourceKind, createdById). A server-side
 calendar bot therefore needs Calari to (a) say which client an event belongs to,
@@ -14,6 +15,7 @@ within the staff member's own access, and (b) create the pairing as that staff
 member. Calari keeps ownership/access; Cap never invents a client.
 
 ## Signing
+
 Same HMAC scheme as `login`, new purpose label `calendar`:
 `cap.v1.calendar\n{ts}\n{nonce}\n{body}` with the integration secret, headers
 `x-cap-key-id`, `x-cap-timestamp`, `x-cap-nonce`, `x-cap-signature-256`.
@@ -23,6 +25,7 @@ New optional integration fields in Cap `CAP_MEETING_INTEGRATIONS`:
 `calendar_resolve_url`, `calendar_pairing_url` (both https, set together).
 
 ## 1. POST calendar_resolve_url
+
 Request (strict):
 `{"user_id": "<calari user id>", "attendee_emails": ["a@x.com", ...]}`
 (1–100 lowercase emails, exact, no display names/titles).
@@ -35,6 +38,7 @@ unknown staff → `active:false`, empty mappings. Cap selects a client only if a
 mapped attendees resolve to exactly one client; otherwise "needs review".
 
 ## 2. POST calendar_pairing_url
+
 Request (strict):
 `{"request_id":"<uuid, stable per attendance+version>","user_id":"...",
   "pairing_kind":"staff_client"|"internal_team","client_id":"<uuid>|null",
@@ -52,12 +56,14 @@ Idempotent on request_id (same body → same pairing; different body → 409).
 Refusal → 403 `{"error":"forbidden"}` (Cap marks the attendance needs_review).
 
 ## 3. Delivery change (additive enum value)
+
 `meeting.source` gains `"calendar_bot"` (in addition to desktop/extension).
 `meeting.provider_hint` = `"google_meet"`, `meeting.meeting_url` =
 `https://meet.google.com/<code>`. Everything else unchanged; authority still
 comes from the stored pairing.
 
 ## Calari UI (optional, later)
+
 Nothing required: staff connect calendars in Cap (`/calendar`) after signing in
 with Calari. Recordings arrive as normal client/internal meetings created by
 that staff member.

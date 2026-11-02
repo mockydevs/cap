@@ -1,0 +1,7 @@
+
+> cap@ format:check /home/don/code/cap-calendar
+> prettier --check .
+
+Checking formatting...
+All matched files use Prettier code style!
+exit=0

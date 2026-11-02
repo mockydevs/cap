@@ -1,0 +1,405 @@
+
+> cap@ test /home/don/code/cap-calendar
+> turbo test
+
+• turbo 2.10.9
+
+   • Packages in scope: @cap/ai, @cap/ai-worker, @cap/config, @cap/crypto, @cap/desktop, @cap/domain, @cap/e2e, @cap/editor-domain, @cap/extension, @cap/media-worker, @cap/outbound-http, @cap/postgres, @cap/queue, @cap/recording, @cap/render-worker, @cap/storage, @cap/transcription, @cap/transcription-worker, @cap/web, @cap/webhook-worker
+   • Running test in 20 packages
+   • Remote caching disabled, using shared worktree cache
+
+@cap/extension:test: cache miss, executing 16fd247a6102a20c
+@cap/outbound-http:test: cache hit, replaying logs 50971825f59b26d3
+@cap/outbound-http:test: 
+@cap/outbound-http:test: > @cap/outbound-http@0.0.0 test /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/outbound-http:test: > vitest run
+@cap/outbound-http:test: 
+@cap/outbound-http:test: 
+@cap/outbound-http:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/outbound-http:test: 
+@cap/outbound-http:test:  ✓ test/index.test.ts (23 tests) 27ms
+@cap/outbound-http:test: 
+@cap/outbound-http:test:  Test Files  1 passed (1)
+@cap/outbound-http:test:       Tests  23 passed (23)
+@cap/outbound-http:test:    Start at  00:49:50
+@cap/outbound-http:test:    Duration  465ms (transform 104ms, setup 0ms, import 228ms, tests 27ms, environment 0ms)
+@cap/outbound-http:test: 
+@cap/domain:build: cache hit, replaying logs e8fa23fa1cd8885f
+@cap/crypto:test: cache hit, replaying logs a87105605e69ef29
+@cap/crypto:test: 
+@cap/crypto:test: > @cap/crypto@0.0.0 test /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:test: > vitest run
+@cap/crypto:test: 
+@cap/crypto:test: 
+@cap/crypto:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:test: 
+@cap/crypto:test:  ✓ test/credentials.test.ts (10 tests) 52ms
+@cap/crypto:test: 
+@cap/crypto:test:  Test Files  1 passed (1)
+@cap/crypto:test:       Tests  10 passed (10)
+@cap/crypto:test:    Start at  00:49:50
+@cap/crypto:test:    Duration  475ms (transform 113ms, setup 0ms, import 225ms, tests 52ms, environment 0ms)
+@cap/crypto:test: 
+@cap/ai:test: cache hit, replaying logs 4e8922b2bfd7bba4
+@cap/ai:test: 
+@cap/ai:test: > @cap/ai@0.0.0 test /home/don/code/cap-dependency-hardening/packages/ai
+@cap/ai:test: > vitest run
+@cap/ai:test: 
+@cap/ai:test: 
+@cap/ai:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/ai
+@cap/ai:test: 
+@cap/ai:test:  ✓ test/entitlement.test.ts (14 tests) 5ms
+@cap/ai:test:  ✓ test/rates.test.ts (9 tests) 17ms
+@cap/ai:test:  ✓ test/ai.test.ts (6 tests) 21ms
+@cap/ai:test: 
+@cap/ai:test:  Test Files  3 passed (3)
+@cap/ai:test:       Tests  29 passed (29)
+@cap/ai:test:    Start at  00:49:51
+@cap/ai:test:    Duration  415ms (transform 304ms, setup 0ms, import 464ms, tests 44ms, environment 0ms)
+@cap/ai:test: 
+@cap/editor-domain:build: cache hit, replaying logs d52ef76dcc586a6f
+@cap/editor-domain:build: 
+@cap/editor-domain:build: > @cap/editor-domain@0.0.0 build /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/editor-domain:build: > tsc --noEmit
+@cap/editor-domain:build: 
+@cap/transcription:build: cache hit, replaying logs 911b0adde040c427
+@cap/transcription:build: 
+@cap/transcription:build: > @cap/transcription@0.0.0 build /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:build: > tsc --noEmit
+@cap/transcription:build: 
+@cap/config:test: cache hit, replaying logs 6185ff644abbe416
+@cap/config:test: 
+@cap/config:test: > @cap/config@0.0.0 test /home/don/code/cap-dependency-hardening/packages/config
+@cap/config:test: > vitest run --passWithNoTests
+@cap/config:test: 
+@cap/config:test: 
+@cap/config:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/config
+@cap/config:test: 
+@cap/config:test:  ✓ src/index.test.ts (2 tests) 16ms
+@cap/config:test: 
+@cap/config:test:  Test Files  1 passed (1)
+@cap/config:test:       Tests  2 passed (2)
+@cap/config:test:    Start at  00:49:50
+@cap/config:test:    Duration  361ms (transform 78ms, setup 0ms, import 183ms, tests 16ms, environment 0ms)
+@cap/config:test: 
+@cap/domain:test: cache hit, replaying logs e76df1ea89ec8968
+@cap/domain:build: 
+@cap/domain:build: > @cap/domain@0.0.0 build /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:test: 
+@cap/domain:test: > @cap/domain@0.0.0 test /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:test: > vitest run
+@cap/domain:build: > tsc --noEmit
+@cap/domain:build: 
+@cap/domain:test: 
+@cap/domain:test: 
+@cap/domain:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:test: 
+@cap/domain:test:  ✓ test/sharing.test.ts (4 tests) 7ms
+@cap/domain:test:  ✓ test/media-upload.test.ts (5 tests) 13ms
+@cap/domain:test: 
+@cap/domain:test:  Test Files  2 passed (2)
+@cap/domain:test:       Tests  9 passed (9)
+@cap/domain:test:    Start at  00:49:50
+@cap/domain:test:    Duration  349ms (transform 208ms, setup 0ms, import 277ms, tests 20ms, environment 0ms)
+@cap/domain:test: 
+@cap/postgres:build: cache hit, replaying logs 6bc4d893ef825c9b
+@cap/transcription:test: cache hit, replaying logs e161c8449fcea5d0
+@cap/postgres:build: 
+@cap/postgres:build: > @cap/postgres@0.0.0 build /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/transcription:test: 
+@cap/transcription:test: > @cap/transcription@0.0.0 test /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:test: > vitest run
+@cap/transcription:test: 
+@cap/transcription:test: 
+@cap/postgres:build: > tsc --noEmit
+@cap/postgres:build: 
+@cap/editor-domain:test: cache hit, replaying logs 9f29badac3f01f45
+@cap/transcription:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:test: 
+@cap/editor-domain:test: 
+@cap/editor-domain:test: > @cap/editor-domain@0.0.0 test /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/transcription:test:  ✓ test/transcription.test.ts (7 tests) 50ms
+@cap/transcription:test: 
+@cap/editor-domain:test: > vitest run
+@cap/editor-domain:test: 
+@cap/recording:test: cache hit, replaying logs dd4be3e85a353af9
+@cap/transcription:test:  Test Files  1 passed (1)
+@cap/transcription:test:       Tests  7 passed (7)
+@cap/editor-domain:test: 
+@cap/transcription:test:    Start at  00:49:50
+@cap/editor-domain:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/transcription:test:    Duration  499ms (transform 165ms, setup 0ms, import 207ms, tests 50ms, environment 0ms)
+@cap/recording:test: 
+@cap/recording:test: > @cap/recording@0.0.0 test /home/don/code/cap-dependency-hardening/packages/recording
+@cap/editor-domain:test: 
+@cap/editor-domain:test:  ✓ test/template.test.ts (6 tests) 41ms
+@cap/editor-domain:test:  ✓ test/editor-domain.test.ts (11 tests) 65ms
+@cap/transcription:test: 
+@cap/recording:test: > vitest run
+@cap/recording:test: 
+@cap/editor-domain:test: 
+@cap/editor-domain:test:  Test Files  2 passed (2)
+@cap/recording:test: 
+@cap/recording:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/recording
+@cap/editor-domain:test:       Tests  17 passed (17)
+@cap/editor-domain:test:    Start at  00:49:50
+@cap/recording:test: 
+@cap/recording:test:  ✓ test/index.test.ts (5 tests) 13ms
+@cap/editor-domain:test:    Duration  755ms (transform 445ms, setup 0ms, import 900ms, tests 106ms, environment 0ms)
+@cap/editor-domain:test: 
+@cap/recording:test: 
+@cap/recording:test:  Test Files  1 passed (1)
+@cap/recording:test:       Tests  5 passed (5)
+@cap/recording:test:    Start at  00:49:50
+@cap/recording:test:    Duration  316ms (transform 68ms, setup 0ms, import 87ms, tests 13ms, environment 0ms)
+@cap/recording:test: 
+@cap/crypto:build: cache hit, replaying logs 3841c0f689bdad12
+@cap/crypto:build: 
+@cap/crypto:build: > @cap/crypto@0.0.0 build /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:build: > tsc --noEmit
+@cap/crypto:build: 
+@cap/recording:build: cache hit, replaying logs 8ebf0df5ec3a0aaf
+@cap/recording:build: 
+@cap/recording:build: > @cap/recording@0.0.0 build /home/don/code/cap-dependency-hardening/packages/recording
+@cap/recording:build: > tsc --noEmit
+@cap/recording:build: 
+@cap/desktop:test: cache miss, executing 78420974a0debfa4
+@cap/postgres:test: cache hit, replaying logs 54b3d9fe760f25b8
+@cap/postgres:test: 
+@cap/postgres:test: > @cap/postgres@0.0.0 test /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/postgres:test: > vitest run
+@cap/postgres:test: 
+@cap/postgres:test: 
+@cap/postgres:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/postgres:test: 
+@cap/postgres:test:  ✓ test/index.test.ts (5 tests) 15ms
+@cap/postgres:test: 
+@cap/postgres:test:  Test Files  1 passed (1)
+@cap/postgres:test:       Tests  5 passed (5)
+@cap/postgres:test:    Start at  00:49:50
+@cap/postgres:test:    Duration  319ms (transform 94ms, setup 0ms, import 111ms, tests 15ms, environment 0ms)
+@cap/postgres:test: 
+@cap/outbound-http:build: cache hit, replaying logs e9a5a26ff2345e67
+@cap/ai:build: cache hit, replaying logs 3f52fb06dc7fabad
+@cap/outbound-http:build: 
+@cap/ai:build: 
+@cap/outbound-http:build: > @cap/outbound-http@0.0.0 build /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/ai:build: > @cap/ai@0.0.0 build /home/don/code/cap-dependency-hardening/packages/ai
+@cap/outbound-http:build: > tsc --noEmit
+@cap/ai:build: > tsc --noEmit
+@cap/outbound-http:build: 
+@cap/ai:build: 
+@cap/storage:build: cache hit, replaying logs 1543f0dc1cd60a74
+@cap/storage:build: 
+@cap/storage:build: > @cap/storage@0.0.0 build /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:build: > tsc --noEmit
+@cap/storage:build: 
+@cap/web:test: cache miss, executing 6f90e4e0d7fe692e
+@cap/storage:test: cache hit, replaying logs 98bcded60e2badf2
+@cap/storage:test: 
+@cap/storage:test: > @cap/storage@0.0.0 test /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:test: > vitest run
+@cap/storage:test: 
+@cap/storage:test: 
+@cap/storage:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:test: 
+@cap/storage:test:  ✓ test/cors.test.ts (12 tests) 45ms
+@cap/storage:test:  ✓ test/storage-contract.test.ts (7 tests) 7ms
+@cap/storage:test:  ✓ test/provider.test.ts (7 tests) 7ms
+@cap/storage:test: 
+@cap/storage:test:  Test Files  3 passed (3)
+@cap/storage:test:       Tests  26 passed (26)
+@cap/storage:test:    Start at  00:49:53
+@cap/storage:test:    Duration  389ms (transform 280ms, setup 0ms, import 523ms, tests 59ms, environment 0ms)
+@cap/storage:test: 
+@cap/queue:test: cache hit, replaying logs 3610dcd6d6511716
+@cap/queue:test: 
+@cap/queue:test: > @cap/queue@0.0.0 test /home/don/code/cap-dependency-hardening/packages/queue
+@cap/queue:test: > vitest run
+@cap/queue:test: 
+@cap/queue:test: 
+@cap/queue:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/packages/queue
+@cap/queue:test: 
+@cap/queue:test:  ✓ test/index.test.ts (2 tests) 5ms
+@cap/queue:test: 
+@cap/queue:test:  Test Files  1 passed (1)
+@cap/queue:test:       Tests  2 passed (2)
+@cap/queue:test:    Start at  00:49:52
+@cap/queue:test:    Duration  429ms (transform 99ms, setup 0ms, import 259ms, tests 5ms, environment 0ms)
+@cap/queue:test: 
+@cap/ai-worker:test: cache hit, replaying logs c09ccc70bea320d2
+@cap/ai-worker:test: 
+@cap/ai-worker:test: > @cap/ai-worker@0.0.0 test /home/don/code/cap-dependency-hardening/apps/ai-worker
+@cap/ai-worker:test: > vitest run
+@cap/ai-worker:test: 
+@cap/ai-worker:test: 
+@cap/ai-worker:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/apps/ai-worker
+@cap/ai-worker:test: 
+@cap/ai-worker:test:  ✓ test/provider.test.ts (1 test) 7ms
+@cap/ai-worker:test:  ✓ test/process-job.test.ts (8 tests) 15ms
+@cap/ai-worker:test: 
+@cap/ai-worker:test:  Test Files  2 passed (2)
+@cap/ai-worker:test:       Tests  9 passed (9)
+@cap/ai-worker:test:    Start at  00:49:53
+@cap/ai-worker:test:    Duration  515ms (transform 159ms, setup 0ms, import 531ms, tests 23ms, environment 0ms)
+@cap/ai-worker:test: 
+@cap/webhook-worker:test: cache hit, replaying logs d9281d3353c17f37
+@cap/media-worker:test: cache hit, replaying logs 5609f86c7dafd867
+@cap/media-worker:test: 
+@cap/media-worker:test: > @cap/media-worker@0.0.0 test /home/don/code/cap-dependency-hardening/apps/media-worker
+@cap/webhook-worker:test: 
+@cap/media-worker:test: > vitest run
+@cap/webhook-worker:test: > @cap/webhook-worker@0.0.0 test /home/don/code/cap-dependency-hardening/apps/webhook-worker
+@cap/media-worker:test: 
+@cap/media-worker:test: 
+@cap/media-worker:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/apps/media-worker
+@cap/webhook-worker:test: > vitest run
+@cap/media-worker:test: 
+@cap/webhook-worker:test: 
+@cap/media-worker:test:  ✓ test/ffmpeg.test.ts (8 tests) 23ms
+@cap/webhook-worker:test: 
+@cap/webhook-worker:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/apps/webhook-worker
+@cap/webhook-worker:test: 
+@cap/transcription-worker:test: cache hit, replaying logs 8241c265c870556a
+@cap/media-worker:test:  ✓ test/outbox.test.ts (3 tests) 47ms
+@cap/media-worker:test: 
+@cap/media-worker:test:  Test Files  2 passed (2)
+@cap/media-worker:test:       Tests  11 passed (11)
+@cap/webhook-worker:test:  ✓ test/delivery.test.ts (2 tests) 5ms
+@cap/transcription-worker:test: 
+@cap/transcription-worker:test: > @cap/transcription-worker@0.0.0 test /home/don/code/cap-dependency-hardening/apps/transcription-worker
+@cap/media-worker:test:    Start at  00:49:55
+@cap/media-worker:test:    Duration  834ms (transform 288ms, setup 0ms, import 693ms, tests 70ms, environment 4ms)
+@cap/media-worker:test: 
+@cap/webhook-worker:test:  ✓ test/outbox.test.ts (3 tests) 9ms
+@cap/webhook-worker:test: 
+@cap/webhook-worker:test:  Test Files  2 passed (2)
+@cap/transcription-worker:test: > vitest run
+@cap/transcription-worker:test: 
+@cap/transcription-worker:test: 
+@cap/webhook-worker:test:       Tests  5 passed (5)
+@cap/webhook-worker:test:    Start at  00:49:53
+@cap/transcription-worker:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/apps/transcription-worker
+@cap/transcription-worker:test: 
+@cap/transcription-worker:test:  ✓ test/provider.test.ts (2 tests) 7ms
+@cap/webhook-worker:test:    Duration  422ms (transform 161ms, setup 0ms, import 484ms, tests 14ms, environment 0ms)
+@cap/webhook-worker:test: 
+@cap/transcription-worker:test:  ✓ test/process-job.test.ts (7 tests) 17ms
+@cap/transcription-worker:test: 
+@cap/transcription-worker:test:  Test Files  2 passed (2)
+@cap/transcription-worker:test:       Tests  9 passed (9)
+@cap/transcription-worker:test:    Start at  00:49:55
+@cap/transcription-worker:test:    Duration  1.50s (transform 964ms, setup 0ms, import 2.09s, tests 24ms, environment 0ms)
+@cap/render-worker:test: cache hit, replaying logs 01bcf1ee59db5d6e
+@cap/transcription-worker:test: 
+@cap/render-worker:test: 
+@cap/render-worker:test: > @cap/render-worker@0.0.0 test /home/don/code/cap-dependency-hardening/apps/render-worker
+@cap/render-worker:test: > vitest run
+@cap/render-worker:test: 
+@cap/render-worker:test: 
+@cap/render-worker:test:  RUN  v4.1.12 /home/don/code/cap-dependency-hardening/apps/render-worker
+@cap/render-worker:test: 
+@cap/render-worker:test:  ✓ test/captions.test.ts (5 tests) 41ms
+@cap/render-worker:test:  ✓ test/filters.test.ts (23 tests) 54ms
+@cap/render-worker:test:  ✓ test/ffmpeg.test.ts (20 tests) 14ms
+@cap/render-worker:test: 
+@cap/render-worker:test:  Test Files  3 passed (3)
+@cap/render-worker:test:       Tests  48 passed (48)
+@cap/render-worker:test:    Start at  00:49:55
+@cap/render-worker:test:    Duration  970ms (transform 669ms, setup 0ms, import 1.07s, tests 108ms, environment 0ms)
+@cap/render-worker:test: 
+@cap/extension:test: 
+@cap/extension:test: > @cap/extension@ test /home/don/code/cap-calendar/apps/extension
+@cap/extension:test: > node --test test/*.test.mjs
+@cap/extension:test: 
+@cap/desktop:test: 
+@cap/desktop:test: > @cap/desktop@0.2.0-beta.6 test /home/don/code/cap-calendar/apps/desktop
+@cap/desktop:test: > vitest run --passWithNoTests
+@cap/desktop:test: 
+@cap/web:test: 
+@cap/web:test: > @cap/web@0.0.0 test /home/don/code/cap-calendar/apps/web
+@cap/web:test: > vitest run
+@cap/web:test: 
+@cap/extension:test: ✔ Calari sign-in binds redemption to state, exact callback and S256 verifier (14.044406ms)
+@cap/extension:test: ✔ sign-in refuses a changed callback state before redemption (0.612138ms)
+@cap/extension:test: ✔ sign-in refuses a changed callback origin before redemption (0.355735ms)
+@cap/extension:test: ✔ sign-in refuses a changed callback path before redemption (0.30816ms)
+@cap/extension:test: ✔ expiry returns sign-in state while preserving unfinished recordings (0.257443ms)
+@cap/extension:test: ✔ Stop reports offscreen errors and retains recording state (0.48767ms)
+@cap/extension:test: ✔ a revoked credential opens sign-in again without deleting recordings (0.660653ms)
+@cap/extension:test: ✔ re-pairing adopts an expired meeting even after all chunks uploaded (1.335494ms)
+@cap/extension:test: ✔ a delayed stop from another meeting cannot clear the current recording (0.207178ms)
+@cap/extension:test: ✔ crash with acknowledged chunks refreshes unknown sequence after renewed pairing (1.797115ms)
+@cap/extension:test: ✔ crash recovery never finalizes a persisted unsaved-audio marker (0.321938ms)
+@cap/extension:test: ✔ chunks are contiguous even when onstop fires after the next chunk starts (4.826812ms)
+@cap/extension:test: ✔ a stop right after start still yields one chunk with a positive duration (0.760464ms)
+@cap/extension:test: ✔ stop waits for an earlier chunk still being saved (0.835123ms)
+@cap/extension:test: ✔ stop reports failed chunk persistence instead of claiming success (1.468986ms)
+@cap/extension:test: ✔ quota failure retains earlier and final chunks for Stop retry without recapture (0.694287ms)
+@cap/extension:test: ✔ each call's end is reported once, including after rejoining the same page (0.545452ms)
+@cap/extension:test: ✔ manual Stop quota failure; retry preserves bytes and finalizes once (18.725259ms)
+@cap/extension:test: ✔ rollover quota failure auto-stops without user action; retry preserves bytes and finalizes once (3.517325ms)
+@cap/extension:test: ✔ only a confirmed upload is an acknowledgement (0.415825ms)
+@cap/extension:test: ✔ gaps are accepted only for audio that is gone or quarantined (0.100696ms)
+@cap/extension:test: ℹ tests 21
+@cap/extension:test: ℹ suites 0
+@cap/extension:test: ℹ pass 21
+@cap/extension:test: ℹ fail 0
+@cap/extension:test: ℹ cancelled 0
+@cap/extension:test: ℹ skipped 0
+@cap/extension:test: ℹ todo 0
+@cap/extension:test: ℹ duration_ms 61.901266
+@cap/desktop:test: 
+@cap/desktop:test:  RUN  v4.1.12 /home/don/code/cap-calendar/apps/desktop
+@cap/desktop:test: 
+@cap/web:test: 
+@cap/web:test:  RUN  v4.1.12 /home/don/code/cap-calendar/apps/web
+@cap/web:test: 
+@cap/desktop:test:  ✓ src/lifecycle.test.ts (4 tests) 8ms
+@cap/desktop:test: 
+@cap/desktop:test:  Test Files  1 passed (1)
+@cap/desktop:test:       Tests  4 passed (4)
+@cap/desktop:test:    Start at  23:53:44
+@cap/desktop:test:    Duration  159ms (transform 43ms, setup 0ms, import 53ms, tests 8ms, environment 0ms)
+@cap/desktop:test: 
+@cap/web:test:  ✓ lib/http/client-address.test.ts (14 tests) 21ms
+@cap/web:test:  ✓ lib/recordings/library-policy.test.ts (2 tests) 3ms
+@cap/web:test:  ✓ lib/format/display.test.ts (8 tests) 18ms
+@cap/web:test:  ✓ lib/auth/origin.test.ts (3 tests) 23ms
+@cap/web:test:  ✓ lib/recordings/validation.test.ts (4 tests) 6ms
+@cap/web:test:  ✓ lib/playback/access-policy.test.ts (6 tests) 4ms
+@cap/web:test:  ✓ lib/embeds/validation.test.ts (3 tests) 13ms
+@cap/web:test:  ✓ lib/comments/validation.test.ts (2 tests) 7ms
+@cap/web:test:  ✓ lib/transcripts/validation.test.ts (3 tests) 8ms
+@cap/web:test:  ✓ lib/retention/retention.test.ts (2 tests) 7ms
+@cap/web:test:  ✓ lib/uploads/upload-failure.test.ts (6 tests) 15ms
+@cap/web:test:  ✓ lib/billing/billing.test.ts (18 tests) 17ms
+@cap/web:test:  ✓ lib/transcripts/format.test.ts (3 tests) 4ms
+@cap/web:test:  ✓ lib/ai/validation.test.ts (10 tests) 11ms
+@cap/web:test:  ✓ lib/editor/validation.test.ts (3 tests) 15ms
+@cap/web:test:  ✓ lib/uploads/validation.test.ts (8 tests) 14ms
+@cap/web:test:  ✓ lib/auth/public-auth-policy.test.ts (13 tests) 157ms
+@cap/web:test:  ✓ lib/auth/google.test.ts (10 tests) 6ms
+@cap/web:test:  ✓ lib/api-keys/api-keys.test.ts (2 tests) 4ms
+@cap/web:test:  ✓ lib/workspace/workspace.test.ts (5 tests) 5ms
+@cap/web:test:  ✓ lib/analytics/service.test.ts (2 tests) 6ms
+@cap/web:test:  ✓ lib/sharing/sharing.test.ts (3 tests) 7ms
+@cap/web:test:  ✓ lib/uploads/resumable-client.test.ts (18 tests) 211ms
+@cap/web:test:  ✓ lib/ai/provider-connections.test.ts (3 tests) 2ms
+@cap/web:test:  ✓ lib/http/outbound-security.test.ts (2 tests) 4ms
+@cap/web:test:  ✓ lib/auth/auth.test.ts (4 tests) 77ms
+@cap/web:test: 
+@cap/web:test:  Test Files  26 passed (26)
+@cap/web:test:       Tests  157 passed (157)
+@cap/web:test:    Start at  23:53:44
+@cap/web:test:    Duration  761ms (transform 2.12s, setup 0ms, import 6.60s, tests 665ms, environment 388ms)
+@cap/web:test: 
+
+ Tasks:    28 successful, 28 total
+Cached:    25 cached, 28 total
+  Time:    1.13s 
+
+ WARNING  no output files found for task @cap/desktop#test. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @cap/extension#test. Please check your `outputs` key in `turbo.json`
+ WARNING  no output files found for task @cap/web#test. Please check your `outputs` key in `turbo.json`
+exit=0

@@ -1,0 +1,106 @@
+
+> cap@ typecheck /home/don/code/cap-calendar
+> turbo typecheck
+
+• turbo 2.10.9
+
+   • Packages in scope: @cap/ai, @cap/ai-worker, @cap/config, @cap/crypto, @cap/desktop, @cap/domain, @cap/e2e, @cap/editor-domain, @cap/extension, @cap/media-worker, @cap/outbound-http, @cap/postgres, @cap/queue, @cap/recording, @cap/render-worker, @cap/storage, @cap/transcription, @cap/transcription-worker, @cap/web, @cap/webhook-worker
+   • Running typecheck in 20 packages
+   • Remote caching disabled, using shared worktree cache
+
+@cap/postgres:typecheck: cache hit, replaying logs 09cc6cb15f6371ad
+@cap/domain:typecheck: cache hit, replaying logs 3a221f8daa5862b4
+@cap/postgres:typecheck: 
+@cap/postgres:typecheck: > @cap/postgres@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/postgres
+@cap/postgres:typecheck: > tsc --noEmit
+@cap/postgres:typecheck: 
+@cap/config:typecheck: cache hit, replaying logs 77966e482297c7b1
+@cap/config:typecheck: 
+@cap/config:typecheck: > @cap/config@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/config
+@cap/config:typecheck: > tsc --noEmit
+@cap/config:typecheck: 
+@cap/ai:typecheck: cache hit, replaying logs a08f7c2317071036
+@cap/outbound-http:typecheck: cache hit, replaying logs 198effe12254a89c
+@cap/outbound-http:typecheck: 
+@cap/outbound-http:typecheck: > @cap/outbound-http@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/outbound-http
+@cap/outbound-http:typecheck: > tsc --noEmit
+@cap/domain:typecheck: 
+@cap/outbound-http:typecheck: 
+@cap/domain:typecheck: > @cap/domain@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/domain
+@cap/domain:typecheck: > tsc --noEmit
+@cap/editor-domain:typecheck: cache hit, replaying logs 43745672097c38ff
+@cap/crypto:typecheck: cache hit, replaying logs 40a25c58592c671f
+@cap/editor-domain:typecheck: 
+@cap/crypto:typecheck: 
+@cap/editor-domain:typecheck: > @cap/editor-domain@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/editor-domain
+@cap/crypto:typecheck: > @cap/crypto@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/crypto
+@cap/crypto:typecheck: > tsc --noEmit
+@cap/domain:typecheck: 
+@cap/editor-domain:typecheck: > tsc --noEmit
+@cap/editor-domain:typecheck: 
+@cap/crypto:typecheck: 
+@cap/recording:typecheck: cache hit, replaying logs cbebfe06f4452e8a
+@cap/recording:typecheck: 
+@cap/recording:typecheck: > @cap/recording@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/recording
+@cap/recording:typecheck: > tsc --noEmit
+@cap/recording:typecheck: 
+@cap/ai:typecheck: 
+@cap/ai:typecheck: > @cap/ai@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/ai
+@cap/ai:typecheck: > tsc --noEmit
+@cap/ai:typecheck: 
+@cap/desktop:typecheck: cache miss, executing 7694d551657aa711
+@cap/transcription:typecheck: cache hit, replaying logs e3dd3c8ab8a3d975
+@cap/transcription:typecheck: 
+@cap/transcription:typecheck: > @cap/transcription@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/transcription
+@cap/transcription:typecheck: > tsc --noEmit
+@cap/transcription:typecheck: 
+@cap/storage:typecheck: cache hit, replaying logs b504005acc747e3b
+@cap/storage:typecheck: 
+@cap/storage:typecheck: > @cap/storage@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/storage
+@cap/storage:typecheck: > tsc --noEmit
+@cap/storage:typecheck: 
+@cap/queue:typecheck: cache hit, replaying logs e3acc53dfdad731f
+@cap/queue:typecheck: 
+@cap/queue:typecheck: > @cap/queue@0.0.0 typecheck /home/don/code/cap-dependency-hardening/packages/queue
+@cap/queue:typecheck: > tsc --noEmit
+@cap/queue:typecheck: 
+@cap/web:typecheck: cache miss, executing 0262ceb2296d2a34
+@cap/transcription-worker:typecheck: cache hit, replaying logs 2673a0e2ba92cd60
+@cap/transcription-worker:typecheck: 
+@cap/transcription-worker:typecheck: > @cap/transcription-worker@0.0.0 typecheck /home/don/code/cap-dependency-hardening/apps/transcription-worker
+@cap/transcription-worker:typecheck: > tsc --noEmit
+@cap/transcription-worker:typecheck: 
+@cap/media-worker:typecheck: cache hit, replaying logs 5b5fdf4cb4e72054
+@cap/ai-worker:typecheck: cache hit, replaying logs 875f074985f6d00d
+@cap/media-worker:typecheck: 
+@cap/media-worker:typecheck: > @cap/media-worker@0.0.0 typecheck /home/don/code/cap-dependency-hardening/apps/media-worker
+@cap/media-worker:typecheck: > tsc --noEmit
+@cap/ai-worker:typecheck: 
+@cap/ai-worker:typecheck: > @cap/ai-worker@0.0.0 typecheck /home/don/code/cap-dependency-hardening/apps/ai-worker
+@cap/media-worker:typecheck: 
+@cap/ai-worker:typecheck: > tsc --noEmit
+@cap/ai-worker:typecheck: 
+@cap/render-worker:typecheck: cache hit, replaying logs 1cc8441e736c4cad
+@cap/render-worker:typecheck: 
+@cap/render-worker:typecheck: > @cap/render-worker@0.0.0 typecheck /home/don/code/cap-dependency-hardening/apps/render-worker
+@cap/render-worker:typecheck: > tsc --noEmit
+@cap/render-worker:typecheck: 
+@cap/webhook-worker:typecheck: cache hit, replaying logs ad1c880bfb9e08d4
+@cap/webhook-worker:typecheck: 
+@cap/webhook-worker:typecheck: > @cap/webhook-worker@0.0.0 typecheck /home/don/code/cap-dependency-hardening/apps/webhook-worker
+@cap/webhook-worker:typecheck: > tsc --noEmit
+@cap/webhook-worker:typecheck: 
+@cap/desktop:typecheck: 
+@cap/desktop:typecheck: > @cap/desktop@0.2.0-beta.6 typecheck /home/don/code/cap-calendar/apps/desktop
+@cap/desktop:typecheck: > tsc --noEmit
+@cap/desktop:typecheck: 
+@cap/web:typecheck: 
+@cap/web:typecheck: > @cap/web@0.0.0 typecheck /home/don/code/cap-calendar/apps/web
+@cap/web:typecheck: > tsc --noEmit
+@cap/web:typecheck: 
+
+ Tasks:    18 successful, 18 total
+Cached:    16 cached, 18 total
+  Time:    3.088s 
+
+exit=0
