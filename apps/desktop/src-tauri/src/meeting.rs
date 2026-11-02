@@ -243,7 +243,7 @@ pub async fn meeting_start(
     // off the async runtime, or the app panics and the recording never starts.
     let session = tauri::async_runtime::spawn_blocking(move || {
         let client = Client::new(&server, &session_token).map_err(|e| e.to_string())?;
-        Session::start(StartOptions {
+        let session = Session::start(StartOptions {
             client,
             dir,
             ffmpeg: crate::ffmpeg_path(),
@@ -261,15 +261,16 @@ pub async fn meeting_start(
             }),
             upload_interval: std::time::Duration::from_secs(3),
         })
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        keep_credential(session, |id| {
+            entry(&meeting_token_key(id))?
+                .set_password(&session_token)
+                .map_err(|e| e.to_string())
+        })
     })
     .await
     .map_err(|e| e.to_string())??;
     let id = session.meeting_id.clone();
-    // If this fails, recovery after a crash falls back to the current pairing.
-    if let Ok(e) = entry(&meeting_token_key(&id)) {
-        let _ = e.set_password(&token);
-    }
     let previous = state.0.lock().map_err(|e| e.to_string())?.replace(session);
     // A finished session still holds a blocking client: drop it off the runtime.
     if let Some(old) = previous {
@@ -284,6 +285,41 @@ pub fn is_recording(state: &MeetingState) -> bool {
         .lock()
         .map(|s| s.as_ref().is_some_and(Session::is_running))
         .unwrap_or(true)
+}
+
+/// A started recording, as far as saving its credential is concerned.
+trait Recording {
+    fn id(&self) -> String;
+    fn stop(&mut self);
+}
+
+impl Recording for Session {
+    fn id(&self) -> String {
+        self.meeting_id.clone()
+    }
+    fn stop(&mut self) {
+        Session::stop(self);
+    }
+}
+
+/// Each meeting's own credential is saved before Cap reports that recording
+/// started, so the meeting can still upload after a crash even if the app
+/// was re-paired with another client meanwhile. If the keyring refuses, the
+/// capture that just started is stopped and the user is told: never a
+/// recording that could not be recovered.
+fn keep_credential<R: Recording>(
+    mut recording: R,
+    save: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<R, String> {
+    match save(&recording.id()) {
+        Ok(()) => Ok(recording),
+        Err(e) => {
+            recording.stop();
+            Err(format!(
+                "Cap stopped because it could not save this meeting's credential in the system keyring ({e}). Unlock the keyring and start again."
+            ))
+        }
+    }
 }
 
 /// `keep` answers the inactivity warning; `stop` ends the recording.
@@ -408,6 +444,48 @@ pub fn meeting_pending_link(state: State<'_, PendingLink>) -> Option<NoteTakerLi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct FakeRecording {
+        stopped: std::rc::Rc<std::cell::Cell<bool>>,
+    }
+
+    impl Recording for FakeRecording {
+        fn id(&self) -> String {
+            "meeting-1".into()
+        }
+        fn stop(&mut self) {
+            self.stopped.set(true);
+        }
+    }
+
+    #[test]
+    fn a_recording_starts_only_once_its_credential_is_saved() {
+        let stopped = std::rc::Rc::new(std::cell::Cell::new(false));
+        let saved = std::cell::RefCell::new(None);
+        let ok = keep_credential(
+            FakeRecording {
+                stopped: stopped.clone(),
+            },
+            |id| {
+                *saved.borrow_mut() = Some(id.to_owned());
+                Ok(())
+            },
+        );
+        assert!(ok.is_ok());
+        assert_eq!(saved.borrow().as_deref(), Some("meeting-1"));
+        assert!(!stopped.get());
+
+        // Keyring refuses: the capture is stopped and the start fails.
+        let failed = keep_credential(
+            FakeRecording {
+                stopped: stopped.clone(),
+            },
+            |_| Err("keyring is locked".into()),
+        );
+        let message = failed.err().expect("start must fail");
+        assert!(stopped.get(), "the started capture must be stopped");
+        assert!(message.contains("keyring is locked"), "{message}");
+    }
 
     #[test]
     fn note_taker_links() {
