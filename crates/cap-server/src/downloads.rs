@@ -477,6 +477,10 @@ async fn homepage(Extension(catalog): Extension<Arc<Catalog>>) -> Html<String> {
     )
 }
 
+async fn privacy() -> impl IntoResponse {
+    Html(include_str!("../../../apps/site/privacy.html"))
+}
+
 async fn css() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
@@ -521,6 +525,7 @@ pub fn router<S: Clone + Send + Sync + 'static>(
     let mut app = Router::new()
         .route("/", get(homepage))
         .route("/index.html", get(homepage))
+        .route("/privacy", get(privacy))
         .route("/styles.css", get(css))
         .route(
             "/assets/cap-recording-editorial-v1-1200.webp",
