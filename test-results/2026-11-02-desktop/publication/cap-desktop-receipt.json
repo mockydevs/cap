@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-beta.6",
-  "commit": "3fd569dc9d02a8500c3a3b4ebd94eecd0bc861e1",
+  "commit": "084d8086caadc308225adc29da49789a775c76eb",
   "download_base": "https://cap.calari.tech/downloads/",
-  "generated_at": "2026-11-02T02:33:57Z",
+  "generated_at": "2026-11-02T02:58:44Z",
   "statuses": {
     "linux-x86_64": "available",
     "windows-x86_64": "pending",
