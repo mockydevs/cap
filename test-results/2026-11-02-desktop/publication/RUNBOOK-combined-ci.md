@@ -15,8 +15,10 @@ older Linux-only OPERATOR-STEPS.md.
 macOS stays `signing_pending`. The Windows installer is unsigned (SmartScreen may warn). Updates stay
 unpublished (`/downloads/latest.json` 404).
 
-1. Staging (already done by root): `/data/cap/downloads/.release-41383982100/` holds `manifest.json`
-   and the two files above. It must sit inside `/data/cap/downloads` (same filesystem).
+1. Staging (root, only after the final audited CI 41383982100 receipt; not done yet): create
+   `/data/cap/downloads/.release-41383982100/` with that run's `manifest.json` and the two files
+   above, inside `/data/cap/downloads` (same filesystem). The live catalog must still be the
+   pending-only one (or this exact release); the script refuses any other published catalog.
 2. Record the live manifest state: `sha256sum /data/cap/downloads/manifest.json` (or note that it is
    absent). Dry run on the host, then read the output:
    `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads --expect-current-sha <that sha256 | absent>`

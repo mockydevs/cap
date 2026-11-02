@@ -11,7 +11,10 @@ It never restarts anything: the Cap service restart is a separate, explicit step
         --expect-current-sha <sha256 of the live manifest.json | absent>   [--apply]
 
 Takes an exclusive lock (<live>/.publish.lock) so two runs never overlap, and refuses unless the
-live manifest.json is exactly the one the operator expects (--expect-current-sha).
+live manifest.json is exactly the one the operator expects (--expect-current-sha) AND is either
+absent, a catalog with nothing available (all pending / signing_pending), or byte-identical to this
+release (idempotent re-run). Any live catalog that already offers a download and is not this exact
+release is refused before any file or manifest is touched.
 
 What --apply does, in order (stops at the first problem, before any change):
   1. Checks the staged manifest is strict hub v1 and lists exactly the expected
@@ -186,6 +189,22 @@ def main() -> None:
         fail("staged manifest.json is missing")
     staged = validate_manifest(staged_raw, stage)
     require_exact_platforms(staged)
+
+    # Only a not-yet-published catalog, or this same release, may be replaced.
+    if current_raw is not None and current_raw != staged_raw:
+        try:
+            live_catalog = json.loads(current_raw.decode("utf-8"))
+            offered = [a.get("platform") for a in live_catalog.get("artifacts", [])
+                       if a.get("status") not in ("pending", "signing_pending")]
+        except (ValueError, AttributeError):
+            fail("live manifest is not a readable catalog; refusing to replace it")
+        if offered:
+            fail(f"live catalog already offers {offered} and is not this release; refusing (no rollback or overwrite)")
+        print("live catalog offers nothing yet (pending only): may be replaced")
+    elif current_raw is None:
+        print("no live catalog yet")
+    else:
+        print("live catalog is this exact release")
     available = {a["platform"]: a for a in staged["artifacts"] if a["status"] == "available"}
     if set(available) != set(EXPECTED):
         fail(f"staged manifest must list exactly {sorted(EXPECTED)} as available")

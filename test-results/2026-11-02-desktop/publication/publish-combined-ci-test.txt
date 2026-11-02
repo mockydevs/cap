@@ -50,3 +50,48 @@ exit=1
 == template placeholders (real script)
 REFUSED: linux-x86_64: pins are still placeholders; fill them from the audited CI 41383982100 artifacts
 exit=1
+
+# Re-test after the pending-or-same live catalog rule (TEST-ONLY 49c pins)
+== live catalog already offers another release
+REFUSED: live catalog already offers ['linux-x86_64'] and is not this release; refusing (no rollback or overwrite)
+live manifest matches the expected state: 1877a76d7c618321aadd15a3c59039d825a0d016007deed30425d59ce162ae68
+exit=1
+files added: 0; backups: 0
+== absent live catalog, dry run
+live manifest matches the expected state: absent
+no live catalog yet
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: absent
+DRY RUN: nothing changed. Re-run with --apply.
+exit=0
+== pending live catalog, apply
+live manifest matches the expected state: f129a2f57afc455fdb4ae04355efe0ea779a5384fb4f8db4c72d9a82a5b3829e
+live catalog offers nothing yet (pending only): may be replaced
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: present -> will be backed up
+backed up live manifest to manifest.json.bak-20261102T035259.042199Z-3120683
+added cap-desktop_0.2.0-beta.6_linux-x86_64.deb
+added cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+manifest.json replaced atomically (0644). Now restart ONLY the cap-server container (runbook step 4).
+exit=0
+== same release re-run
+live manifest matches the expected state: 96cce3212c063f90b9cd0cbf9245d51248fc21d55b20405ada4a2078111c4354
+live catalog is this exact release
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: already present with identical bytes, kept
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: already present with identical bytes, kept
+already published: live files and manifest match this release; nothing to do
+exit=0
+== wrong expected sha
+REFUSED: live manifest is 96cce3212c063f90b9cd0cbf9245d51248fc21d55b20405ada4a2078111c4354, operator expected f129a2f57afc455fdb4ae04355efe0ea779a5384fb4f8db4c72d9a82a5b3829e
+exit=1
+== lock held
+REFUSED: another publication run holds the lock
+exit=1
+== template placeholders (real script)
+REFUSED: linux-x86_64: pins are still placeholders; fill them from the audited CI 41383982100 artifacts
+exit=1
