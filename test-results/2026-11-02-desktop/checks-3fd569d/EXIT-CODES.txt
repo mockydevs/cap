@@ -1,0 +1,13 @@
+source 3fd569dc9d02a8500c3a3b4ebd94eecd0bc861e1
+ws-fmt exit=0 (ffmpeg 6.1.1-3ubuntu5)
+ws-clippy exit=0 (ffmpeg 6.1.1-3ubuntu5)
+recorder-tests exit=0 (ffmpeg 6.1.1-3ubuntu5)
+pulse-smoke-1 exit=0 (ffmpeg 6.1.1-3ubuntu5)
+pulse-smoke-2 exit=0 (ffmpeg 6.1.1-3ubuntu5)
+pulse-smoke-3 exit=0 (ffmpeg 6.1.1-3ubuntu5)
+desktop-fmt exit=0 (ffmpeg 6.1.1-3ubuntu5)
+desktop-clippy exit=0 (ffmpeg 6.1.1-3ubuntu5)
+desktop-tests exit=0 (ffmpeg 6.1.1-3ubuntu5)
+recorder-tests-ffmpeg8 exit=0 (ffmpeg 8.0.1-3ubuntu2 native)
+win-recorder-clippy exit=0
+win-desktop-clippy exit=0
