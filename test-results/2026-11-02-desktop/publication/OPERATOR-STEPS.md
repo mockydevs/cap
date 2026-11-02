@@ -1,19 +1,17 @@
-# Linux publication: operator steps (for the release owner; Claude performs none of these)
+# Linux publication: operator steps (release owner only; Claude performs none of these)
 
-Artifact: dist/desktop/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
-sha256 7cbdb79c2b5f06052a4bacbdcfaa70e158d1ecdfd75be9b05caab02a5ea1bdd5, 7919562 bytes.
-Built from clean source 5179a45ebd2528f5113b2e21b6202d875e1fd36f (release profile,
-CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech, updater artifacts off, no updater endpoint/pubkey,
-no CAP_DEV_SERVER_URL or test server in the binary). Supersedes d9da06f8 and 23b7fe4b (do not publish).
+Follows docs/DOWNLOAD-HUB.md in cap-download-hub. Artifact and manifest values are filled in by the
+final package receipt (final-linux-deb.txt) and the generated manifest.json in this folder.
 
-1. Copy the .deb and cap-desktop-manifest.json (this folder) to the host.
-2. Verify on the host before exposing:
-   sha256sum cap-desktop_0.2.0-beta.6_linux-x86_64.deb   # must equal the value above
-   stat -c %s cap-desktop_0.2.0-beta.6_linux-x86_64.deb  # 7919562
-   dpkg-deb -f cap-desktop_0.2.0-beta.6_linux-x86_64.deb Package Version Architecture Depends
-   dpkg-deb --fsys-tarfile cap-desktop_0.2.0-beta.6_linux-x86_64.deb | tar -xO ./usr/bin/cap-desktop | strings | grep -c 'https://meetings.calari.tech'   # >= 1
-3. Place as regular, non-symlink, read-only files in CAP_DOWNLOAD_DIR (/srv/downloads):
-   cap-desktop_0.2.0-beta.6_linux-x86_64.deb and cap-desktop-manifest.json.
-4. Restart or reload the hub per its runbook; confirm /downloads lists Linux as available, Windows
-   pending, macOS signing pending, and that the download's size/sha256 match.
-5. Do not publish latest.json or any updater file: updates are off for this release.
+1. Verify the artifact locally against the receipt (sha256sum, stat -c %s, dpkg-deb -f ... Package Version
+   Architecture Depends; strings in usr/bin/cap-desktop must contain https://meetings.calari.tech).
+2. Build a complete new download set in a fresh staging directory on the host: the new versioned
+   installer basename, any installers still being served, and the new manifest.json (this folder's file).
+   Do not edit or replace bytes of an installer that is already live; a new build gets a new basename.
+3. Regular, non-symlink files only, directly in the directory. Then switch atomically so the host path
+   /data/cap/downloads (mounted read-only in the container as /srv/downloads, CAP_DOWNLOAD_DIR) holds the
+   complete set; keep the previous set until active downloads finish.
+4. Restart the Rust service (the manifest is validated only at startup; it refuses to start if any
+   available file is missing or its size/SHA-256 differ). There is no reload endpoint or directory listing.
+5. Check GET /api/downloads and the UI #downloads section: Linux available with the receipt's size and
+   SHA-256, Windows pending, macOS signing_pending; /downloads/latest.json still 404 (updates off).

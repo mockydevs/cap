@@ -206,6 +206,9 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
             format!("expr:gte(t,n_forced*{segment_seconds})"),
         ]);
     }
+    // Each output is flushed packet by packet. Otherwise FFmpeg holds about
+    // 2 s of captured audio in its output buffers, and "q" at stop drops it
+    // (7 s of PulseAudio became 5 s). Stop still cuts capture immediately.
     out.extend([
         "-map".into(),
         "[rec]".into(),
@@ -217,6 +220,8 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
         "segment".into(),
         "-segment_time".into(),
         segment_seconds.to_string(),
+        "-flush_packets".into(),
+        "1".into(),
         "-segment_format".into(),
         if video.is_some() {
             "webm".into()
@@ -238,6 +243,8 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
         "1".into(),
         "-ar".into(),
         PCM_RATE.to_string(),
+        "-flush_packets".into(),
+        "1".into(),
         "-f".into(),
         "s16le".into(),
         "pipe:1".into(),
@@ -301,7 +308,12 @@ mod tests {
         let list = dir.join("segments.csv");
         assert!(joined.contains(&*segments.to_string_lossy()));
         assert!(joined.contains(&format!("-segment_list {}", list.to_string_lossy())));
-        assert!(joined.ends_with("-f s16le pipe:1"));
+        assert!(joined.ends_with("-flush_packets 1 -f s16le pipe:1"));
+        assert_eq!(
+            joined.matches("-flush_packets 1").count(),
+            2,
+            "both outputs"
+        );
         assert!(!joined.contains("libvpx"));
     }
 

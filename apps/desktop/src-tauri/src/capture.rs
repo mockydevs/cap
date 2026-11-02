@@ -144,6 +144,9 @@ pub fn spawn(options: &CaptureOptions, output: &Path) -> Result<CaptureProcess, 
     command.args([
         "-movflags",
         "+frag_keyframe+empty_moov+default_base_moof",
+        // Write as it goes, so "q" at stop does not drop buffered output.
+        "-flush_packets",
+        "1",
         output.to_string_lossy().as_ref(),
     ]);
     let video = match command

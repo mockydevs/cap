@@ -7,7 +7,7 @@
 DIR holds the installers the release workflow built and checked in this run,
 and the Windows installer's updater .sig. Only files listed here can be marked "available";
 macOS stays "signing_pending" until signing exists. Writes into DIR:
-  cap-desktop-manifest.json  download hub v1: only schema_version + artifacts;
+  manifest.json  download hub v1: only schema_version + artifacts;
                              a pending entry is just platform + status
   updater-manifest.json      only when a signed update payload exists (none
                              while updates are off): payload + signature per
@@ -110,7 +110,7 @@ def main() -> None:
             }
 
     manifest = {"schema_version": 1, "artifacts": artifacts}
-    write(args.dir / "cap-desktop-manifest.json", manifest)
+    write(args.dir / "manifest.json", manifest)
     (args.dir / "SHA256SUMS").write_text("\n".join(sums) + ("\n" if sums else ""),
                                          encoding="ascii")
     if updater:

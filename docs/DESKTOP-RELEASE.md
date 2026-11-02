@@ -44,7 +44,7 @@ The `cap-desktop-<version>` artifact holds:
 
 - `cap-desktop_<version>_linux-x86_64.deb`
 - `cap-desktop_<version>_windows-x86_64-setup.exe`
-- `cap-desktop-manifest.json`: download hub v1, only `schema_version` and
+- `manifest.json`: download hub v1, only `schema_version` and
   `artifacts`. An available entry has platform, version, filename, bytes,
   SHA-256 and status; a `pending` or `signing_pending` entry has only
   platform and status.

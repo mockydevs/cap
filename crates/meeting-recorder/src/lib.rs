@@ -24,7 +24,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         mpsc, Arc, Mutex,
     },
     thread::JoinHandle,
@@ -513,12 +513,10 @@ impl Session {
         let detector = Arc::new(Mutex::new(Detector::new(opts.detector, 0)));
         let clock = Instant::now();
         let pcm_alive = Arc::new(AtomicBool::new(true));
-        let pcm_frames = Arc::new(AtomicU64::new(0));
         {
             let detector = detector.clone();
             let alive = pcm_alive.clone();
-            let frames = pcm_frames.clone();
-            std::thread::spawn(move || pcm_reader(stdout, detector, clock, alive, frames));
+            std::thread::spawn(move || pcm_reader(stdout, detector, clock, alive));
         }
         let capture_done = Arc::new(AtomicBool::new(false));
         let stop_reason = Arc::new(Mutex::new(None::<StopReason>));
@@ -545,7 +543,6 @@ impl Session {
                 detector,
                 clock,
                 pcm_alive,
-                pcm_frames,
                 journal,
                 dir: opts.dir,
                 watch: opts.watch_window,
@@ -603,12 +600,10 @@ fn pcm_reader(
     detector: Arc<Mutex<Detector>>,
     clock: Instant,
     alive: Arc<AtomicBool>,
-    frames: Arc<AtomicU64>,
 ) {
     // 100 ms frames of s16le mono.
     let mut buf = vec![0u8; (ffmpeg::PCM_RATE as usize / 10) * 2];
     while out.read_exact(&mut buf).is_ok() {
-        frames.fetch_add(1, Ordering::SeqCst);
         let mut sum = 0f64;
         for pair in buf.chunks_exact(2) {
             let v = f64::from(i16::from_le_bytes([pair[0], pair[1]])) / 32768.0;
@@ -675,8 +670,6 @@ struct ControlCtx {
     detector: Arc<Mutex<Detector>>,
     clock: Instant,
     pcm_alive: Arc<AtomicBool>,
-    /// 100 ms frames FFmpeg has written so far (its output timeline).
-    pcm_frames: Arc<AtomicU64>,
     journal: Arc<Mutex<Journal>>,
     dir: PathBuf,
     watch: Option<Box<dyn Fn() -> bool + Send>>,
@@ -756,11 +749,6 @@ fn start_system_audio(
     Ok((out, started))
 }
 
-/// Output FFmpeg must still write after a stop (1.5 s of 100 ms frames).
-const DRAIN_FRAMES: u64 = 15;
-/// Upper bound on that wait, so stopping never stalls on a stuck device.
-const MAX_DRAIN: Duration = Duration::from_secs(3);
-
 fn control_loop(mut c: ControlCtx) {
     let mut last_watch = Instant::now();
     let mut last_warn: Option<Instant> = None;
@@ -817,18 +805,6 @@ fn control_loop(mut c: ControlCtx) {
     if let Ok(mut j) = c.journal.lock() {
         j.stop_reason = Some(reason);
         let _ = j.save(&c.dir);
-    }
-    // Live devices reach FFmpeg's output with a delay (about 1-2 s through
-    // PulseAudio), and "q" drops whatever is still in flight. Let the output
-    // advance by DRAIN first, so audio up to the moment of stopping is kept.
-    // Bounded, and skipped when FFmpeg has already exited.
-    let drain_from = c.pcm_frames.load(Ordering::SeqCst);
-    let deadline = Instant::now() + MAX_DRAIN;
-    while c.pcm_alive.load(Ordering::SeqCst)
-        && c.pcm_frames.load(Ordering::SeqCst) < drain_from + DRAIN_FRAMES
-        && Instant::now() < deadline
-    {
-        std::thread::sleep(Duration::from_millis(20));
     }
     // Ask FFmpeg to finish cleanly so the last segment is closed and listed.
     if let Some(mut stdin) = c.stdin.take() {

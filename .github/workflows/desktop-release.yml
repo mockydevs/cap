@@ -252,7 +252,16 @@ jobs:
             python -I scripts/desktop/check-pe.py (Join-Path $dir $exe)
             if ($LASTEXITCODE -ne 0) { throw "installed $exe is not an x86-64 Windows program" }
           }
-          & (Join-Path $dir 'ffmpeg.exe') -hide_banner -version | Select-Object -First 1
+          $version = & (Join-Path $dir 'ffmpeg.exe') -hide_banner -version
+          if ($LASTEXITCODE -ne 0) { throw "installed ffmpeg.exe exit $LASTEXITCODE" }
+          $version | Select-Object -First 1
+          # The installed app starts and keeps running (no Cap account or server needed to open it).
+          $app = Start-Process -FilePath (Join-Path $dir 'cap-desktop.exe') -PassThru
+          Start-Sleep -Seconds 15
+          if ($app.HasExited) { throw "installed app exited early with code $($app.ExitCode)" }
+          "installed app running after 15 s (pid $($app.Id))"
+          Stop-Process -Id $app.Id -Force
+          $app.WaitForExit(10000) | Out-Null
           Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Set-Content "$out/$name.files.txt"
           Start-Process -FilePath (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
           Start-Sleep -Seconds 5

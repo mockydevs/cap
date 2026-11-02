@@ -416,6 +416,129 @@ fn a_paced_system_audio_pipe_mixes_with_the_microphone() {
     e.rt.block_on(e.state.db.close());
 }
 
+/// Decodes a meeting's local segments to 8 kHz mono samples.
+#[cfg(unix)]
+fn decoded_segments(ffmpeg: &str, dir: &Path) -> Vec<i16> {
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "ogg"))
+        .collect();
+    files.sort();
+    let mut samples = Vec::new();
+    for f in files {
+        let out = std::process::Command::new(ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&f)
+            .args(["-ac", "1", "-ar", "8000", "-f", "s16le", "-"])
+            .output()
+            .unwrap();
+        samples.extend(
+            out.stdout
+                .chunks_exact(2)
+                .map(|b| i16::from_le_bytes([b[0], b[1]])),
+        );
+    }
+    samples
+}
+
+/// Level of one frequency (Goertzel), per sample.
+#[cfg(unix)]
+fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    let k = 2.0 * (2.0 * std::f64::consts::PI * freq / 8000.0).cos();
+    let (mut s1, mut s2) = (0.0f64, 0.0f64);
+    for &v in samples {
+        let s0 = f64::from(v) + k * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    (s1 * s1 + s2 * s2 - k * s1 * s2).max(0.0).sqrt() / samples.len().max(1) as f64
+}
+
+/// Stopping cuts capture at once yet keeps what was captured before it: a
+/// tone played only after Stop is absent, and the audio before Stop is all
+/// there. (FFmpeg used to hold ~2 s of output, which "q" dropped.)
+#[cfg(unix)]
+#[test]
+fn stop_keeps_audio_up_to_stop_and_nothing_after() {
+    use cap_meeting_recorder::system_audio::{Pacer, FRAME_BYTES};
+    use std::io::Write;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let fifo = root.join("system-audio.pcm");
+    assert!(std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap()
+        .success());
+    let stopped = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
+    let writer = {
+        let (fifo, stopped, done) = (fifo.clone(), stopped.clone(), done.clone());
+        std::thread::spawn(move || {
+            let mut out = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+            let mut pacer = Pacer::new(Instant::now());
+            let mut n = 0u64;
+            while !done.load(Ordering::SeqCst) {
+                // 440 Hz before Stop, 1000 Hz after it.
+                let freq = if stopped.load(Ordering::SeqCst) {
+                    1000.0
+                } else {
+                    440.0
+                };
+                let plan = pacer.plan(Instant::now(), 480);
+                let mut buf = Vec::with_capacity(plan.keep as usize * FRAME_BYTES);
+                for _ in 0..plan.keep {
+                    let v = ((n as f32) * freq * std::f32::consts::TAU / 48_000.0).sin() * 0.4;
+                    n += 1;
+                    buf.extend(v.to_le_bytes());
+                    buf.extend(v.to_le_bytes());
+                }
+                if out.write_all(&buf).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        })
+    };
+    let (mut session, _events) = start_with(
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
+        &d,
+        vec![Input::PcmPipe {
+            path: fifo.to_string_lossy().into_owned(),
+        }],
+        CaptureMode::Audio,
+        DetectorConfig::default(),
+    );
+    let started = Instant::now();
+    std::thread::sleep(Duration::from_secs(6));
+    stopped.store(true, Ordering::SeqCst);
+    let before_stop = started.elapsed();
+    session.stop();
+    // Keep the "after Stop" tone playing for a while before closing the pipe.
+    std::thread::sleep(Duration::from_secs(2));
+    done.store(true, Ordering::SeqCst);
+    let _ = writer.join();
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
+    let samples = decoded_segments(&e.ffmpeg, &d);
+    let seconds = samples.len() as f64 / 8000.0;
+    let (before, after) = (tone_level(&samples, 440.0), tone_level(&samples, 1000.0));
+    eprintln!(
+        "kept {seconds:.2} s of {:.2} s before Stop; 440 Hz {before:.1}, 1000 Hz {after:.1}",
+        before_stop.as_secs_f64()
+    );
+    assert!(
+        seconds >= before_stop.as_secs_f64() - 1.0,
+        "only {seconds:.2} s kept of {:.2} s before Stop",
+        before_stop.as_secs_f64()
+    );
+    assert!(after < before / 20.0, "audio from after Stop was recorded");
+    e.rt.block_on(e.state.db.close());
+}
+
 /// Real PulseAudio capture with the inputs the app picks on Linux: the
 /// default microphone plus the speakers' monitor. Needs a running PulseAudio
 /// (or PipeWire-Pulse) with something playing on both; see
