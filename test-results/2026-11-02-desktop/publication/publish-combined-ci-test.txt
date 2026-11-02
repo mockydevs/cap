@@ -1,0 +1,34 @@
+== dry run
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: present -> will be backed up
+DRY RUN: nothing changed. Re-run with --apply.
+exit=0
+== apply
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: present -> will be backed up
+backed up live manifest to manifest.json.bak-20261102T032731.771628Z-3089943
+added cap-desktop_0.2.0-beta.6_linux-x86_64.deb
+added cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+manifest.json replaced atomically (0644). Now restart ONLY the Cap service (runbook step 4).
+exit=0
+644 779 <scratch>/live/manifest.json
+644 7935324 <scratch>/live/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
+644 44995608 <scratch>/live/cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+644 242 <scratch>/live/manifest.json.bak-20261102T032731.771628Z-3089943
+== re-apply
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: already present with identical bytes, kept
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: already present with identical bytes, kept
+already published: live files and manifest match this release; nothing to do
+exit=0
+== live different bytes
+REFUSED: live cap-desktop_0.2.0-beta.6_linux-x86_64.deb exists with different bytes; never overwrite a live installer
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+exit=1
+== tampered staged
+REFUSED: windows-x86_64: size mismatch for cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+exit=1
