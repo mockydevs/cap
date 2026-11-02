@@ -73,7 +73,14 @@ impl Input {
                 "-i".into(),
                 format!("none:{device}"),
             ],
+            // The format is given, so no probing: FFmpeg 8 otherwise reads
+            // seconds of the pipe first, holding back the whole recording,
+            // and the final seconds are lost at stop.
             Input::PcmPipe { path } => v(&[
+                "-probesize",
+                "32",
+                "-analyzeduration",
+                "0",
                 "-thread_queue_size",
                 "1024",
                 "-f",
