@@ -1,0 +1,21 @@
+server cold: 124s rc=0
+server warm after src change with OLD mtime: 56s rc=0
+  marker A in binary: 1
+server warm after UI-only change: 52s rc=0
+  UI marker in binary: 1
+  marker A still: 1
+  final image has no build dirs: 0
+  user: uid=10001(cap) gid=999(cap) groups=999(cap)
+  size: 800369290
+bot release cold: 26s rc=0
+bot test cold: 20s rc=0
+bot release warm after change: 9s rc=0
+  release has marker B: 1
+  release has fake-meet code (must be 0): 0
+  release has speaker binary (must be 0): 0
+  release policy has localhost (must be 0): 0
+  test build has fake-meet code (must be >0): 1
+  release user: uid=10002(capbot) gid=997(capbot) groups=997(capbot)
+  release has no build dirs: 0
+exit=0
+server warm at production default CARGO_BUILD_JOBS=2 after src change: 64s rc=0; marker C in binary: 1

@@ -10,11 +10,20 @@ ARG CARGO_BUILD_JOBS=2
 ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 # Test images only: "fake-meet" lets the runner open a local Meet stand-in.
 ARG BOT_FEATURES=""
+ARG TARGETPLATFORM
 COPY Cargo.toml Cargo.lock clippy.toml ./
 COPY crates crates
 COPY apps/site apps/site
-RUN if [ -n "$BOT_FEATURES" ]; then F="--features $BOT_FEATURES"; else F=""; fi; \
-    cargo build --release -p cap-meeting-bot $F
+# Same caching as the server (see crates/cap-server/Dockerfile). The target
+# cache is keyed by BOT_FEATURES, so a test build never shares artifacts
+# with the release build.
+RUN --mount=type=cache,id=cap-cargo-registry-rust1.95,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cap-cargo-git-rust1.95,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=cap-bot-target-rust1.95-${TARGETPLATFORM}-features-${BOT_FEATURES:-release},target=/src/target,sharing=locked \
+    find crates apps/site Cargo.toml -type f -exec touch {} + \
+    && if [ -n "$BOT_FEATURES" ]; then F="--features $BOT_FEATURES"; else F=""; fi \
+    && cargo build --release -p cap-meeting-bot $F \
+    && mkdir -p /out && cp target/release/cap-meeting-bot /out/cap-meeting-bot
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG CHROME_POLICY=chrome-policy.json
 COPY infra/calendar-bot/${CHROME_POLICY} /etc/chromium/policies/managed/cap-bot.json
 COPY infra/calendar-bot/entrypoint.sh /usr/local/bin/cap-bot-entrypoint
-COPY --from=build /src/target/release/cap-meeting-bot /usr/local/bin/cap-meeting-bot
+COPY --from=build /out/cap-meeting-bot /usr/local/bin/cap-meeting-bot
 ENV CHROME_PATH=/usr/bin/chromium \
     FFMPEG_PATH=/usr/bin/ffmpeg \
     CAP_BOT_SPOOL_DIR=/var/lib/cap-bot \
