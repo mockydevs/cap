@@ -37,8 +37,17 @@ services:
     security_opt: ["no-new-privileges:true"]
     tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     volumes:
-      - ${CAP_WHISPER_MODEL_DIRECTORY:?Set the absolute host directory containing verified Whisper models}:/models:ro
-      - ${CAP_DOWNLOAD_HOST_DIRECTORY:?Set the dedicated verified public installer directory}:/srv/downloads:ro
+      # Coolify validates bind sources before Compose interpolation.
+      - type: bind
+        source: /data/cap/whisper-models
+        target: /models
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: /data/cap/downloads
+        target: /srv/downloads
+        read_only: true
+        bind: { create_host_path: false }
     environment:
       CAP_ENV: production
       CAP_SERVER_BIND: 0.0.0.0:8787
