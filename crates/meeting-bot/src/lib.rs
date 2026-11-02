@@ -71,12 +71,12 @@ pub fn config_from_env() -> Result<runner::Config, String> {
 }
 
 #[cfg(not(feature = "fake-meet"))]
-fn meet_origin() -> String {
+pub fn meet_origin() -> String {
     meet::MEET_ORIGIN.into()
 }
 
 /// Test builds only: a local stand-in for Meet.
 #[cfg(feature = "fake-meet")]
-fn meet_origin() -> String {
+pub fn meet_origin() -> String {
     var("CAP_BOT_TEST_MEET_ORIGIN").unwrap_or_else(|| meet::MEET_ORIGIN.into())
 }

@@ -11,6 +11,18 @@ default = []
 # Lets tests point the runner at a local stand-in for Google Meet. Never
 # enabled in release images: production only ever opens meet.google.com.
 fake-meet = []
+# Test-only synthetic speaker for the controlled live test (bin
+# cap-meet-speaker). Never built into the notetaker image.
+test-speaker = []
+
+[[bin]]
+name = "cap-meeting-bot"
+path = "src/main.rs"
+
+[[bin]]
+name = "cap-meet-speaker"
+path = "src/bin/speaker.rs"
+required-features = ["test-speaker"]
 
 [dependencies]
 cap-meeting-detector = { path = "../meeting-detector" }

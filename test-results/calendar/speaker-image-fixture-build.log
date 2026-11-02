@@ -1,0 +1,365 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from speaker.Dockerfile
+#1 DONE 0.0s
+
+#1 [internal] load build definition from speaker.Dockerfile
+#1 transferring dockerfile: 1.64kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.95-bookworm
+#2 DONE 1.0s
+
+#3 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#3 DONE 1.1s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 294B done
+#4 DONE 0.0s
+
+#5 [build 1/6] FROM docker.io/library/rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1
+#5 resolve docker.io/library/rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 0.0s done
+#5 DONE 0.0s
+
+#6 [stage-1 1/6] FROM docker.io/library/debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
+#6 resolve docker.io/library/debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 56.15kB done
+#7 DONE 0.0s
+
+#8 [build 2/6] WORKDIR /src
+#8 CACHED
+
+#9 [stage-1 2/6] RUN apt-get update && apt-get install -y --no-install-recommends       chromium ffmpeg pulseaudio pulseaudio-utils xvfb ca-certificates fonts-liberation     && rm -rf /var/lib/apt/lists/*     && useradd --system --uid 10003 --create-home --home-dir /home/capspk capspk
+#9 CACHED
+
+#10 [build 3/6] COPY Cargo.toml Cargo.lock clippy.toml ./
+#10 CACHED
+
+#11 [stage-1 3/6] COPY infra/calendar-bot/chrome-policy.test.json /etc/chromium/policies/managed/cap-bot.json
+#11 CACHED
+
+#12 [stage-1 4/6] COPY infra/calendar-bot/speaker-entrypoint.sh /usr/local/bin/cap-speaker-entrypoint
+#12 DONE 0.0s
+
+#13 [build 4/6] COPY crates crates
+#13 DONE 0.1s
+
+#14 [stage-1 5/6] COPY crates/meeting-bot/tests/fixtures/speech.ogg /opt/cap-speaker/speech.ogg
+#14 DONE 0.1s
+
+#15 [build 5/6] COPY apps/site apps/site
+#15 DONE 0.1s
+
+#16 [build 6/6] RUN cargo build --release -p cap-meeting-bot --bin cap-meet-speaker --features "test-speaker,fake-meet"
+#16 0.219     Updating crates.io index
+#16 5.448  Downloading crates ...
+#16 6.337   Downloaded atomic-waker v1.1.2
+#16 6.388   Downloaded httpdate v1.0.3
+#16 6.402   Downloaded futures-sink v0.3.34
+#16 6.403   Downloaded form_urlencoded v1.2.2
+#16 6.448   Downloaded http-body v1.1.0
+#16 6.448   Downloaded equivalent v1.0.3
+#16 6.456   Downloaded percent-encoding v2.3.2
+#16 6.462   Downloaded potential_utf v0.1.6
+#16 6.467   Downloaded dunce v1.0.5
+#16 6.478   Downloaded hex v0.4.3
+#16 6.487   Downloaded itoa v1.0.18
+#16 6.488   Downloaded http-range-header v0.4.2
+#16 6.492   Downloaded futures-io v0.3.34
+#16 6.496   Downloaded rand_pcg v0.10.2
+#16 6.497   Downloaded idna_adapter v1.2.2
+#16 6.509   Downloaded cfg-if v1.0.5
+#16 6.523   Downloaded futures-task v0.3.34
+#16 6.533   Downloaded errno v0.3.14
+#16 6.537   Downloaded cfg_aliases v0.2.2
+#16 6.571   Downloaded serde_urlencoded v0.7.1
+#16 6.587   Downloaded lru-slab v0.1.3
+#16 6.606   Downloaded block-buffer v0.10.4
+#16 6.608   Downloaded autocfg v1.5.1
+#16 6.632   Downloaded openssl-probe v0.2.2
+#16 6.633   Downloaded cpufeatures v0.3.1
+#16 6.645   Downloaded fnv v1.0.7
+#16 6.661   Downloaded futures-core v0.3.34
+#16 6.665   Downloaded mime v0.3.17
+#16 6.667   Downloaded crypto-common v0.1.7
+#16 6.720   Downloaded rustc-hash v2.1.3
+#16 6.738   Downloaded hyper-rustls v0.27.10
+#16 6.740   Downloaded digest v0.10.7
+#16 6.741   Downloaded cpufeatures v0.2.17
+#16 6.741   Downloaded http-body-util v0.1.5
+#16 6.743   Downloaded ipnet v2.12.2
+#16 6.749   Downloaded pkg-config v0.3.34
+#16 6.750   Downloaded data-encoding v2.11.1
+#16 6.752   Downloaded mime_guess v2.0.5
+#16 6.759   Downloaded foldhash v0.2.0
+#16 6.764   Downloaded fs_extra v1.3.0
+#16 6.765   Downloaded utf8_iter v1.1.0
+#16 6.773   Downloaded quote v1.0.47
+#16 6.774   Downloaded generic-array v0.14.7
+#16 6.775   Downloaded rand_core v0.9.5
+#16 6.777   Downloaded jobserver v0.1.35
+#16 6.778   Downloaded rand_chacha v0.9.0
+#16 6.780   Downloaded displaydoc v0.2.7
+#16 6.781   Downloaded find-msvc-tools v0.1.15
+#16 6.785   Downloaded cmake v0.1.58
+#16 6.790   Downloaded untrusted v0.9.0
+#16 6.793   Downloaded getrandom v0.2.17
+#16 6.795   Downloaded once_cell v1.21.4
+#16 6.796   Downloaded pin-project-lite v0.2.17
+#16 6.798   Downloaded futures-channel v0.3.34
+#16 6.799   Downloaded httparse v1.10.1
+#16 6.801   Downloaded rand_core v0.10.1
+#16 6.801   Downloaded quinn-udp v0.5.16
+#16 6.840   Downloaded bitflags v2.13.2
+#16 6.842   Downloaded litemap v0.8.3
+#16 6.843   Downloaded const-oid v0.9.6
+#16 6.844   Downloaded iana-time-zone v0.1.65
+#16 6.854   Downloaded chacha20 v0.10.2
+#16 6.867   Downloaded utf-8 v0.7.6
+#16 6.867   Downloaded ppv-lite86 v0.2.21
+#16 6.868   Downloaded try-lock v0.2.5
+#16 6.871   Downloaded base64 v0.22.1
+#16 6.874   Downloaded hmac v0.12.1
+#16 6.875   Downloaded getrandom v0.3.4
+#16 6.876   Downloaded getrandom v0.4.3
+#16 6.878   Downloaded bytes v1.12.1
+#16 6.879   Downloaded log v0.4.35
+#16 6.880   Downloaded icu_provider v2.4.0
+#16 6.885   Downloaded proc-macro2 v1.0.107
+#16 6.887   Downloaded num-traits v0.2.19
+#16 6.888   Downloaded icu_normalizer_data v2.4.0
+#16 6.889   Downloaded icu_locale_core v2.4.0
+#16 6.904   Downloaded base64 v0.23.1
+#16 6.907   Downloaded quinn v0.11.12
+#16 6.918   Downloaded icu_collections v2.4.0
+#16 6.921   Downloaded memchr v2.8.3
+#16 6.923   Downloaded rand v0.9.5
+#16 7.095   Downloaded version_check v0.9.5
+#16 7.100   Downloaded zerofrom-derive v0.1.8
+#16 7.101   Downloaded zerofrom v0.1.8
+#16 7.102   Downloaded tower-layer v0.3.3
+#16 7.198   Downloaded sha1_smol v1.0.1
+#16 7.202   Downloaded tokio-macros v2.7.2
+#16 7.205   Downloaded subtle v2.6.1
+#16 7.207   Downloaded yoke-derive v0.8.4
+#16 7.227   Downloaded tower-service v0.3.3
+#16 7.249   Downloaded rustls-pki-types v1.15.1
+#16 7.262   Downloaded signal-hook-registry v1.4.8
+#16 7.262   Downloaded rustls-native-certs v0.8.5
+#16 7.263   Downloaded ryu v1.0.23
+#16 7.365   Downloaded rand v0.10.3
+#16 7.367   Downloaded mio v1.2.4
+#16 7.370   Downloaded reqwest v0.12.28
+#16 7.372   Downloaded libm v0.2.16
+#16 7.376   Downloaded sync_wrapper v1.0.2
+#16 7.377   Downloaded icu_properties_data v2.4.0
+#16 7.381   Downloaded hyper v1.12.0
+#16 7.384   Downloaded aws-lc-rs v1.19.0
+#16 7.389   Downloaded chrono v0.4.45
+#16 7.392   Downloaded quinn-proto v0.11.19
+#16 7.395   Downloaded futures-util v0.3.34
+#16 7.400   Downloaded icu_properties v2.4.0
+#16 7.402   Downloaded hashbrown v0.17.1
+#16 7.404   Downloaded h2 v0.4.20
+#16 7.407   Downloaded cc v1.10.0
+#16 7.409   Downloaded idna v1.1.0
+#16 7.410   Downloaded indexmap v2.14.2
+#16 7.412   Downloaded hyper-util v0.1.21
+#16 7.415   Downloaded http v1.5.0
+#16 7.438   Downloaded stable_deref_trait v1.2.1
+#16 7.571   Downloaded nix v0.30.1
+#16 7.577   Downloaded rustls v0.23.46
+#16 7.583   Downloaded icu_normalizer v2.4.0
+#16 7.588   Downloaded libc v0.2.191
+#16 7.606   Downloaded zerovec-derive v0.11.7
+#16 7.607   Downloaded tokio-rustls v0.26.6
+#16 7.608   Downloaded thiserror-impl v2.0.21
+#16 7.608   Downloaded sha1 v0.10.7
+#16 7.610   Downloaded ring v0.17.14
+#16 7.628   Downloaded zeroize v1.9.1
+#16 7.629   Downloaded writeable v0.6.4
+#16 7.630   Downloaded want v0.3.2
+#16 7.630   Downloaded utf_types v1.0.0
+#16 7.631   Downloaded unicase v2.10.0
+#16 7.631   Downloaded thiserror v2.0.21
+#16 7.634   Downloaded shlex v2.0.1
+#16 7.722   Downloaded tinystr v0.8.5
+#16 7.723   Downloaded synstructure v0.14.0
+#16 7.852   Downloaded zmij v1.0.23
+#16 7.861   Downloaded yoke v0.8.4
+#16 7.862   Downloaded slab v0.4.12
+#16 7.862   Downloaded sha2 v0.10.9
+#16 7.863   Downloaded serde_derive v1.0.229
+#16 7.864   Downloaded tracing-attributes v0.1.31
+#16 7.865   Downloaded smallvec v1.16.4
+#16 7.866   Downloaded serde_core v1.0.229
+#16 8.055   Downloaded unicode-ident v1.0.27
+#16 8.082   Downloaded tungstenite v0.26.2
+#16 8.111   Downloaded tracing-core v0.1.36
+#16 8.217   Downloaded aws-lc-sys v0.47.0
+#16 8.332   Downloaded tinyvec v1.13.3
+#16 8.334   Downloaded socket2 v0.6.5
+#16 8.335   Downloaded serde v1.0.229
+#16 8.336   Downloaded rustls-webpki v0.103.16
+#16 8.354   Downloaded uuid v1.29.0
+#16 8.581   Downloaded url v2.5.8
+#16 8.851   Downloaded zerotrie v0.2.5
+#16 8.887   Downloaded zerovec v0.11.9
+#16 8.966   Downloaded typenum v1.20.1
+#16 8.969   Downloaded tower v0.5.3
+#16 9.105   Downloaded tokio-util v0.7.20
+#16 9.202   Downloaded tower-http v0.6.11
+#16 9.291   Downloaded serde_json v1.0.154
+#16 9.596   Downloaded webpki-roots v1.0.11
+#16 9.729   Downloaded syn v3.0.9
+#16 9.942   Downloaded syn v2.0.119
+#16 9.963   Downloaded zerocopy v0.8.63
+#16 10.18   Downloaded tracing v0.1.44
+#16 10.59   Downloaded tokio v1.54.1
+#16 10.64    Compiling proc-macro2 v1.0.107
+#16 10.64    Compiling quote v1.0.47
+#16 10.64    Compiling unicode-ident v1.0.27
+#16 10.64    Compiling libc v0.2.191
+#16 10.64    Compiling cfg-if v1.0.5
+#16 10.64    Compiling stable_deref_trait v1.2.1
+#16 10.66    Compiling itoa v1.0.18
+#16 10.66    Compiling bytes v1.12.1
+#16 10.68    Compiling pin-project-lite v0.2.17
+#16 10.70    Compiling version_check v0.9.5
+#16 10.72    Compiling subtle v2.6.1
+#16 10.73    Compiling futures-core v0.3.34
+#16 10.76    Compiling find-msvc-tools v0.1.15
+#16 10.77    Compiling shlex v2.0.1
+#16 10.81    Compiling generic-array v0.14.7
+#16 10.82    Compiling cc v1.10.0
+#16 10.84    Compiling writeable v0.6.4
+#16 10.86    Compiling smallvec v1.16.4
+#16 10.94    Compiling utf_types v1.0.0
+#16 10.94    Compiling litemap v0.8.3
+#16 10.94    Compiling typenum v1.20.1
+#16 11.03    Compiling serde_core v1.0.229
+#16 11.06    Compiling utf8_iter v1.1.0
+#16 11.11    Compiling syn v3.0.9
+#16 11.11    Compiling http v1.5.0
+#16 11.13    Compiling icu_properties_data v2.4.0
+#16 11.17    Compiling icu_normalizer_data v2.4.0
+#16 11.22    Compiling memchr v2.8.3
+#16 11.41    Compiling socket2 v0.6.5
+#16 11.41    Compiling mio v1.2.4
+#16 11.54    Compiling ring v0.17.14
+#16 11.57    Compiling tokio v1.54.1
+#16 11.65    Compiling zeroize v1.9.1
+#16 11.67    Compiling httparse v1.10.1
+#16 11.71    Compiling futures-sink v0.3.34
+#16 11.74    Compiling once_cell v1.21.4
+#16 11.76    Compiling getrandom v0.3.4
+#16 11.82    Compiling zerocopy v0.8.63
+#16 11.85    Compiling synstructure v0.14.0
+#16 11.93    Compiling percent-encoding v2.3.2
+#16 12.04    Compiling rustls-pki-types v1.15.1
+#16 12.11    Compiling http-body v1.1.0
+#16 12.16    Compiling crypto-common v0.1.7
+#16 12.20    Compiling block-buffer v0.10.4
+#16 12.24    Compiling getrandom v0.2.17
+#16 12.30    Compiling slab v0.4.12
+#16 12.31    Compiling futures-task v0.3.34
+#16 12.31    Compiling zerofrom-derive v0.1.8
+#16 12.35    Compiling yoke-derive v0.8.4
+#16 12.36    Compiling zerovec-derive v0.11.7
+#16 12.48    Compiling displaydoc v0.2.7
+#16 12.59    Compiling zerofrom v0.1.8
+#16 12.64    Compiling yoke v0.8.4
+#16 12.64    Compiling untrusted v0.9.0
+#16 12.68    Compiling serde v1.0.229
+#16 12.70    Compiling futures-io v0.3.34
+#16 12.73    Compiling zerotrie v0.2.5
+#16 12.76    Compiling futures-util v0.3.34
+#16 12.77    Compiling zerovec v0.11.9
+#16 12.78    Compiling serde_derive v1.0.229
+#16 12.87    Compiling digest v0.10.7
+#16 13.08    Compiling tinystr v0.8.5
+#16 13.12    Compiling potential_utf v0.1.6
+#16 13.15    Compiling icu_locale_core v2.4.0
+#16 13.17    Compiling icu_collections v2.4.0
+#16 13.90    Compiling icu_provider v2.4.0
+#16 13.93    Compiling try-lock v0.2.5
+#16 13.94    Compiling tower-service v0.3.3
+#16 13.96    Compiling zmij v1.0.23
+#16 13.96    Compiling autocfg v1.5.1
+#16 14.03    Compiling rustls v0.23.46
+#16 14.07    Compiling icu_normalizer v2.4.0
+#16 14.10    Compiling icu_properties v2.4.0
+#16 14.14    Compiling num-traits v0.2.19
+#16 14.20    Compiling want v0.3.2
+#16 14.25    Compiling rand_core v0.9.5
+#16 14.33    Compiling form_urlencoded v1.2.2
+#16 14.40    Compiling tracing-core v0.1.36
+#16 14.43    Compiling atomic-waker v1.1.2
+#16 14.47    Compiling cpufeatures v0.2.17
+#16 14.48    Compiling thiserror v2.0.21
+#16 14.49    Compiling serde_json v1.0.154
+#16 14.54    Compiling idna_adapter v1.2.2
+#16 14.57    Compiling getrandom v0.4.3
+#16 14.61    Compiling idna v1.1.0
+#16 14.64    Compiling tracing v0.1.44
+#16 14.66    Compiling hyper v1.12.0
+#16 14.80    Compiling thiserror-impl v2.0.21
+#16 14.86    Compiling futures-channel v0.3.34
+#16 14.92    Compiling ppv-lite86 v0.2.21
+#16 14.95    Compiling sync_wrapper v1.0.2
+#16 14.97    Compiling base64 v0.23.1
+#16 15.07    Compiling rand_chacha v0.9.0
+#16 15.21    Compiling tower-layer v0.3.3
+#16 15.25    Compiling bitflags v2.13.2
+#16 15.28    Compiling ipnet v2.12.2
+#16 15.32    Compiling tower v0.5.3
+#16 15.34    Compiling rand v0.9.5
+#16 15.46    Compiling hyper-util v0.1.21
+#16 15.60    Compiling url v2.5.8
+#16 15.71    Compiling rustls-webpki v0.103.16
+#16 15.83    Compiling webpki-roots v1.0.11
+#16 15.86    Compiling sha1_smol v1.0.1
+#16 15.94    Compiling cfg_aliases v0.2.2
+#16 16.14    Compiling base64 v0.22.1
+#16 16.22    Compiling iana-time-zone v0.1.65
+#16 16.25    Compiling ryu v1.0.23
+#16 16.30    Compiling log v0.4.35
+#16 16.31    Compiling serde_urlencoded v0.7.1
+#16 16.34    Compiling chrono v0.4.45
+#16 16.36    Compiling nix v0.30.1
+#16 16.37    Compiling uuid v1.29.0
+#16 16.40    Compiling tower-http v0.6.11
+#16 16.48    Compiling sha2 v0.10.9
+#16 16.54    Compiling hmac v0.12.1
+#16 16.58    Compiling http-body-util v0.1.5
+#16 16.59    Compiling hex v0.4.3
+#16 16.63    Compiling sha1 v0.10.7
+#16 16.69    Compiling data-encoding v2.11.1
+#16 16.71    Compiling cap-meeting-detector v0.1.0 (/src/crates/meeting-detector)
+#16 16.73    Compiling utf-8 v0.7.6
+#16 16.82    Compiling tungstenite v0.26.2
+#16 16.89    Compiling cap-meeting-protocol v0.1.0 (/src/crates/meeting-protocol)
+#16 17.50    Compiling tokio-rustls v0.26.6
+#16 17.60    Compiling hyper-rustls v0.27.10
+#16 17.67    Compiling reqwest v0.12.28
+#16 18.27    Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+#16 18.52    Compiling cap-meeting-bot v0.1.0 (/src/crates/meeting-bot)
+#16 23.48     Finished `release` profile [optimized] target(s) in 23.31s
+#16 DONE 23.6s
+
+#17 [stage-1 6/6] COPY --from=build /src/target/release/cap-meet-speaker /usr/local/bin/cap-meet-speaker
+#17 DONE 0.1s
+
+#18 exporting to image
+#18 exporting layers 0.1s done
+#18 exporting manifest sha256:0febd0f89d137da6b1e3322866a52719a06d463eff9f8763bf70589d0d5a7122 done
+#18 exporting config sha256:8c2cc6a4f086dfa4b117ea0383786d35d3d512b86436c266b087f69149b1a828 done
+#18 exporting attestation manifest sha256:a942433c910fac1175ad26ead2e7cf5147c1d2eb2d0b1fe3cf02766c075eb654 0.0s done
+#18 exporting manifest list sha256:316aaad80106ee0851dec31053c3d4768be7ada58f31649dca512aab8056ec01 done
+#18 naming to docker.io/library/cap-meet-speaker:fixture-test done
+#18 unpacking to docker.io/library/cap-meet-speaker:fixture-test 0.0s done
+#18 DONE 0.2s
+exit=0

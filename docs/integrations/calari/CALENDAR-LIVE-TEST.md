@@ -42,11 +42,23 @@ password in any tool, and the notetaker never signs in to Google.
 5. At start − 2 minutes the bot claims and opens Meet. Don, in his Chrome,
    joins the meeting as host. "Calari Notetaker" appears asking to join;
    Don admits it. Mic and camera of the bot are off.
-6. Audio: Don does NOT speak client data. He opens a tab with the synthetic
-   speech file (`crates/meeting-bot/tests/fixtures/speech.ogg`, served
-   locally or as a file in the browser) and in Meet uses **Present → A tab →
-   that tab → Share tab audio**, then plays it (about 15 s). Optionally play
-   it twice.
+6. Audio comes from the TEST-ONLY synthetic speaker, not from Don's microphone
+   or room. Root runs it by hand, pinned to this one meeting, after the
+   notetaker is admitted:
+
+   ```bash
+   docker build -f infra/calendar-bot/speaker.Dockerfile -t cap-meet-speaker:test .
+   docker run --rm --shm-size 512m --read-only --tmpfs /tmp:rw,nosuid,size=512m \
+     --cap-drop ALL --security-opt no-new-privileges:true \
+     -e CAP_SPEAKER_ALLOWED_CODE=<meet code> cap-meet-speaker:test --minutes 15 --repeat 2
+   ```
+
+   It asks to join as "Calari audio test" (camera off, microphone ON: the
+   only participant that is), Don admits it, it plays the scripted synthetic
+   speech twice into its microphone and leaves. It refuses any other meeting
+   code, holds no Google credentials, records nothing, and exits at the time
+   limit. The notetaker stays muted.
+
 7. Don ends the call for everyone (or leaves; the bot leaves when the meeting
    ends, or after silence).
 8. Expect within minutes: attendance `completed`; Cap meeting delivered
@@ -66,6 +78,8 @@ password in any tool, and the notetaker never signs in to Google.
 
 - Edit the event time by +5 min before preparation → `/calendar` shows the
   new time, one attendance (rescheduled, not duplicated).
+- If Meet shows "Continue without microphone and camera" to the notetaker, it
+  dismisses it (it has no usable devices on purpose) and asks to join.
 - Create a second Meet event with an unmapped guest → "Choose a client",
   no bot.
 - After the test: **Disconnect** on `/calendar` → status Disconnected,

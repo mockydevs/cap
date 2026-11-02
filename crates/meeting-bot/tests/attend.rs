@@ -60,6 +60,11 @@ async fn runner_container_attends_records_and_delivers() {
             "microphone switched off"
         );
         assert_eq!(get("cam"), Some(Value::Bool(true)), "camera switched off");
+        assert_eq!(
+            get("nomedia"),
+            Some(Value::Bool(true)),
+            "dismissed Meet's no-device prompt"
+        );
         assert!(get("playing").is_some(), "{s:?}");
     }
     let kinds: Vec<String> = sqlx::query_scalar(
@@ -118,7 +123,8 @@ async fn unconfirmed_lease_stops_capture_before_server_expiry() {
     };
     let seen = Arc::new(Mutex::new(Vec::new()));
     // A meeting that never ends on its own.
-    let meet = fake_meet(seen.clone(), true).await;
+    let alive = Arc::new(AtomicU64::new(0));
+    let meet = fake_meet_with(seen.clone(), true, 2_500, alive.clone()).await;
     let (p, server) = proxy(&w.cap).await;
     let volume = Volume(format!("cap-bot-spool-{}", Uuid::new_v4().simple()));
     let c = start_runner(&image, &server, &meet, &volume.0);
@@ -139,20 +145,17 @@ async fn unconfirmed_lease_stops_capture_before_server_expiry() {
     let last_ok = *p.reports_ok.lock().unwrap().iter().max().unwrap();
     assert!(last_ok <= cut + 1_000);
     let server_lease_end = last_ok + (LEASE as u128) * 1000;
-    let leave = seen
-        .lock()
-        .unwrap()
-        .iter()
-        .find(|v| v["k"] == "leave")
-        .map(|v| v["t"].as_u64().unwrap() as u128);
-    let leave = leave.expect("the runner left the meeting");
+    // The browser (and with it the meeting audio) is gone: it either
+    // clicked Leave or the deadline watchdog ended it. Its pings stop.
+    let leave = alive.load(Ordering::SeqCst) as u128;
+    assert!(leave > 0);
     eprintln!(
-        "last confirmed report {last_ok}, left at {leave} ({} ms later), server lease ends {server_lease_end}",
+        "last confirmed report {last_ok}, browser last alive {leave} ({} ms later), server lease ends {server_lease_end}",
         leave.saturating_sub(last_ok)
     );
     assert!(
         leave < server_lease_end,
-        "left before the server's lease ended"
+        "browser gone before the server's lease ended"
     );
     // Capture stopped then too: the meeting it uploaded ends before the lease.
     let (ended, mstate): (Option<chrono::DateTime<Utc>>, String) =
@@ -529,4 +532,55 @@ async fn injected_platform_secrets_never_reach_runner_processes() {
     }
     drop(c);
     w.drop_db().await;
+}
+
+/// The TEST-ONLY speaker (controlled live test helper): joins as
+/// "Calari audio test", keeps its microphone ON (only it does), plays the
+/// scripted file into that microphone, and leaves. Refuses any meeting but
+/// the pinned one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_speaker_joins_unmuted_and_plays_only_the_script() {
+    let Ok(image) = std::env::var("CAP_TEST_SPEAKER_IMAGE") else {
+        eprintln!("SKIPPED: set CAP_TEST_SPEAKER_IMAGE");
+        return;
+    };
+    // Pinned code mismatch: refuses before opening anything.
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let meet = fake_meet_listening(seen.clone()).await;
+    let (code, log) = run_speaker(&image, "abc-defg-hij", "xyz-wxyz-xyz", &meet);
+    assert_eq!(code, 2, "{log}");
+    assert!(
+        log.contains("CAP_SPEAKER_ALLOWED_CODE must equal --code"),
+        "{log}"
+    );
+    assert!(seen.lock().unwrap().is_empty());
+
+    let (code, log) = run_speaker(&image, "abc-defg-hij", "abc-defg-hij", &meet);
+    eprintln!("speaker log:\n{log}");
+    let s = seen.lock().unwrap().clone();
+    eprintln!("page events: {s:?}");
+    assert_eq!(code, 0, "{log}");
+    let get = |k: &str| s.iter().find(|v| v["k"] == k).map(|v| v["v"].clone());
+    let join = get("join").expect("joined");
+    assert_eq!(join["name"], "Calari audio test");
+    assert_eq!(join["trusted"], true);
+    assert_eq!(join["path"], "/abc-defg-hij");
+    assert!(
+        get("mic").is_none(),
+        "the speaker never mutes its microphone"
+    );
+    assert_eq!(get("cam"), Some(Value::Bool(true)), "camera off");
+    assert!(get("mic_error").is_none(), "{s:?}");
+    let peak = s
+        .iter()
+        .filter(|v| v["k"] == "mic_peak")
+        .filter_map(|v| v["v"].as_f64())
+        .fold(0.0, f64::max);
+    eprintln!("loudest level heard on the speaker's microphone: {peak:.3}");
+    assert!(
+        peak > 0.05,
+        "the scripted audio went out through the microphone"
+    );
+    assert!(get("leave").is_some(), "left after playing");
+    assert!(!log.contains("FAKE-SPEAKER-SECRET"));
 }

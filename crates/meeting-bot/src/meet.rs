@@ -43,6 +43,10 @@ pub struct PageState {
     pub ended: bool,
     #[serde(default)]
     pub leave: Option<[f64; 2]>,
+    /// Meet's "Continue without microphone/camera" prompt, shown when the
+    /// browser has no usable devices (the notetaker on purpose).
+    #[serde(default)]
+    pub without_media: Option<[f64; 2]>,
 }
 
 /// Reads what the page shows. Returns element centres for trusted clicks.
@@ -59,6 +63,7 @@ const PROBE: &str = r#"(() => {
   const mic = buttons.find(b => /turn off microphone/i.test(label(b)));
   const cam = buttons.find(b => /turn off camera/i.test(label(b)));
   const leave = buttons.find(b => /^leave call/i.test(b.getAttribute('aria-label') || ''));
+  const withoutMedia = buttons.find(b => /^continue without (microphone|camera)/i.test((b.innerText || '').trim()));
   return {
     name_input: name ? at(name) : null,
     name_filled: !!(name && name.value && name.value.trim().length > 0),
@@ -68,6 +73,7 @@ const PROBE: &str = r#"(() => {
     waiting: has('Asking to be let in', "You'll join the call when someone lets you in", 'You’ll join the call when someone lets you in', 'Waiting for the host'),
     in_call: !!leave,
     leave: leave ? at(leave) : null,
+    without_media: withoutMedia ? at(withoutMedia) : null,
     refused: has("You can't join this video call", 'You can’t join this video call', 'denied your request', "weren't allowed to join", 'weren’t allowed to join', 'Check your meeting code', 'Meeting not found'),
     ended: has('You left the meeting', 'You have been removed', 'removed you from the meeting', 'The meeting has ended', 'Call ended', 'This call has ended')
   };
@@ -95,6 +101,8 @@ pub struct JoinOptions<'a> {
     pub waiting_timeout: Duration,
     pub on_waiting: &'a mut dyn FnMut(),
     pub keep_going: &'a dyn Fn() -> bool,
+    /// The notetaker always mutes; only the test speaker keeps its mic on.
+    pub mute_microphone: bool,
 }
 
 pub fn join(b: &mut Browser, url: &str, o: JoinOptions<'_>) -> Result<JoinOutcome> {
@@ -125,7 +133,12 @@ pub fn join(b: &mut Browser, url: &str, o: JoinOptions<'_>) -> Result<JoinOutcom
             continue;
         }
         if asked_at.is_none() {
-            if let Some([x, y]) = s.mic_on {
+            // Only a muted participant may say "continue without microphone".
+            if let (Some([x, y]), true) = (s.without_media, o.mute_microphone) {
+                b.click(x, y)?;
+                continue;
+            }
+            if let (Some([x, y]), true) = (s.mic_on, o.mute_microphone) {
                 b.click(x, y)?;
                 continue;
             }

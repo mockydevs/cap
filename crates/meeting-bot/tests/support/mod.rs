@@ -32,7 +32,8 @@ pub const DON: &str = "cldon000000000000000000001";
 pub fn page(long: bool, admit_after_ms: u64) -> String {
     format!(
         r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Meet stand-in</title></head><body>
-<div id="pre"><input type="text" aria-label="Your name" id="name">
+<div id="nomedia"><p>Do you want people to see and hear you in the meeting?</p><button id="nomediabtn">Continue without microphone and camera</button></div>
+<div id="pre" hidden><input type="text" aria-label="Your name" id="name">
 <button aria-label="Turn off microphone" id="mic">mic</button>
 <button aria-label="Turn off camera" id="cam">cam</button>
 <button id="join"><span>Ask to join</span></button></div>
@@ -43,6 +44,7 @@ pub fn page(long: bool, admit_after_ms: u64) -> String {
 const $ = id => document.getElementById(id);
 setInterval(() => fetch('/alive', {{method: 'POST'}}), 500);
 const report = (k, v) => fetch('/seen', {{method: 'POST', headers: {{'content-type': 'application/json'}}, body: JSON.stringify({{k, v, t: Date.now()}})}});
+$('nomediabtn').onclick = e => {{ report('nomedia', e.isTrusted); $('nomedia').hidden = true; $('pre').hidden = false; }};
 $('mic').onclick = e => {{ report('mic', e.isTrusted); $('mic').setAttribute('aria-label', 'Turn on microphone'); }};
 $('cam').onclick = e => {{ report('cam', e.isTrusted); $('cam').setAttribute('aria-label', 'Turn on camera'); }};
 $('join').onclick = e => {{
@@ -420,4 +422,126 @@ pub async fn deliver(w: &World) {
     let t = std::time::Instant::now();
     while worker::run_once(&w.state, Utc::now()).await.unwrap() {}
     eprintln!("transcribed and delivered in {:?}", t.elapsed());
+}
+
+/// A Meet stand-in that, once its guest is admitted, listens to that
+/// guest's own microphone and reports the loudest level it heard.
+pub async fn fake_meet_listening(seen: Arc<Mutex<Vec<Value>>>) -> String {
+    let html = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Meet stand-in</title></head><body>
+<div id="pre"><input type="text" aria-label="Your name" id="name">
+<button aria-label="Turn off microphone" id="mic">mic</button>
+<button aria-label="Turn off camera" id="cam">cam</button>
+<button id="join"><span>Ask to join</span></button></div>
+<div id="waiting" hidden>Asking to be let in…</div>
+<div id="incall" hidden><p>In the call</p><button aria-label="Leave call" id="leave">leave</button></div>
+<script>
+const $ = id => document.getElementById(id);
+const report = (k, v) => fetch('/seen', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({k, v, t: Date.now()})});
+$('mic').onclick = e => { report('mic', e.isTrusted); $('mic').setAttribute('aria-label', 'Turn on microphone'); };
+$('cam').onclick = e => { report('cam', e.isTrusted); $('cam').setAttribute('aria-label', 'Turn on camera'); };
+$('join').onclick = e => {
+  report('join', {trusted: e.isTrusted, name: $('name').value, path: location.pathname});
+  $('pre').hidden = true; $('waiting').hidden = false;
+  setTimeout(async () => {
+    $('waiting').hidden = true; $('incall').hidden = false; report('admitted', true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      const ctx = new AudioContext(); const an = ctx.createAnalyser(); an.fftSize = 2048;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Float32Array(an.fftSize); let peak = 0;
+      setInterval(() => { an.getFloatTimeDomainData(buf); for (const x of buf) peak = Math.max(peak, Math.abs(x)); }, 50);
+      setInterval(() => report('mic_peak', peak), 1000);
+    } catch (err) { report('mic_error', String(err)); }
+  }, 2500);
+};
+$('leave').onclick = e => report('leave', e.isTrusted);
+</script></body></html>"#;
+    let app = Router::new()
+        .route(
+            "/seen",
+            post(move |Json(v): Json<Value>| {
+                let seen = seen.clone();
+                async move {
+                    seen.lock().unwrap().push(v);
+                    "ok"
+                }
+            }),
+        )
+        .route(
+            "/{code}",
+            get(move || async move { axum::response::Html(html) }),
+        );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+    url
+}
+
+/// Runs the test-only speaker container to completion; returns (exit code, logs).
+pub fn run_speaker(image: &str, allowed: &str, code: &str, meet: &str) -> (i64, String) {
+    let name = format!("cap-speaker-e2e-{}", Uuid::new_v4().simple());
+    let _c = Container(name.clone());
+    let out = Command::new("docker")
+        .args([
+            "run",
+            "-d",
+            "--name",
+            &name,
+            "--network",
+            "host",
+            "--read-only",
+            "--tmpfs",
+            "/tmp:rw,nosuid,size=512m",
+            "--shm-size",
+            "512m",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges:true",
+            "-e",
+            &format!("CAP_SPEAKER_ALLOWED_CODE={allowed}"),
+            "-e",
+            &format!("CAP_BOT_TEST_MEET_ORIGIN={meet}"),
+            "-e",
+            "DATABASE_URL=postgres://leak:FAKE-SPEAKER-SECRET@db/x",
+            image,
+            "--wav",
+            "/opt/cap-speaker/speech.ogg",
+            "--minutes",
+            "3",
+            "--repeat",
+            "1",
+        ])
+        .args(if code != allowed {
+            vec!["--code".to_owned(), code.to_owned()]
+        } else {
+            vec![]
+        })
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let wait = Command::new("timeout")
+        .args(["240", "docker", "wait", &name])
+        .output()
+        .unwrap();
+    let code: i64 = String::from_utf8_lossy(&wait.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(-1);
+    let l = Command::new("docker")
+        .args(["logs", &name])
+        .output()
+        .unwrap();
+    (
+        code,
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&l.stdout),
+            String::from_utf8_lossy(&l.stderr)
+        ),
+    )
 }

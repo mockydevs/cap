@@ -1,5 +1,23 @@
 # Cap calendar attendance: implementation result
 
+## Test-only synthetic speaker (root request 21:42Z)
+
+- `cap-meet-speaker` (feature `test-speaker`, own image
+  `infra/calendar-bot/speaker.Dockerfile`, never in the notetaker image):
+  joins one pinned Meet code (argument must equal CAP_SPEAKER_ALLOWED_CODE)
+  as "Calari audio test", camera off, microphone ON, plays the baked-in
+  synthetic speech into a PulseAudio null sink remapped as its microphone,
+  leaves; hard time limit (1-30 min); env allowlist; no Google credentials.
+- Notetaker now also dismisses Meet's "Continue without microphone and
+  camera" prompt (muted participants only).
+- Tests: `test_speaker_joins_unmuted_and_plays_only_the_script` (refuses a
+  mismatched code before opening anything; joined trusted, never muted, cam
+  off, page heard its microphone at peak 1.0, left); notetaker fixture now
+  shows the no-device prompt first. 7/7 container tests, composite vs real
+  local Calari, workspace 144/0, clippy 0, fmt, prettier; speaker image
+  uid 10003, no localhost policy; notetaker image has no speaker binary.
+- Live plan updated: docs/integrations/calari/CALENDAR-LIVE-TEST.md step 6.
+
 ## Runner environment hardening (root request 21:32Z)
 
 - Entrypoint keeps only an explicit allowlist of variables before starting

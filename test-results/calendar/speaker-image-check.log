@@ -1,0 +1,4 @@
+uid=10003(capspk) gid=997(capspk) groups=997(capspk)
+0
+cap-meet-speaker: CAP_SPEAKER_ALLOWED_CODE must equal --code
+exit=2

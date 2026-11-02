@@ -356,6 +356,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         chrome: &cfg.chrome,
         profile: cfg.profile_dir.join(job.attendance_id.to_string()),
         pulse_sink: &cfg.pulse_sink,
+        pulse_source: None,
         no_sandbox: cfg.no_sandbox,
     }) {
         Ok(b) => b,
@@ -397,6 +398,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
             waiting_timeout: cfg.waiting_timeout,
             on_waiting: &mut on_waiting,
             keep_going: &keep,
+            mute_microphone: true,
         },
     );
     match joined {

@@ -118,6 +118,8 @@ pub struct LaunchOptions<'a> {
     pub profile: PathBuf,
     /// PulseAudio sink that receives the meeting audio.
     pub pulse_sink: &'a str,
+    /// Microphone source; `None` uses the default (silent for the notetaker).
+    pub pulse_source: Option<&'a str>,
     /// Only for container runtimes without user namespaces.
     pub no_sandbox: bool,
 }
@@ -160,6 +162,7 @@ impl Browser {
                     .filter_map(|k| std::env::var(k).ok().map(|v| (*k, v))),
             )
             .env("PULSE_SINK", o.pulse_sink)
+            .envs(o.pulse_source.map(|s| ("PULSE_SOURCE", s.to_owned())))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
