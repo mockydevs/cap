@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "platform": "linux-x86_64",
+      "version": "0.2.0-beta.6",
+      "filename": "cap-desktop_0.2.0-beta.6_linux-x86_64.deb",
+      "bytes": 7919356,
+      "sha256": "cf864bf615cdf841e8f70d95202457b964cff38009974dbc380f8b0f16b1a046",
+      "status": "available"
+    },
+    {
+      "platform": "windows-x86_64",
+      "status": "pending"
+    },
+    {
+      "platform": "macos-aarch64",
+      "status": "signing_pending"
+    },
+    {
+      "platform": "macos-x86_64",
+      "status": "signing_pending"
+    }
+  ]
+}
