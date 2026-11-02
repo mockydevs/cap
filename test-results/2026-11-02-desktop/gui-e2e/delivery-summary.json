@@ -1,0 +1,16 @@
+{
+  "signature_verified_by_mock_calari": true,
+  "schema": "cap.meeting.delivery.v1",
+  "event_type": "meeting.transcript.completed",
+  "pairing_id": "e1c440e7-ed37-43f5-9317-a43e2dda78bc",
+  "title": "Synthetic kickoff",
+  "stop_reason": "user_stopped",
+  "partial": false,
+  "duration_ms": 27821,
+  "transcript_segments": [
+    [
+      0,
+      24306
+    ]
+  ]
+}

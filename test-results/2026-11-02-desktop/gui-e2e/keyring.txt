@@ -1,0 +1,10 @@
+keyring items for cap-desktop: 2
+token stored in plain files: 0
+CacheStorage
+WebKitCache
+hsts-storage.sqlite
+mediakeys
+meeting-device.json
+meetings
+projects
+storage

@@ -203,7 +203,6 @@ pub async fn meeting_start(
         return Err("Pair Cap with a Calari client again.".into());
     }
     let token = device_token().ok_or("Pair Cap with a Calari client first.")?;
-    let client = Client::new(&server, &token).map_err(|e| e.to_string())?;
     let platform = Platform::current();
     let screen = match (&options.mode, options.video_source_id.as_deref()) {
         (CaptureMode::Video, Some(id)) => Some(crate::capture::source_geometry(id)?),
@@ -239,7 +238,11 @@ pub async fn meeting_start(
             }) as Box<dyn Fn() -> bool + Send>
         });
     let emitter = app.clone();
+    let session_token = token.clone();
+    // The recorder's HTTP client is blocking: it must be created and dropped
+    // off the async runtime, or the app panics and the recording never starts.
     let session = tauri::async_runtime::spawn_blocking(move || {
+        let client = Client::new(&server, &session_token).map_err(|e| e.to_string())?;
         Session::start(StartOptions {
             client,
             dir,
@@ -258,15 +261,20 @@ pub async fn meeting_start(
             }),
             upload_interval: std::time::Duration::from_secs(3),
         })
+        .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())??;
     let id = session.meeting_id.clone();
-    entry(&meeting_token_key(&id))?
-        .set_password(&token)
-        .map_err(|e| e.to_string())?;
-    *state.0.lock().map_err(|e| e.to_string())? = Some(session);
+    // If this fails, recovery after a crash falls back to the current pairing.
+    if let Ok(e) = entry(&meeting_token_key(&id)) {
+        let _ = e.set_password(&token);
+    }
+    let previous = state.0.lock().map_err(|e| e.to_string())?.replace(session);
+    // A finished session still holds a blocking client: drop it off the runtime.
+    if let Some(old) = previous {
+        tauri::async_runtime::spawn_blocking(move || drop(old));
+    }
     Ok(id)
 }
 
