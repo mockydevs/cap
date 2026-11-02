@@ -208,7 +208,8 @@ input:focus-visible,
   color: var(--fg);
   text-decoration: none;
 }
-.row:hover {
+/* Hover never hides the keyboard focus border. */
+.row:hover:not(:focus-visible) {
   border-color: var(--line-strong);
 }
 .thumb {

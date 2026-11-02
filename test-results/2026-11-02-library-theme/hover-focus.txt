@@ -1,0 +1,2 @@
+before (5523bf8): {"base":"rgb(225, 230, 239)","focused":"rgb(201, 0, 97)","focusVisible":true,"hoverAndFocus":"rgb(207, 215, 228)","hovered":true,"hoverOnly":"rgb(207, 215, 228)"}
+after: {"base":"rgb(225, 230, 239)","focused":"rgb(201, 0, 97)","focusVisible":true,"hoverAndFocus":"rgb(201, 0, 97)","hovered":true,"hoverOnly":"rgb(207, 215, 228)"}
