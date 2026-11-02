@@ -105,11 +105,16 @@ def snapshot(path: pathlib.Path):
 
 def validate_manifest(raw: bytes, where: pathlib.Path) -> dict:
     """Same rules as the hub: strict keys, one entry per platform, safe names, real files."""
-    if len(raw) > MAX_MANIFEST:
-        fail("manifest larger than 64 KiB")
-    m = json.loads(raw.decode("utf-8"))
-    if set(m) != {"schema_version", "artifacts"} or m["schema_version"] != 1:
-        fail("manifest top level must be exactly schema_version=1 and artifacts")
+    if not raw or len(raw) > MAX_MANIFEST:
+        fail(f"manifest in {where} is empty or larger than 64 KiB")
+    try:
+        m = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        fail(f"manifest in {where} is not valid UTF-8 JSON")
+    if not isinstance(m, dict) or set(m) != {"schema_version", "artifacts"} or m["schema_version"] != 1:
+        fail(f"manifest in {where}: top level must be exactly schema_version=1 and artifacts")
+    if not isinstance(m["artifacts"], list) or not all(isinstance(a, dict) for a in m["artifacts"]):
+        fail(f"manifest in {where}: artifacts must be a list of objects")
     seen = set()
     for a in m["artifacts"]:
         p = a.get("platform")
@@ -140,14 +145,14 @@ def validate_manifest(raw: bytes, where: pathlib.Path) -> dict:
     return m
 
 
-def require_exact_platforms(m: dict) -> None:
-    """Exactly the four platforms; both macOS entries signing_pending."""
+def require_exact_platforms(m: dict, label: str = "staged") -> None:
+    """Exactly the four platforms, each once; both macOS entries signing_pending."""
     by = {a["platform"]: a for a in m["artifacts"]}
     if set(by) != set(PLATFORMS) or len(m["artifacts"]) != len(PLATFORMS):
-        fail("staged manifest must list exactly the four platforms")
+        fail(f"{label} manifest must list exactly the four platforms")
     for mac in ("macos-aarch64", "macos-x86_64"):
         if by[mac] != {"platform": mac, "status": "signing_pending"}:
-            fail(f"{mac} must be exactly signing_pending")
+            fail(f"{label} {mac} must be exactly signing_pending")
 
 
 def main() -> None:
@@ -194,15 +199,13 @@ def main() -> None:
 
     # Only a not-yet-published catalog, or this same release, may be replaced.
     if current_raw != staged_raw:
-        try:
-            live_catalog = json.loads(current_raw.decode("utf-8"))
-            offered = [a.get("platform") for a in live_catalog.get("artifacts", [])
-                       if a.get("status") not in ("pending", "signing_pending")]
-        except (ValueError, AttributeError):
-            fail("live manifest is not a readable catalog; refusing to replace it")
+        # Same strict rules as the hub, then: nothing may be available yet.
+        live_catalog = validate_manifest(current_raw, live)
+        require_exact_platforms(live_catalog, "live")
+        offered = [a["platform"] for a in live_catalog["artifacts"] if a["status"] == "available"]
         if offered:
             fail(f"live catalog already offers {offered} and is not this release; refusing (no rollback or overwrite)")
-        print("live catalog offers nothing yet (pending only): may be replaced")
+        print("live catalog is the known pending-only catalog: may be replaced")
     else:
         print("live catalog is this exact release")
     available = {a["platform"]: a for a in staged["artifacts"] if a["status"] == "available"}

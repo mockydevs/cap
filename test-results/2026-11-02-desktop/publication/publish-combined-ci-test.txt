@@ -135,3 +135,57 @@ exit=1
 == template placeholders (real script)
 REFUSED: linux-x86_64: pins are still placeholders; fill them from the audited CI 41383982100 artifacts
 exit=1
+
+# Re-test after strict live catalog validation (TEST-ONLY 49c pins)
+== empty object {}
+REFUSED: manifest in <scratch>/live: top level must be exactly schema_version=1 and artifacts
+exit=1 files=0 backups=0
+== empty artifacts list
+REFUSED: live manifest must list exactly the four platforms
+exit=1 files=0 backups=0
+== missing a platform
+REFUSED: live manifest must list exactly the four platforms
+exit=1 files=0 backups=0
+== duplicate platform
+REFUSED: unknown or duplicate platform 'linux-x86_64'
+exit=1 files=0 backups=0
+== unknown top-level key
+REFUSED: manifest in <scratch>/live: top level must be exactly schema_version=1 and artifacts
+exit=1 files=0 backups=0
+== unknown key in pending entry
+REFUSED: linux-x86_64: pending entry must contain only platform/status
+exit=1 files=0 backups=0
+== schema_version 2
+REFUSED: manifest in <scratch>/live: top level must be exactly schema_version=1 and artifacts
+exit=1 files=0 backups=0
+== artifacts not a list
+REFUSED: manifest in <scratch>/live: artifacts must be a list of objects
+exit=1 files=0 backups=0
+== top level is a list
+REFUSED: manifest in <scratch>/live: top level must be exactly schema_version=1 and artifacts
+exit=1 files=0 backups=0
+== invalid JSON
+REFUSED: manifest in <scratch>/live is not valid UTF-8 JSON
+exit=1 files=0 backups=0
+== empty file
+REFUSED: manifest in <scratch>/live is empty or larger than 64 KiB
+exit=1 files=0 backups=0
+== other release available
+REFUSED: linux-x86_64: <scratch>/live/cap-desktop_0.2.0-beta.7_linux-x86_64.deb is missing or not a regular file
+exit=1 files=0 backups=0
+== missing manifest
+REFUSED: live manifest.json is missing; this release only replaces the known pending catalog
+exit=1 files=0 backups=0
+== known pending catalog: apply
+live catalog is the known pending-only catalog: may be replaced
+manifest.json replaced atomically (0644). Now restart ONLY the cap-server container (runbook step 4).
+exit=0
+== same release re-run
+already published: live files and manifest match this release; nothing to do
+exit=0
+== template placeholders (real script)
+REFUSED: linux-x86_64: pins are still placeholders; fill them from the audited CI 41383982100 artifacts
+exit=1
+== other release available, its file present, correct sha
+REFUSED: live catalog already offers ['linux-x86_64'] and is not this release; refusing (no rollback or overwrite)
+exit=1 beta6 files=0 backups=0 live manifest unchanged=yes
