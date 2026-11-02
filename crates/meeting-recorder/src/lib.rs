@@ -383,6 +383,11 @@ pub fn recover_all(root: &Path, tokens_for: impl Fn(&Journal) -> Vec<String>) ->
     };
     for entry in entries.flatten() {
         let dir = entry.path();
+        // Old or crashed spools are made private before anything is read
+        // from them; a symlink or a non-directory is skipped, never followed.
+        if restrict_existing_dir(&dir).is_err() {
+            continue;
+        }
         let Ok(j) = Journal::load(&dir) else { continue };
         if j.finalized {
             continue;
@@ -685,18 +690,31 @@ fn private_dir(dir: &Path) -> std::io::Result<()> {
     }
     #[cfg(unix)]
     {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        use std::os::unix::fs::DirBuilderExt;
         match std::fs::DirBuilder::new().mode(0o700).create(dir) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err(e),
         }
-        let meta = std::fs::symlink_metadata(dir)?;
-        if !meta.file_type().is_dir() {
-            return Err(std::io::Error::other(
-                "the meeting folder is not a plain directory",
-            ));
-        }
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(dir)?;
+    restrict_existing_dir(dir)
+}
+
+/// An existing meeting folder must be a plain directory (a symlink or file is
+/// refused, never followed) and, on Unix, is set to exactly 0700. Nothing is
+/// created.
+fn restrict_existing_dir(dir: &Path) -> std::io::Result<()> {
+    let meta = std::fs::symlink_metadata(dir)?;
+    if !meta.file_type().is_dir() {
+        return Err(std::io::Error::other(
+            "the meeting folder is not a plain directory",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
         // The umask can strip bits from the create mode; set it exactly.
         if meta.permissions().mode() & 0o777 != 0o700 {
             std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
@@ -707,12 +725,8 @@ fn private_dir(dir: &Path) -> std::io::Result<()> {
                 "could not make the meeting folder private",
             ));
         }
-        Ok(())
     }
-    #[cfg(not(unix))]
-    {
-        std::fs::create_dir_all(dir)
-    }
+    Ok(())
 }
 
 /// Starts native system-audio captures and points FFmpeg at their pipes.
@@ -875,6 +889,37 @@ mod tests {
         let file = root.join("meetings").join("four");
         std::fs::write(&file, b"x").unwrap();
         assert!(private_dir(&file).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Recovery makes old spools private before reading them, and never
+    /// follows a symlink or creates anything.
+    #[cfg(unix)]
+    #[test]
+    fn recovery_restricts_old_spools_and_skips_symlinks() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let mode = |p: &Path| std::fs::symlink_metadata(p).unwrap().permissions().mode() & 0o777;
+        let root = std::env::temp_dir().join(format!("cap-recover-{}", uuid::Uuid::new_v4()));
+        let spools = root.join("meetings");
+        let old = spools.join("old");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::set_permissions(&old, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let target = root.join("elsewhere");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o777)).unwrap();
+        symlink(&target, spools.join("link")).unwrap();
+        let before: Vec<_> = std::fs::read_dir(&spools).unwrap().collect();
+
+        let recovered = recover_all(&spools, |_| Vec::new());
+        assert!(recovered.is_empty());
+        assert_eq!(mode(&old), 0o700, "old spool made private");
+        assert_eq!(mode(&target), 0o777, "symlink target untouched");
+        assert!(std::fs::symlink_metadata(spools.join("link"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        let after: Vec<_> = std::fs::read_dir(&spools).unwrap().collect();
+        assert_eq!(before.len(), after.len(), "nothing created");
         std::fs::remove_dir_all(&root).unwrap();
     }
 
