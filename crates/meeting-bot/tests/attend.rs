@@ -29,7 +29,7 @@ use serde_json::Value;
 use std::{
     process::Command,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     time::{SystemTime, UNIX_EPOCH},
@@ -38,7 +38,7 @@ use uuid::Uuid;
 
 const DON: &str = "cldon000000000000000000001";
 
-fn page(long: bool) -> String {
+fn page(long: bool, admit_after_ms: u64) -> String {
     format!(
         r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Meet stand-in</title></head><body>
 <div id="pre"><input type="text" aria-label="Your name" id="name">
@@ -50,6 +50,7 @@ fn page(long: bool) -> String {
 <div id="end" hidden>The meeting has ended</div>
 <script>
 const $ = id => document.getElementById(id);
+setInterval(() => fetch('/alive', {{method: 'POST'}}), 500);
 const report = (k, v) => fetch('/seen', {{method: 'POST', headers: {{'content-type': 'application/json'}}, body: JSON.stringify({{k, v, t: Date.now()}})}});
 $('mic').onclick = e => {{ report('mic', e.isTrusted); $('mic').setAttribute('aria-label', 'Turn on microphone'); }};
 $('cam').onclick = e => {{ report('cam', e.isTrusted); $('cam').setAttribute('aria-label', 'Turn on camera'); }};
@@ -57,23 +58,45 @@ $('join').onclick = e => {{
   report('join', {{trusted: e.isTrusted, name: $('name').value, path: location.pathname}});
   $('pre').hidden = true; $('waiting').hidden = false;
   setTimeout(() => {{ $('waiting').hidden = true; $('incall').hidden = false; report('admitted', true);
-    setTimeout(() => $('a').play().then(() => report('playing', true), err => report('play_error', String(err))), 4000); }}, 2500);
+    setTimeout(() => $('a').play().then(() => report('playing', true), err => report('play_error', String(err))), 4000); }}, {admit_after_ms});
 }};
 $('a').onended = () => setTimeout(() => {{ report('ended', true); $('incall').hidden = true; $('end').hidden = false; }}, 3000);
 $('leave').onclick = e => report('leave', e.isTrusted);
 </script></body></html>"#,
-        loop_attr = if long { "loop" } else { "" }
+        loop_attr = if long { "loop" } else { "" },
+        admit_after_ms = admit_after_ms
     )
 }
 
 async fn fake_meet(seen: Arc<Mutex<Vec<Value>>>, long: bool) -> String {
+    fake_meet_with(seen, long, 2_500, Arc::new(AtomicU64::new(0))).await
+}
+
+/// `alive` receives the host time (ms) of the page's latest ping, so a test
+/// can tell exactly when the runner's browser stopped.
+async fn fake_meet_with(
+    seen: Arc<Mutex<Vec<Value>>>,
+    long: bool,
+    admit_after_ms: u64,
+    alive: Arc<AtomicU64>,
+) -> String {
     let audio = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/speech.ogg"
     ))
     .unwrap();
-    let html = page(long);
+    let html = page(long, admit_after_ms);
     let app = Router::new()
+        .route(
+            "/alive",
+            post(move || {
+                let alive = alive.clone();
+                async move {
+                    alive.store(now_ms() as u64, Ordering::SeqCst);
+                    "ok"
+                }
+            }),
+        )
         .route(
             "/speech.ogg",
             get(move || {
@@ -109,6 +132,8 @@ async fn fake_meet(seen: Arc<Mutex<Vec<Value>>>, long: bool) -> String {
 struct Proxy {
     target: String,
     hang_reports: AtomicBool,
+    /// Hang only reports carrying one of these states.
+    hang_states: Mutex<Vec<String>>,
     fail_uploads: AtomicBool,
     claims: AtomicUsize,
     /// Arrival time (ms) of every report the proxy let through successfully.
@@ -135,7 +160,12 @@ async fn forward(
         p.claims.fetch_add(1, Ordering::SeqCst);
     }
     let is_report = path.ends_with("/report");
-    if is_report && p.hang_reports.load(Ordering::SeqCst) {
+    let state = serde_json::from_slice::<Value>(&body)
+        .ok()
+        .and_then(|v| v["state"].as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let hang_state = p.hang_states.lock().unwrap().contains(&state);
+    if is_report && (p.hang_reports.load(Ordering::SeqCst) || hang_state) {
         tokio::time::sleep(std::time::Duration::from_secs(120)).await;
         return (StatusCode::GATEWAY_TIMEOUT, HeaderMap::new(), Bytes::new());
     }
@@ -170,7 +200,9 @@ async fn forward(
         out.insert("content-type", ct.to_str().unwrap().parse().unwrap());
     }
     let bytes = res.bytes().await.unwrap();
-    if is_report && status.is_success() {
+    // Only in-meeting reports renew the lease the runner relies on; its final
+    // completed/failed report comes after it has already left.
+    if is_report && status.is_success() && state != "completed" && state != "failed" {
         p.reports_ok.lock().unwrap().push(arrived);
     }
     (status, out, bytes)
@@ -663,5 +695,141 @@ async fn upload_outage_and_restart_deliver_once_without_rejoining() {
     assert_eq!(empty, "");
     assert!(logs(&second).contains("recovered and finalized meeting"));
     drop(second);
+    w.drop_db().await;
+}
+
+/// Review round 2: the lobby's "waiting" report hangs. The control thread
+/// must not block on it; the runner leaves (browser gone) before the server's
+/// lease ends, and never records.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hung_waiting_report_leaves_before_server_lease() {
+    let Ok(image) = std::env::var("CAP_TEST_BOT_IMAGE") else {
+        eprintln!("SKIPPED: set CAP_TEST_BOT_IMAGE");
+        return;
+    };
+    const LEASE: i64 = 20;
+    let Some((w, _att, _acme, _real)) = ready_world(LEASE).await else {
+        return;
+    };
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let alive = Arc::new(AtomicU64::new(0));
+    // Nobody admits the bot for two minutes.
+    let meet = fake_meet_with(seen.clone(), true, 120_000, alive.clone()).await;
+    let (p, server) = proxy(&w.cap).await;
+    p.hang_states.lock().unwrap().push("waiting".into());
+    let volume = Volume(format!("cap-bot-spool-{}", Uuid::new_v4().simple()));
+    let c = start_runner(&image, &server, &meet, &volume.0);
+    for _ in 0..90 {
+        if seen.lock().unwrap().iter().any(|v| v["k"] == "join") {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    assert!(
+        seen.lock().unwrap().iter().any(|v| v["k"] == "join"),
+        "{}",
+        logs(&c)
+    );
+    tokio::time::sleep(std::time::Duration::from_secs((LEASE as u64) + 15)).await;
+    eprintln!("runner log:\n{}", logs(&c));
+    let last_ok = *p.reports_ok.lock().unwrap().iter().max().unwrap();
+    let lease_end = last_ok + (LEASE as u128) * 1000;
+    let last_alive = alive.load(Ordering::SeqCst) as u128;
+    eprintln!(
+        "waiting phase: last confirmed report {last_ok}, browser last alive {last_alive} ({} ms later), server lease ends {lease_end}",
+        last_alive.saturating_sub(last_ok)
+    );
+    assert!(last_alive > 0);
+    assert!(
+        last_alive < lease_end,
+        "browser gone before the server lease ended"
+    );
+    let meetings: i64 = sqlx::query_scalar("SELECT count(*) FROM meeting_sessions")
+        .fetch_one(&w.state.db)
+        .await
+        .unwrap();
+    assert_eq!(meetings, 0, "never recorded");
+    drop(c);
+    w.drop_db().await;
+}
+
+/// Review round 2: the first "recording" report (right after capture starts)
+/// hangs. Capture and browser must still stop before the server lease ends.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hung_first_recording_report_stops_capture_before_server_lease() {
+    let Ok(image) = std::env::var("CAP_TEST_BOT_IMAGE") else {
+        eprintln!("SKIPPED: set CAP_TEST_BOT_IMAGE");
+        return;
+    };
+    const LEASE: i64 = 20;
+    let Some((w, _att, acme, _real)) = ready_world(LEASE).await else {
+        return;
+    };
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let alive = Arc::new(AtomicU64::new(0));
+    let meet = fake_meet_with(seen.clone(), true, 2_500, alive.clone()).await;
+    let (p, server) = proxy(&w.cap).await;
+    p.hang_states.lock().unwrap().push("recording".into());
+    let volume = Volume(format!("cap-bot-spool-{}", Uuid::new_v4().simple()));
+    let c = start_runner(&image, &server, &meet, &volume.0);
+    let mut created = false;
+    for _ in 0..240 {
+        let n: i64 = sqlx::query_scalar("SELECT count(*) FROM meeting_sessions")
+            .fetch_one(&w.state.db)
+            .await
+            .unwrap();
+        if n > 0 {
+            created = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    assert!(created, "{}", logs(&c));
+    tokio::time::sleep(std::time::Duration::from_secs((LEASE as u64) + 20)).await;
+    eprintln!("runner log:\n{}", logs(&c));
+    let last_ok = *p.reports_ok.lock().unwrap().iter().max().unwrap();
+    let lease_end = last_ok + (LEASE as u128) * 1000;
+    let last_alive = alive.load(Ordering::SeqCst) as u128;
+    eprintln!(
+        "recording phase: last confirmed report {last_ok}, browser last alive {last_alive} ({} ms later), server lease ends {lease_end}",
+        last_alive.saturating_sub(last_ok)
+    );
+    assert!(
+        last_alive < lease_end,
+        "browser gone before the server lease ended"
+    );
+    let (ended, mstate): (Option<chrono::DateTime<Utc>>, String) =
+        sqlx::query_as("SELECT ended_at, state FROM meeting_sessions")
+            .fetch_one(&w.state.db)
+            .await
+            .unwrap();
+    assert_ne!(mstate, "recording", "finalized by the runner");
+    let ended_ms = ended.unwrap().timestamp_millis() as u128;
+    assert!(
+        ended_ms <= lease_end,
+        "audio ends {ended_ms} <= lease end {lease_end}"
+    );
+    let joins = seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|v| v["k"] == "join")
+        .count();
+    assert_eq!(joins, 1);
+    attendance::schedule::tick(&w.state, Utc::now())
+        .await
+        .unwrap();
+    let meetings: i64 = sqlx::query_scalar("SELECT count(*) FROM meeting_sessions")
+        .fetch_one(&w.state.db)
+        .await
+        .unwrap();
+    assert_eq!(meetings, 1, "not re-queued to a second recording");
+    deliver(&w).await;
+    {
+        let c = w.calari.lock().unwrap();
+        assert_eq!(c.deliveries.len(), 1);
+        assert_eq!(c.deliveries[0]["client_id"], acme.to_string());
+    }
+    drop(c);
     w.drop_db().await;
 }

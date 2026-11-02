@@ -1,0 +1,37 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running tests/attend.rs (target/debug/deps/attend-b57928efb7fa5515)
+
+running 2 tests
+test hung_first_recording_report_stops_capture_before_server_lease ... runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 02f4d3e8-8366-494c-8ef5-d40d65af1ee5
+cap-meeting-bot: 02f4d3e8-8366-494c-8ef5-d40d65af1ee5 failed: lease could not be renewed; left early, recorded audio was delivered
+
+recording phase: last confirmed report 1793650926398, browser last alive 1793650948101 (21703 ms later), server lease ends 1793650946398
+
+thread 'hung_first_recording_report_stops_capture_before_server_lease' (281275) panicked at crates/meeting-bot/tests/attend.rs:797:5:
+browser gone before the server lease ended
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test hung_waiting_report_leaves_before_server_lease ... runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 823e1a4f-89d4-47e9-8147-5996ce31c031
+cap-meeting-bot: 823e1a4f-89d4-47e9-8147-5996ce31c031 failed: lease could not be renewed; left before recording
+
+waiting phase: last confirmed report 1793650968312, browser last alive 1793650992520 (24208 ms later), server lease ends 1793650988312
+
+thread 'hung_waiting_report_leaves_before_server_lease' (282339) panicked at crates/meeting-bot/tests/attend.rs:743:5:
+browser gone before the server lease ended
+FAILED
+
+failures:
+
+failures:
+    hung_first_recording_report_stops_capture_before_server_lease
+    hung_waiting_report_leaves_before_server_lease
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 3 filtered out; finished in 86.39s
+
+error: test failed, to rerun pass `-p cap-meeting-bot --test attend`
+exit=101

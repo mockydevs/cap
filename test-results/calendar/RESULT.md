@@ -1,5 +1,20 @@
 # Cap calendar attendance: implementation result
 
+## Review round 3 (fix for review-round-2.md)
+- P1 lease control-thread gap: the join/record thread no longer makes any
+  network call while a browser or capture is live; "waiting" and the first
+  "recording" report only update state and wake the heartbeat thread. An
+  independent watchdog kills Chrome the instant the local deadline passes.
+- New container tests `hung_waiting_report_leaves_before_server_lease` and
+  `hung_first_recording_report_stops_capture_before_server_lease` (page pings
+  `/alive` every 500 ms; only in-meeting reports count as lease renewals).
+  Fixed runner: browser gone 14.9 s / 15.1 s after the last confirmed report,
+  before the 20 s server lease; recording meeting ends before lease, one
+  meeting, delivered once. Counter-evidence `counter-evidence-ca07c50.log`
+  (exit 101): ca07c50 runner alive 24.2 s / 21.7 s, past the lease.
+- All 5 container tests exit 0 with real Whisper (`bot-e2e-real-whisper.log`);
+  workspace 140 passed / 0 failed; clippy 0; fmt clean; prod image rebuilt.
+
 ## Review round 2 (fixes for review-round-1.md)
 - P1 #1 lease: runner keeps a local fail-closed deadline (send time of last
   confirmed report + granted lease − min(10 s, lease/4)); failed/hung reports
@@ -65,7 +80,7 @@ were kept and extended.
 ## Evidence (test-results/calendar/)
 | Command | Exit | Result |
 | --- | --- | --- |
-| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet` | 0 | 138 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below) |
+| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet` | 0 | 140 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below) |
 | `… CAP_TEST_BOT_IMAGE=cap-meeting-bot:calendar-test CAP_TEST_WHISPER_MODEL=ggml-tiny.en cargo test -p cap-meeting-bot --features fake-meet,cap-server/local-whisper --test attend` | 0 | real runner container joined local Meet stand-in, trusted clicks, name "Calari Notetaker", mic/cam off, waited, admitted, recorded synthetic speech, left on end (31 s); real Whisper transcript; signed delivery verified; client routed; receipt rcpt-1; device revoked (`bot-e2e-real-whisper.log`) |
 | `cargo clippy --workspace --all-targets --features cap-meeting-bot/fake-meet` | 0 | 0 warnings (`clippy.log`) |
 | `cargo fmt --all -- --check` | 0 | (`fmt.log`) |

@@ -95,7 +95,11 @@ No paid bot service; everything runs on the existing server.
    last report the server confirmed + the granted lease − a margin
    (min(10 s, lease/4)). Failed, refused or hung reports never extend it; past
    it the runner stops capturing and leaves, so it is gone before the server
-   could hand the meeting to another runner. Server side, a lapsed lease is
+   could hand the meeting to another runner. All reports go out from the
+   heartbeat thread (state changes only wake it), so the thread that joins
+   and records never waits on the network; an independent watchdog kills
+   Chrome (and with it the meeting audio) the moment the deadline passes,
+   whatever the control thread is doing. Server side, a lapsed lease is
    re-queued only if no meeting exists for the attendance's device (so a
    meeting is never recorded twice); otherwise the attendance is failed and
    its meeting stays open for the runner's recovery upload. A lost runner's

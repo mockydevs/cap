@@ -27,7 +27,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Condvar, Mutex,
     },
     time::{Duration, Instant},
 };
@@ -210,6 +210,12 @@ struct Live {
     done: AtomicBool,
     /// Local fail-closed deadline; only confirmed reports move it.
     deadline: Mutex<Instant>,
+    /// Wakes the heartbeat to report a state change now. The control thread
+    /// never makes a network call itself while a browser or capture is live.
+    poked: Mutex<bool>,
+    wake: Condvar,
+    /// Set when the watchdog ended the browser at the deadline.
+    watchdog_fired: AtomicBool,
 }
 
 impl Live {
@@ -234,6 +240,25 @@ impl Live {
         }
     }
 
+    fn poke(&self) {
+        if let Ok(mut p) = self.poked.lock() {
+            *p = true;
+            self.wake.notify_all();
+        }
+    }
+
+    /// Sleeps until poked, the interval passes, or the job is done.
+    fn wait_for_turn(&self, every: Duration) {
+        if let Ok(p) = self.poked.lock() {
+            if let Ok((mut p, _)) = self
+                .wake
+                .wait_timeout_while(p, every, |p| !*p && !self.done.load(Ordering::SeqCst))
+            {
+                *p = false;
+            }
+        }
+    }
+
     fn lease_valid(&self) -> bool {
         self.deadline
             .lock()
@@ -254,6 +279,9 @@ pub fn run_job(api: &Api, job: Claim, lease_until: Instant) -> Outcome {
         lease_lost: AtomicBool::new(false),
         done: AtomicBool::new(false),
         deadline: Mutex::new(lease_until),
+        poked: Mutex::new(false),
+        wake: Condvar::new(),
+        watchdog_fired: AtomicBool::new(false),
     });
     let first = api.report(&job, "joining", None, None);
     live.confirmed(&first);
@@ -278,7 +306,7 @@ pub fn run_job(api: &Api, job: Claim, lease_until: Instant) -> Outcome {
         let every = cfg.heartbeat;
         std::thread::spawn(move || {
             while !live.done.load(Ordering::SeqCst) {
-                std::thread::sleep(every);
+                live.wait_for_turn(every);
                 if live.done.load(Ordering::SeqCst) {
                     break;
                 }
@@ -288,8 +316,13 @@ pub fn run_job(api: &Api, job: Claim, lease_until: Instant) -> Outcome {
             }
         })
     };
-    let outcome = attend(api, &job, &live);
+    let outcome = if live.lease_valid() {
+        attend(api, &job, &live)
+    } else {
+        Outcome::Failed("lease could not be confirmed before joining".into())
+    };
     live.done.store(true, Ordering::SeqCst);
+    live.poke();
     // The heartbeat may be stuck in a hung request; never wait for it.
     drop(hb);
     if live.lease_lost.load(Ordering::SeqCst) {
@@ -332,10 +365,28 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     let leave_by = job.leave_by;
     let keep =
         || live.keep_going.load(Ordering::SeqCst) && Utc::now() < leave_by && live.lease_valid();
+    // Independent of everything below (page probes, starting the capture,
+    // creating the meeting): at the deadline the browser ends, and with it
+    // the meeting audio, even if the control thread is blocked.
+    let watchdog = {
+        let live = live.clone();
+        let killer = browser.killer();
+        std::thread::spawn(move || {
+            while !live.done.load(Ordering::SeqCst) {
+                if !live.lease_valid() {
+                    live.watchdog_fired.store(true, Ordering::SeqCst);
+                    live.keep_going.store(false, Ordering::SeqCst);
+                    killer.kill();
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        })
+    };
+    drop(watchdog);
     let mut on_waiting = || {
         set_state(live, "waiting", None);
-        let r = api.report(job, "waiting", None, None);
-        live.confirmed(&r);
+        live.poke();
     };
     let joined = meet::join(
         &mut browser,
@@ -359,6 +410,9 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         }
         Ok(meet::JoinOutcome::NotAdmitted) => {
             return Outcome::Failed("nobody admitted the notetaker".into())
+        }
+        Err(_) if live.watchdog_fired.load(Ordering::SeqCst) => {
+            return Outcome::Failed("lease could not be renewed; left before recording".into())
         }
         Err(e) => return Outcome::Failed(format!("joining failed: {e}")),
     }
@@ -417,8 +471,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     };
     let meeting_id = session.meeting_id.clone();
     set_state(live, "recording", Some(meeting_id.clone()));
-    let r = api.report(job, "recording", Some(&meeting_id), None);
-    live.confirmed(&r);
+    live.poke();
     let mut deadline_stop = false;
     loop {
         std::thread::sleep(Duration::from_millis(500));
@@ -452,7 +505,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     // has exactly one writer before recovery may touch it.
     while !session.wait_uploaded(Duration::from_secs(60)) {}
     let ev = events.lock().map(|v| v.clone()).unwrap_or_default();
-    let lost_lease = deadline_stop;
+    let lost_lease = deadline_stop || live.watchdog_fired.load(Ordering::SeqCst);
     match crate::spool::settle(&cfg.spool_dir, job.attendance_id) {
         crate::spool::Settled::Finalized if lost_lease => Outcome::Failed(
             "lease could not be renewed; left early, recorded audio was delivered".into(),

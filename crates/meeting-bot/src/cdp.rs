@@ -7,6 +7,7 @@ use std::{
     net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tungstenite::{stream::MaybeTlsStream, Message, WebSocket};
@@ -92,9 +93,21 @@ impl Cdp {
     }
 }
 
+#[derive(Clone)]
+pub struct Killer(Arc<Mutex<Child>>);
+
+impl Killer {
+    pub fn kill(&self) {
+        if let Ok(mut c) = self.0.lock() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+    }
+}
+
 /// A private Chrome with one page, deleted (profile included) on drop.
 pub struct Browser {
-    child: Child,
+    child: Arc<Mutex<Child>>,
     profile: PathBuf,
     cdp: Cdp,
     session: String,
@@ -199,7 +212,7 @@ impl Browser {
         cdp.call(Some(&session), "Page.enable", json!({}))?;
         cdp.call(Some(&session), "Runtime.enable", json!({}))?;
         Ok(Self {
-            child,
+            child: Arc::new(Mutex::new(child)),
             profile: o.profile,
             cdp,
             session,
@@ -257,7 +270,16 @@ impl Browser {
     }
 
     pub fn is_alive(&mut self) -> bool {
-        matches!(self.child.try_wait(), Ok(None))
+        self.child
+            .lock()
+            .map(|mut c| matches!(c.try_wait(), Ok(None)))
+            .unwrap_or(false)
+    }
+
+    /// A handle another thread can use to end the browser (and with it the
+    /// meeting audio) immediately, whatever this thread is doing.
+    pub fn killer(&self) -> Killer {
+        Killer(self.child.clone())
     }
 
     pub fn profile(&self) -> &Path {
@@ -269,11 +291,13 @@ impl Drop for Browser {
     fn drop(&mut self) {
         let _ = self.cdp.call(None, "Browser.close", json!({}));
         let deadline = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < deadline && matches!(self.child.try_wait(), Ok(None)) {
+        while Instant::now() < deadline && self.is_alive() {
             std::thread::sleep(Duration::from_millis(100));
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Ok(mut c) = self.child.lock() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
         // Cookies and site data from the meeting never outlive it.
         let _ = std::fs::remove_dir_all(&self.profile);
     }
