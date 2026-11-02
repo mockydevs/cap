@@ -1,5 +1,36 @@
 # Cap calendar attendance: implementation result
 
+## Composite gate (root addendum 2026-11-02 20:49Z)
+
+Real local Cap + real local Calari (portal head 2108496 on main 6330c28,
+calendar adapter + receiver + worker, kit by claude:cbd574a6) + real runner
+container + real Whisper (ggml-tiny.en). FIXTURES: Google Calendar/OAuth,
+Google Meet page, Calari's AI step (portal kit's local AI fixture). Test:
+`crates/meeting-bot/tests/composite.rs`, log `composite-real-calari.log`
+(exit 0).
+
+- Staff session verified live by Calari's signed status; exact mapping
+  pat.lee@acme-dental.example → Demo Acme Dental scheduled; the same meeting
+  twice in the calendar → one attendance; ambiguous (Acme + Beta) → both
+  offered, nothing scheduled until the staff member chose Beta; unmapped and
+  archived-client attendees → no client, never internal.
+- One real Calari calendar pairing (staff_client, Acme). Calari refused (no
+  pairing created): unknown client, internal kind with a client, client kind
+  without one, reused request id with a different body, unknown staff.
+- Runner joined the fixture meeting, recorded, uploaded; Cap delivered; the
+  proxy hid Calari's first 200 behind a 503, Cap retried, Calari answered 200
+  again and kept ONE delivery row; Cap stored the Calari receipt; no further
+  sends.
+- Calari verify: one CLIENT_MEETING for Demo Acme Dental, status READY,
+  notes (AI fixture quoting the real transcript), one task bound to Acme.
+- Disconnect: Google fixture revoke, nothing left scheduled, no new pairing.
+- Fixes found by this gate: Cap now treats Calari 400 as a refusal (needs
+  review, no retries); Cap sends no `cap_url` unless its public URL is https
+  (Calari requires https; local http otherwise caused a 400).
+- Shared local Calari DB keeps one meeting per run (two runs → two rows, each
+  with one delivery).
+- Workspace 141 passed / 0 failed; clippy 0; fmt; pnpm format:check ok.
+
 ## Review round 3 (fix for review-round-2.md)
 
 - P1 lease control-thread gap: the join/record thread no longer makes any

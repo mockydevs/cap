@@ -54,7 +54,8 @@ async fn signed_post<T: serde::de::DeserializeOwned>(
         })?;
     match res.status().as_u16() {
         200 | 201 => {}
-        401 | 403 | 404 | 409 | 422 => return Err(CalariError::Refused),
+        // Invalid or unauthorized requests never succeed on retry.
+        400 | 401 | 403 | 404 | 409 | 422 => return Err(CalariError::Refused),
         code => {
             tracing::warn!(status = code, "Calari calendar endpoint failed");
             return Err(CalariError::Retry);

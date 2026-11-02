@@ -523,9 +523,12 @@ async fn frozen_delivery(
                 .unwrap_or(StopReason::Interrupted),
             partial: m.get("partial"),
             // The signed-in meeting page, when library sign-in is set up.
+            // Only a real https link: Calari refuses anything else, so a
+            // local http server sends none rather than a rejected delivery.
             cap_url: integration
                 .login_authorize_url
                 .as_ref()
+                .filter(|_| state.cfg.public_base_url.starts_with("https://"))
                 .map(|_| format!("{}/meetings/{id}", state.cfg.public_base_url)),
             meeting_url: m.get("meeting_url"),
         },
