@@ -382,3 +382,50 @@ async fn available_windows_installer_discloses_unsigned_status_without_inventing
     .unwrap();
     assert!(!body.contains("Windows installer is currently unsigned."));
 }
+
+#[tokio::test]
+async fn editorial_assets_have_explicit_bounded_routes_without_directory_serving() {
+    let app = downloads::router::<()>(Arc::new(Catalog::default()), None);
+    for (path, mime, max) in [
+        (
+            "/assets/cap-recording-editorial-v1-1200.webp",
+            "image/webp",
+            100_000,
+        ),
+        (
+            "/assets/cap-recording-editorial-v1-640.webp",
+            "image/webp",
+            50_000,
+        ),
+        ("/assets/calari-wordmark-navy.svg", "image/svg+xml", 20_000),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], mime);
+        assert_eq!(response.headers()["x-content-type-options"], "nosniff");
+        assert_eq!(response.headers()["cache-control"], "public, max-age=86400");
+        let bytes = to_bytes(response.into_body(), max).await.unwrap();
+        assert!(!bytes.is_empty());
+        if mime == "image/webp" {
+            assert_eq!(&bytes[..4], b"RIFF");
+            assert_eq!(&bytes[8..12], b"WEBP");
+        }
+    }
+    for path in [
+        "/assets/manifest.json",
+        "/assets/private.key",
+        "/assets/source.png",
+        "/assets/%2e%2e/private.key",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}
