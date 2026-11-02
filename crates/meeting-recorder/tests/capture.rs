@@ -539,6 +539,48 @@ fn stop_keeps_audio_up_to_stop_and_nothing_after() {
     e.rt.block_on(e.state.db.close());
 }
 
+/// Milliseconds until FFmpeg delivers the first audio from a Pulse source.
+fn pulse_first_audio_ms(ffmpeg: &str, source: &str) -> u64 {
+    use std::io::Read;
+    let started = Instant::now();
+    let mut child = std::process::Command::new(ffmpeg)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "pulse",
+            "-i",
+            source,
+        ])
+        .args([
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-flush_packets",
+            "1",
+            "-f",
+            "s16le",
+            "-",
+        ])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut first = [0u8; 320];
+    child
+        .stdout
+        .as_mut()
+        .unwrap()
+        .read_exact(&mut first)
+        .unwrap();
+    let ms = started.elapsed().as_millis() as u64;
+    let _ = child.kill();
+    let _ = child.wait();
+    ms
+}
+
 /// Real PulseAudio capture with the inputs the app picks on Linux: the
 /// default microphone plus the speakers' monitor. Needs a running PulseAudio
 /// (or PipeWire-Pulse) with something playing on both; see
@@ -578,6 +620,14 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
             Input::LinuxMonitor
         ]
     );
+    // How long each Pulse input takes to deliver its first audio here (a
+    // fresh PulseAudio starts the speakers' monitor in about 2 s, the
+    // microphone in about 0.1 s). That start-up is not capturable audio.
+    let ready_ms = ["default", "@DEFAULT_MONITOR@"]
+        .iter()
+        .map(|source| pulse_first_audio_ms(&e.ffmpeg, source))
+        .max()
+        .unwrap();
     let (_, d) = dir();
     let (mut session, events) = start_with(
         Client::new(&e.server, &e.token).unwrap(),
@@ -607,8 +657,16 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         .iter()
         .map(|s| (s.start_ms, s.end_ms))
         .collect();
-    eprintln!("pulse recorded {spans:?} of ~10 s");
+    let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
+    eprintln!("pulse recorded {recorded} ms of ~10 s, inputs ready after {ready_ms} ms: {spans:?}");
     assert!(p.transcript.segments.len() >= 3, "{spans:?}");
+    // Everything from when the inputs deliver audio until Stop must be kept
+    // (1 s tolerance for process start and segment rounding).
+    let floor = 10_000u64.saturating_sub(ready_ms + 1_000);
+    assert!(
+        recorded >= floor,
+        "only {recorded} ms kept; inputs were ready after {ready_ms} ms, so at least {floor} ms expected"
+    );
     e.rt.block_on(e.state.db.close());
 }
 
