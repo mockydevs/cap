@@ -4,3 +4,4 @@ test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 (first line above is the umask-000 child run of the privacy test)
 == mutation check: create mode and chmod removed -> child sees 0777 (511) not 0700 (448): test FAILED; restored: passes
+== recovery guard: mutation (guard removed) -> FAIL 'old spool made private'; restored -> recorder 14 unit + 11 capture pass (FFmpeg 8.0.1 native); workspace clippy 0 errors; Windows cross-clippy clean
