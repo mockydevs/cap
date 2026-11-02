@@ -1,0 +1,101 @@
+    Checking cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+error[E0425]: cannot find function `decoded_segments` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:764:19
+    |
+764 |     let samples = decoded_segments(&e.ffmpeg, &d);
+    |                   ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:421:4
+    |
+420 | #[cfg(unix)]
+    |       ---- the item is gated here
+421 | fn decoded_segments(ffmpeg: &str, dir: &Path) -> Vec<i16> {
+    |    ^^^^^^^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:770:23
+    |
+770 |     let first_words = tone_level(at(starting - 0.3, starting + 1.2), 330.0);
+    |                       ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:772:9
+    |
+772 |         tone_level(at(starting + 1.5, starting + 7.0), 330.0),
+    |         ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:773:9
+    |
+773 |         tone_level(at(starting + 1.5, starting + 7.0), 550.0),
+    |         ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:775:23
+    |
+775 |     let before_stop = tone_level(at(secs - 1.5, secs), 550.0);
+    |                       ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:785:17
+    |
+785 |                 tone_level(w, 330.0),
+    |                 ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+error[E0425]: cannot find function `tone_level` in this scope
+   --> crates/meeting-recorder/tests/capture.rs:786:17
+    |
+786 |                 tone_level(w, 550.0)
+    |                 ^^^^^^^^^^ not found in this scope
+    |
+note: found an item that was configured out
+   --> crates/meeting-recorder/tests/capture.rs:448:4
+    |
+447 | #[cfg(unix)]
+    |       ---- the item is gated here
+448 | fn tone_level(samples: &[i16], freq: f64) -> f64 {
+    |    ^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `cap-meeting-recorder` (test "capture") due to 7 previous errors

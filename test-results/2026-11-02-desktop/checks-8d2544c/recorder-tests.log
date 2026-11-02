@@ -1,0 +1,59 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
+     Running unittests src/lib.rs (/target/debug/deps/cap_meeting_recorder-0b2bf121fdcfda66)
+
+running 15 tests
+test devices::tests::linux_and_mac_rules ... ok
+test devices::tests::windows_records_the_first_microphone_plus_native_loopback ... ok
+test devices::tests::parses_device_lists ... ok
+test ffmpeg::tests::audio_mode_ignores_a_video_input ... ok
+test ffmpeg::tests::segment_list_parsing ... ok
+test ffmpeg::tests::audio_mode_mixes_inputs_into_segments_and_pcm ... ok
+test ffmpeg::tests::pulse_inputs_are_aligned_on_wall_clock_time ... ok
+test ffmpeg::tests::video_mode_adds_the_screen_and_webm_segments ... ok
+test system_audio::tests::audio_far_ahead_of_the_clock_is_trimmed ... ok
+test system_audio::tests::a_long_stall_is_skipped_not_filled_with_silence ... ok
+test system_audio::tests::silence_fills_gaps_in_real_time_only_after_a_short_wait ... ok
+test system_audio::tests::steady_audio_passes_through_untouched ... ok
+test tests::only_confirmed_uploads_count_as_acknowledged ... ok
+test tests::recovery_restricts_old_spools_and_skips_symlinks ... ok
+
+running 1 test
+test tests::meeting_folders_are_private_even_with_a_permissive_umask ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+test tests::meeting_folders_are_private_even_with_a_permissive_umask ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 14 tests
+SKIPPED: set CAP_TEST_PULSE=1 with PulseAudio running
+test linux_records_the_microphone_and_the_speakers_through_pulse ... ok
+test a_device_that_never_starts_fails_cleanly ... ok
+test prolonged_silence_warns_then_stops ... ok
+cap: segment 0 quarantined: server returned 409 chunk_conflict
+test video_mode_uploads_webm_segments ... ok
+test a_crashed_session_is_recovered_as_interrupted ... ok
+test a_conflicting_chunk_is_quarantined_not_deleted ... ok
+test an_outage_keeps_audio_until_the_server_is_back ... ok
+test a_same_client_re_pairing_finishes_an_expired_meeting ... ok
+test a_stalled_upload_never_delays_stop ... ok
+test user_stop_closes_the_last_segment_and_uploads_it ... ok
+starting took 2.111270837s; kept 3.13 s; first second 700 Hz 3297.6; 440 Hz 4896.6
+test recording_starts_only_once_audio_arrives_and_keeps_the_first_sound ... ok
+test source_ending_stops_finalizes_and_delivers_every_segment ... ok
+test a_paced_system_audio_pipe_mixes_with_the_microphone ... ok
+kept 6.09 s of 6.00 s before Stop; 440 Hz 4809.2, 1000 Hz 67.7
+test stop_keeps_audio_up_to_stop_and_nothing_after ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.60s
+
+   Doc-tests cap_meeting_recorder
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

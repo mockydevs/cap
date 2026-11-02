@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 12175 ms (12.13 s decoded): [(0, 2000), (2000, 4000), (4000, 6000), (6000, 8000), (8000, 10000), (10000, 12000), (12000, 12175)]; Recording after 2.27 s; first words 330 Hz 1355.3; quiet middle 330/550 Hz 0.0/0.0; last 1.5 s 550 Hz 2123.9
+per second 330/550 Hz: 0:0/0 1:0/0 2:2033/3 3:0/0 4:0/0 5:0/0 6:0/0 7:0/0 8:0/0 9:0/0 10:2/766 11:6/2728
+test linux_records_the_microphone_and_the_speakers_through_pulse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 13.05s
+

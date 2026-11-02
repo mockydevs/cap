@@ -677,6 +677,7 @@ fn a_device_that_never_starts_fails_cleanly() {
 /// default microphone plus the speakers' monitor. Needs a running PulseAudio
 /// (or PipeWire-Pulse) with something playing on both; see
 /// `scripts/desktop/pulse-capture-smoke.sh`.
+#[cfg(unix)]
 #[test]
 fn linux_records_the_microphone_and_the_speakers_through_pulse() {
     use cap_meeting_recorder::devices::{self, InputChoice, Platform};
