@@ -300,9 +300,13 @@ fn source_ending_stops_finalizes_and_delivers_every_segment() {
     assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
-        evs.contains(&Event::Stopped {
-            reason: StopReason::DeviceLost
-        }),
+        evs.iter().any(|e| matches!(
+            e,
+            Event::Stopped {
+                reason: StopReason::DeviceLost,
+                ..
+            }
+        )),
         "{evs:?}"
     );
     assert!(
@@ -399,9 +403,10 @@ fn a_paced_system_audio_pipe_mixes_with_the_microphone() {
     let evs = events.lock().unwrap().clone();
     assert!(
         evs.contains(&Event::Stopped {
+            meeting_id: session.meeting_id.clone(),
             reason: StopReason::UserStopped
         }),
-        "{evs:?}"
+        "the stop names its meeting: {evs:?}"
     );
     let p = delivered(&e);
     // 2-second segments over ~7 s: the mix kept running after the pipe went
@@ -832,9 +837,13 @@ fn pulse_marker_case(
     assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
-        evs.contains(&Event::Stopped {
-            reason: StopReason::UserStopped
-        }),
+        evs.iter().any(|e| matches!(
+            e,
+            Event::Stopped {
+                reason: StopReason::UserStopped,
+                ..
+            }
+        )),
         "{evs:?}"
     );
     let p = delivered(&e);
@@ -958,9 +967,13 @@ fn user_stop_closes_the_last_segment_and_uploads_it() {
     assert!(session.wait_uploaded(Duration::from_secs(60)));
     let evs = events.lock().unwrap().clone();
     assert!(
-        evs.contains(&Event::Stopped {
-            reason: StopReason::UserStopped
-        }),
+        evs.iter().any(|e| matches!(
+            e,
+            Event::Stopped {
+                reason: StopReason::UserStopped,
+                ..
+            }
+        )),
         "{evs:?}"
     );
     let p = delivered(&e);
@@ -1008,9 +1021,13 @@ fn prolonged_silence_warns_then_stops() {
         "{evs:?}"
     );
     assert!(
-        evs.contains(&Event::Stopped {
-            reason: StopReason::ProlongedInactivity
-        }),
+        evs.iter().any(|e| matches!(
+            e,
+            Event::Stopped {
+                reason: StopReason::ProlongedInactivity,
+                ..
+            }
+        )),
         "{evs:?}"
     );
     assert_eq!(
@@ -1107,9 +1124,13 @@ fn a_stalled_upload_never_delays_stop() {
     session.stop();
     let took = t.elapsed();
     assert!(took < Duration::from_secs(12), "stop took {took:?}");
-    assert!(events.lock().unwrap().contains(&Event::Stopped {
-        reason: StopReason::UserStopped
-    }));
+    assert!(events.lock().unwrap().iter().any(|e| matches!(
+        e,
+        Event::Stopped {
+            reason: StopReason::UserStopped,
+            ..
+        }
+    )));
     assert!(segment_files(&d) >= 2, "audio stays on disk");
     let j = Journal::load(&d).unwrap();
     assert!(j.uploaded.is_empty() && !j.finalized);

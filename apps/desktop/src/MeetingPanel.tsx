@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import {
   meeting,
   type AudioDevices,
@@ -7,6 +7,12 @@ import {
   type NoteTakerLink,
   type PairInfo,
 } from "./api";
+import {
+  initialLifecycle,
+  lifecycle,
+  startFromForm,
+  startFromLink,
+} from "./lifecycle";
 
 const stopText: Record<string, string> = {
   user_stopped: "You stopped the recording.",
@@ -29,7 +35,7 @@ export function MeetingPanel({
   const [screen, setScreen] = useState("");
   const [watchWindow, setWatchWindow] = useState("");
   const [systemAudio, setSystemAudio] = useState(true);
-  const [recording, setRecording] = useState<string | null>(null);
+  const [{ recording }, dispatch] = useReducer(lifecycle, initialLifecycle);
   const [warning, setWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,7 +52,7 @@ export function MeetingPanel({
       .catch(() => {});
     void meeting
       .recording()
-      .then(setRecording)
+      .then((id) => id && dispatch({ type: "started", id }))
       .catch(() => {});
     void meeting
       .pendingLink()
@@ -67,7 +73,7 @@ export function MeetingPanel({
           );
         } else if (ev.kind === "stopped") {
           setWarning(null);
-          setRecording(null);
+          dispatch({ type: "stopped", id: ev.meeting_id });
           setMessage(
             `${stopText[ev.reason] ?? "Recording stopped."} Uploading to Calari…`,
           );
@@ -100,34 +106,44 @@ export function MeetingPanel({
   const start = (overrideMode?: "audio" | "video", overrideTitle?: string) =>
     run(async () => {
       const m = overrideMode ?? mode;
-      const id = await meeting.start({
-        title: overrideTitle || title,
-        mode: m,
-        microphoneId: microphone || undefined,
-        systemAudio,
-        videoSourceId: m === "video" ? screen || screens[0]?.id : undefined,
-        watchWindow: watchWindow || undefined,
-      });
-      setRecording(id);
+      await startFromForm(
+        { start: meeting.start, dispatch },
+        {
+          title: overrideTitle || title,
+          mode: m,
+          microphoneId: microphone || undefined,
+          systemAudio,
+          videoSourceId: m === "video" ? screen || screens[0]?.id : undefined,
+          watchWindow: watchWindow || undefined,
+        },
+      );
     });
 
   const acceptLink = () =>
     run(async () => {
       if (!link) return;
-      const info = await meeting.pair(link.code);
-      setDevice(info);
       const l = link;
-      setLink(null);
-      setMode(l.mode);
-      const id = await meeting.start({
-        title: l.title || "Meeting notes",
-        mode: l.mode,
-        microphoneId: microphone || undefined,
-        systemAudio,
-        videoSourceId:
-          l.mode === "video" ? screen || screens[0]?.id : undefined,
-      });
-      setRecording(id);
+      await startFromLink(
+        {
+          start: meeting.start,
+          pair: meeting.pair,
+          dispatch,
+          onPaired: (info) => {
+            setDevice(info);
+            setLink(null);
+            setMode(l.mode);
+          },
+        },
+        l,
+        {
+          title: l.title || "Meeting notes",
+          mode: l.mode,
+          microphoneId: microphone || undefined,
+          systemAudio,
+          videoSourceId:
+            l.mode === "video" ? screen || screens[0]?.id : undefined,
+        },
+      );
     });
 
   const who =

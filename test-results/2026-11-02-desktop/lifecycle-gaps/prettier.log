@@ -1,0 +1,4 @@
+node_modules/.bin/prettier
+3.9.6
+Checking formatting...
+All matched files use Prettier code style!

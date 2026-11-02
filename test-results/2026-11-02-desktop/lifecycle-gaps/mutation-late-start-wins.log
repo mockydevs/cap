@@ -1,0 +1,71 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/src/apps/desktop[39m
+
+ [31m❯[39m src/lifecycle.test.ts [2m([22m[2m4 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 9[2mms[22m[39m
+     [32m✓[39m shows the meeting as recording when it starts[32m 2[2mms[22m[39m
+[31m     [31m×[31m a stop seen before the start returns wins (Start recording)[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m a stop seen before the start returns wins (Add note taker link)[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m a stop for another meeting never clears the one shown[39m[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/lifecycle.test.ts[2m > [22mmeeting lifecycle[2m > [22ma stop seen before the start returns wins (Start recording)
+[31m[1mAssertionError[22m: expected 'm1' to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+"m1"
+
+[36m [2m❯[22m src/lifecycle.test.ts:[2m81:25[22m[39m
+    [90m 79|[39m     call[33m.[39m[34mfinish[39m([32m"m1"[39m)[33m;[39m
+    [90m 80|[39m     [35mawait[39m done[33m;[39m
+    [90m 81|[39m     [34mexpect[39m(s[33m.[39mrecording)[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   |[39m                         [31m^[39m
+    [90m 82|[39m   })[33m;[39m
+    [90m 83|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/lifecycle.test.ts[2m > [22mmeeting lifecycle[2m > [22ma stop seen before the start returns wins (Add note taker link)
+[31m[1mAssertionError[22m: expected 'm1' to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+"m1"
+
+[36m [2m❯[22m src/lifecycle.test.ts:[2m107:25[22m[39m
+    [90m105|[39m     call[33m.[39m[34mfinish[39m([32m"m1"[39m)[33m;[39m
+    [90m106|[39m     [35mawait[39m done[33m;[39m
+    [90m107|[39m     [34mexpect[39m(s[33m.[39mrecording)[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   |[39m                         [31m^[39m
+    [90m108|[39m   })[33m;[39m
+    [90m109|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/lifecycle.test.ts[2m > [22mmeeting lifecycle[2m > [22ma stop for another meeting never clears the one shown
+[31m[1mAssertionError[22m: expected 'm1' to be 'm2' // Object.is equality[39m
+
+Expected: [32m"m[7m2[27m"[39m
+Received: [31m"m[7m1[27m"[39m
+
+[36m [2m❯[22m src/lifecycle.test.ts:[2m116:29[22m[39m
+    [90m114|[39m     [90m// The earlier meeting's late start does not take over either.[39m
+    [90m115|[39m     state [33m=[39m [34mlifecycle[39m(state[33m,[39m { type[33m:[39m [32m"started"[39m[33m,[39m id[33m:[39m [32m"m1"[39m })[33m;[39m
+    [90m116|[39m     [34mexpect[39m(state[33m.[39mrecording)[33m.[39m[34mtoBe[39m([32m"m2"[39m)[33m;[39m
+    [90m   |[39m                             [31m^[39m
+    [90m117|[39m   })[33m;[39m
+    [90m118|[39m })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 02:47:00
+[2m   Duration [22m 100ms[2m (transform 24ms, setup 0ms, import 31ms, tests 9ms, environment 0ms)[22m
+

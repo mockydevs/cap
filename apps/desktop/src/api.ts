@@ -63,7 +63,7 @@ export type MeetingEvent =
       reason: "inactivity" | "hard_limit" | "signal";
       stops_in_ms: number;
     }
-  | { kind: "stopped"; reason: string }
+  | { kind: "stopped"; meeting_id: string; reason: string }
   | { kind: "finalized"; meeting_id: string }
   | { kind: "failed"; message: string; reauthorize: boolean };
 export type AudioDevices = {

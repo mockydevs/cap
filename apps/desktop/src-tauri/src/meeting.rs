@@ -266,15 +266,12 @@ pub async fn meeting_start(
             ready_timeout: std::time::Duration::from_secs(15),
         }) {
             Ok(session) => session,
-            Err(e @ cap_meeting_recorder::Error::CaptureStopped { .. }) => {
-                if let cap_meeting_recorder::Error::CaptureStopped { meeting_id } = &e {
-                    // Its own credential, so recovery can upload it even if
-                    // the app is re-paired; the current pairing is the fallback.
-                    if let Ok(entry) = entry(&meeting_token_key(meeting_id)) {
-                        let _ = entry.set_password(&session_token);
-                    }
-                }
-                return Err((e.to_string(), true));
+            Err(cap_meeting_recorder::Error::CaptureStopped { meeting_id }) => {
+                return Err(stopped_as_it_began(&meeting_id, |id| {
+                    entry(&meeting_token_key(id))?
+                        .set_password(&session_token)
+                        .map_err(|e| e.to_string())
+                }));
             }
             Err(e) => return Err((e.to_string(), false)),
         };
@@ -354,6 +351,30 @@ fn keep_credential<R: Recording>(
                 "Cap stopped because it could not save this meeting's credential in the system keyring ({e}). Unlock the keyring and start again."
             ))
         }
+    }
+}
+
+/// Capture stopped while the meeting was being created. Like a normal start,
+/// its audio is sent only under the meeting's own saved credential: then it
+/// is uploaded straight away (`true`). If the keyring refuses, nothing is
+/// sent now and the user is not told it will be; the audio stays on this
+/// device. Returns the message for the user and whether to upload now.
+fn stopped_as_it_began(
+    meeting_id: &str,
+    save: impl FnOnce(&str) -> Result<(), String>,
+) -> (String, bool) {
+    match save(meeting_id) {
+        Ok(()) => (
+            "Recording stopped as it began because the audio device stopped. What was captured will still be sent."
+                .into(),
+            true,
+        ),
+        Err(e) => (
+            format!(
+                "Recording stopped as it began because the audio device stopped, and Cap could not save this meeting's credential in the system keyring ({e}). What was captured is kept on this device but was not sent. Unlock the keyring and start again."
+            ),
+            false,
+        ),
     }
 }
 
@@ -520,6 +541,26 @@ mod tests {
         let message = failed.err().expect("start must fail");
         assert!(stopped.get(), "the started capture must be stopped");
         assert!(message.contains("keyring is locked"), "{message}");
+    }
+
+    #[test]
+    fn audio_from_a_capture_that_stopped_as_it_began_is_sent_only_with_its_own_credential() {
+        let saved = std::cell::RefCell::new(None);
+        let (message, upload_now) = stopped_as_it_began("meeting-2", |id| {
+            *saved.borrow_mut() = Some(id.to_owned());
+            Ok(())
+        });
+        assert_eq!(saved.borrow().as_deref(), Some("meeting-2"));
+        assert!(upload_now);
+        assert!(message.contains("will still be sent"), "{message}");
+
+        // Keyring refuses: no upload now, and no promise that it will be sent.
+        let (message, upload_now) =
+            stopped_as_it_began("meeting-2", |_| Err("keyring is locked".into()));
+        assert!(!upload_now, "must not upload under another credential");
+        assert!(message.contains("keyring is locked"), "{message}");
+        assert!(message.contains("not sent"), "{message}");
+        assert!(!message.contains("will still be sent"), "{message}");
     }
 
     #[test]

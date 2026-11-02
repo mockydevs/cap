@@ -432,7 +432,11 @@ pub enum Event {
         reason: &'static str,
         stops_in_ms: u64,
     },
+    /// Capture ended. `meeting_id` lets the app ignore a stop for any
+    /// meeting other than the one it shows, and lets a stop that arrives
+    /// before the start call returns win over that late start.
     Stopped {
+        meeting_id: String,
         reason: StopReason,
     },
     Finalized {
@@ -873,9 +877,11 @@ fn control_loop(mut c: ControlCtx) {
     if let Ok(mut r) = c.stop_reason.lock() {
         *r = Some(reason);
     }
+    let mut meeting_id = String::new();
     if let Ok(mut j) = c.journal.lock() {
         j.stop_reason = Some(reason);
         let _ = j.save(&c.dir);
+        meeting_id = j.meeting_id.clone();
     }
     // Ask FFmpeg to finish cleanly so the last segment is closed and listed.
     if let Some(mut stdin) = c.stdin.take() {
@@ -895,7 +901,7 @@ fn control_loop(mut c: ControlCtx) {
     for capture in &mut c.system_audio {
         capture.stop();
     }
-    (c.on_event)(Event::Stopped { reason });
+    (c.on_event)(Event::Stopped { meeting_id, reason });
     c.capture_done.store(true, Ordering::SeqCst);
 }
 

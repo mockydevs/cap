@@ -1,0 +1,12 @@
+desktop-tsc+vitest exit=0
+mutation-late-start-wins exit=1
+ws-fmt exit=0
+ws-clippy exit=0
+recorder-tests exit=0
+desktop-fmt exit=0
+desktop-clippy exit=0
+desktop-tests exit=0
+mutation-upload-without-credential exit=101
+prettier-check exit=0
+win-recorder-clippy exit=0
+win-desktop-clippy exit=0
