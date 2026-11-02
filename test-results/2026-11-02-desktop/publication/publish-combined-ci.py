@@ -42,19 +42,19 @@ import stat
 import sys
 
 # Pinned from CI run 41383982100 (source 0caf020 = runtime 553db6b + production CSS).
-# TEMPLATE: filled in only from the independently audited CI artifacts. The script refuses
-# to run while any value below is still a placeholder.
+# Pinned from the downloaded CI 41383982100 artifacts (SHA256SUMS verified, receipt commit 0caf020).
+# The script refuses to run if any value is a placeholder.
 RUN_ID = "41383982100"
 EXPECTED = {
     "linux-x86_64": (
         "cap-desktop_0.2.0-beta.6_linux-x86_64.deb",
-        0,  # PIN: bytes
-        "PIN_LINUX_SHA256",
+        7935440,
+        "e39cd10aa8dccb8d9325a56ee570425b3b8ff98c98dbb21ee744c53dd80e6fa6",
     ),
     "windows-x86_64": (
         "cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe",
-        0,  # PIN: bytes
-        "PIN_WINDOWS_SHA256",
+        44976241,
+        "f76fba04b4cb93e407a69523d580b2cc1f8a42a73e2fbba2cc71ab522f684906",
     ),
 }
 VERSION = "0.2.0-beta.6"

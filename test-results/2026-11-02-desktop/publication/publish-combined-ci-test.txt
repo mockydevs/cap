@@ -189,3 +189,44 @@ exit=1
 == other release available, its file present, correct sha
 REFUSED: live catalog already offers ['linux-x86_64'] and is not this release; refusing (no rollback or overwrite)
 exit=1 beta6 files=0 backups=0 live manifest unchanged=yes
+
+# FINAL pinned script on the real CI 41383982100 files (scratch)
+== dry run (pinned final script, real 41383982100 files)
+live manifest matches the expected state: f129a2f57afc455fdb4ae04355efe0ea779a5384fb4f8db4c72d9a82a5b3829e
+live catalog is the known pending-only catalog: may be replaced
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: present -> will be backed up
+DRY RUN: nothing changed. Re-run with --apply.
+exit=0
+== apply
+live manifest matches the expected state: f129a2f57afc455fdb4ae04355efe0ea779a5384fb4f8db4c72d9a82a5b3829e
+live catalog is the known pending-only catalog: may be replaced
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: will be added
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: will be added
+live manifest: present -> will be backed up
+backed up live manifest to manifest.json.bak-20261102T040010.479292Z-3126923
+added cap-desktop_0.2.0-beta.6_linux-x86_64.deb
+added cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+manifest.json replaced atomically (0644). Now restart ONLY the cap-server container (runbook step 4).
+exit=0
+644 779 <scratch>/live/manifest.json
+644 7935440 <scratch>/live/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
+644 44976241 <scratch>/live/cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live manifest == CI manifest: yes
+new live manifest sha256: d3178fdbb34e6d0c4ae330347501a1a79d8995c045eac25c07e8a33ece8bbdb7
+== idempotent re-run
+live manifest matches the expected state: d3178fdbb34e6d0c4ae330347501a1a79d8995c045eac25c07e8a33ece8bbdb7
+live catalog is this exact release
+staged release OK: linux-x86_64 cap-desktop_0.2.0-beta.6_linux-x86_64.deb, windows-x86_64 cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe
+live cap-desktop_0.2.0-beta.6_linux-x86_64.deb: already present with identical bytes, kept
+live cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: already present with identical bytes, kept
+already published: live files and manifest match this release; nothing to do
+exit=0
+== old 49c staged files refused
+REFUSED: linux-x86_64: staged manifest differs from the pinned CI artifact
+live manifest matches the expected state: f129a2f57afc455fdb4ae04355efe0ea779a5384fb4f8db4c72d9a82a5b3829e
+live catalog is the known pending-only catalog: may be replaced
+exit=1

@@ -1,16 +1,16 @@
 # Publish the combined CI installers (Linux + Windows)
 
-**TEMPLATE for CI run 41383982100 (source 0caf020 = runtime 553db6b + production CSS). The script
-refuses to run until the pins below are filled from the audited artifacts. The earlier 49c
-installers (d9cd5661 / 3b7cf444) contain the started_at bug and must never be published.**
+**PINNED to CI run 41383982100 (receipt commit 0caf02057c2a58346abe74a35da221fd15784b6d = runtime
+553db6b + production CSS). The earlier 49c installers (d9cd5661 / 3b7cf444) contain the started_at
+bug and must never be published.**
 
 Root release owner only, after the desktop GUI provider gate (passed on 553db6b). Replaces the
 older Linux-only OPERATOR-STEPS.md.
 
-| Platform       | File                                              | Bytes | SHA-256 |
-| -------------- | ------------------------------------------------- | ----- | ------- |
-| linux-x86_64   | cap-desktop_0.2.0-beta.6_linux-x86_64.deb         | PIN   | PIN     |
-| windows-x86_64 | cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe | PIN   | PIN     |
+| Platform       | File                                              | Bytes    | SHA-256                                                          |
+| -------------- | ------------------------------------------------- | -------- | ---------------------------------------------------------------- |
+| linux-x86_64   | cap-desktop_0.2.0-beta.6_linux-x86_64.deb         | 7935440  | e39cd10aa8dccb8d9325a56ee570425b3b8ff98c98dbb21ee744c53dd80e6fa6 |
+| windows-x86_64 | cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe | 44976241 | f76fba04b4cb93e407a69523d580b2cc1f8a42a73e2fbba2cc71ab522f684906 |
 
 macOS stays `signing_pending`. The Windows installer is unsigned (SmartScreen may warn). Updates stay
 unpublished (`/downloads/latest.json` 404).
