@@ -6,7 +6,7 @@ It never restarts anything: the Cap service restart is a separate, explicit step
 (see RUNBOOK-combined-ci.md).
 
     python3 -I publish-combined-ci.py \
-        --stage /data/cap/downloads/.release-41379816245 \
+        --stage /data/cap/downloads/.release-41383982100 \
         --live  /data/cap/downloads            [--apply]
 
 What --apply does, in order (stops at the first problem, before any change):
@@ -33,17 +33,20 @@ import re
 import stat
 import sys
 
-# Pinned from CI run 41379816245 (source 49c), independently audited.
+# Pinned from CI run 41383982100 (source 0caf020 = runtime 553db6b + production CSS).
+# TEMPLATE: filled in only from the independently audited CI artifacts. The script refuses
+# to run while any value below is still a placeholder.
+RUN_ID = "41383982100"
 EXPECTED = {
     "linux-x86_64": (
         "cap-desktop_0.2.0-beta.6_linux-x86_64.deb",
-        7935324,
-        "d9cd5661f4f6177612508e39a0f406cdf402bf00104edc5cfa8def548bcce909",
+        0,  # PIN: bytes
+        "PIN_LINUX_SHA256",
     ),
     "windows-x86_64": (
         "cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe",
-        44995608,
-        "3b7cf4448c88a125fda1185f4a9f363074a28e2b6d17fa4b58027a5e32e5ff95",
+        0,  # PIN: bytes
+        "PIN_WINDOWS_SHA256",
     ),
 }
 VERSION = "0.2.0-beta.6"
@@ -123,7 +126,12 @@ def main() -> None:
     ap.add_argument("--live", required=True, type=pathlib.Path)
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
+    for p, (_, size, digest) in EXPECTED.items():
+        if size <= 0 or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            fail(f"{p}: pins are still placeholders; fill them from the audited CI {RUN_ID} artifacts")
     stage, live = args.stage.resolve(), args.live.resolve()
+    if stage.name != f".release-{RUN_ID}":
+        fail(f"stage directory must be named .release-{RUN_ID}")
     if stage.parent != live:
         fail("stage must be a directory inside the live download directory (same filesystem)")
 

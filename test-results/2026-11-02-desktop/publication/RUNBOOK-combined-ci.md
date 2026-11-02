@@ -1,25 +1,24 @@
 # Publish the combined CI installers (Linux + Windows)
 
-**HOLD: the pinned 49c installers below contain the started_at bug fixed in 553db6b. Update the
-table and `EXPECTED` in `publish-combined-ci.py` to the new CI run before any use.**
+**TEMPLATE for CI run 41383982100 (source 0caf020 = runtime 553db6b + production CSS). The script
+refuses to run until the pins below are filled from the audited artifacts. The earlier 49c
+installers (d9cd5661 / 3b7cf444) contain the started_at bug and must never be published.**
 
-Root release owner only, after the desktop GUI provider gate passes. Replaces the older
-Linux-only OPERATOR-STEPS.md (obsolete; its e959 owner build stays unpublished).
+Root release owner only, after the desktop GUI provider gate (passed on 553db6b). Replaces the
+older Linux-only OPERATOR-STEPS.md.
 
-Release: CI run 41379816245, source 49c. Pinned in `publish-combined-ci.py`:
-
-| Platform       | File                                              | Bytes    | SHA-256                                                          |
-| -------------- | ------------------------------------------------- | -------- | ---------------------------------------------------------------- |
-| linux-x86_64   | cap-desktop_0.2.0-beta.6_linux-x86_64.deb         | 7935324  | d9cd5661f4f6177612508e39a0f406cdf402bf00104edc5cfa8def548bcce909 |
-| windows-x86_64 | cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe | 44995608 | 3b7cf4448c88a125fda1185f4a9f363074a28e2b6d17fa4b58027a5e32e5ff95 |
+| Platform       | File                                              | Bytes | SHA-256 |
+| -------------- | ------------------------------------------------- | ----- | ------- |
+| linux-x86_64   | cap-desktop_0.2.0-beta.6_linux-x86_64.deb         | PIN   | PIN     |
+| windows-x86_64 | cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe | PIN   | PIN     |
 
 macOS stays `signing_pending`. The Windows installer is unsigned (SmartScreen may warn). Updates stay
 unpublished (`/downloads/latest.json` 404).
 
-1. Staging (already done by root): `/data/cap/downloads/.release-41379816245/` holds `manifest.json`
+1. Staging (already done by root): `/data/cap/downloads/.release-41383982100/` holds `manifest.json`
    and the two files above. It must sit inside `/data/cap/downloads` (same filesystem).
 2. Dry run on the host, then read the output:
-   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41379816245 --live /data/cap/downloads`
+   `python3 -I publish-combined-ci.py --stage /data/cap/downloads/.release-41383982100 --live /data/cap/downloads`
    It must say "staged release OK" and "will be added" (or "identical bytes, kept") for both files.
    Any "REFUSED" stops here; nothing was changed.
 3. Apply: the same command with `--apply`. It backs up the current manifest to
