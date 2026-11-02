@@ -394,3 +394,89 @@ input:focus-visible,
     display: none;
   }
 }
+/* Calendar settings */
+.stack > * + * {
+  margin-top: 12px;
+}
+.section {
+  margin: 28px 0 12px;
+}
+form.inline {
+  display: block;
+}
+button.primary,
+button.secondary,
+button.danger {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+button.primary:hover {
+  background: var(--accent-strong);
+}
+button.secondary {
+  background: var(--panel);
+  color: var(--navy);
+  border-color: var(--line-strong);
+}
+button.danger {
+  background: var(--panel);
+  color: var(--bad);
+  border-color: currentColor;
+}
+.cal-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.choice select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  max-width: 240px;
+}
+/* One focus indicator: the select's own border. */
+.choice select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+@media (forced-colors: active) {
+  .choice select:focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 0;
+  }
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .cal-row {
+    grid-template-columns: 1fr;
+  }
+}

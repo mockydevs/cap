@@ -79,6 +79,8 @@ fn env() -> Option<Env> {
                 login_authorize_url: None,
                 login_exchange_url: None,
                 login_status_url: None,
+                calendar_resolve_url: None,
+                calendar_pairing_url: None,
             }],
             transcription: TranscriptionConfig::TestFixture,
             abandon_after: Duration::from_secs(3600),
@@ -86,6 +88,7 @@ fn env() -> Option<Env> {
             download_dir: None,
             portal_url: None,
             ffmpeg_path: "ffmpeg".into(),
+            calendar: None,
         };
         let state = cap_server::AppState::new(cfg).await.unwrap();
         tokio::spawn(cap_server::meetings::worker::run(state.clone()));

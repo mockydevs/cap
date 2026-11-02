@@ -1,9 +1,12 @@
 //! Cap server. Phase 1 of ADR 0004: the meeting pipeline and the static
 //! site. Later phases move the rest of the TypeScript backend here.
 
+pub mod attendance;
+pub mod calendar;
 pub mod config;
 pub mod downloads;
 pub mod error;
+pub mod google_calendar;
 pub mod meetings;
 pub mod store;
 pub mod web;
@@ -45,6 +48,8 @@ impl AppState {
             .redirect(reqwest::redirect::Policy::none())
             .timeout(std::time::Duration::from_secs(10))
             .build()?;
+        web::pages::CALENDAR_NAV
+            .store(cfg.calendar.is_some(), std::sync::atomic::Ordering::Relaxed);
         Ok(Self {
             cfg: Arc::new(cfg),
             downloads,
@@ -91,6 +96,11 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/meetings/{id}/finalize", post(api::finalize_meeting))
         .route("/v1/meetings/{id}/events", post(api::meeting_event))
         .route("/v1/meetings/{id}/adopt", post(api::adopt_meeting))
+        .route("/v1/calendar-bot/claim", post(attendance::bot_api::claim))
+        .route(
+            "/v1/calendar-bot/attendances/{id}/report",
+            post(attendance::bot_api::report),
+        )
         .merge(web::router())
         .merge(downloads::router(
             state.downloads.clone(),

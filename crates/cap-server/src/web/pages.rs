@@ -16,7 +16,7 @@ use serde::Deserialize;
 use sqlx::Row;
 use uuid::Uuid;
 
-fn layout(title: &str, user: Option<&WebUser>, body: Markup) -> Markup {
+pub(crate) fn layout(title: &str, user: Option<&WebUser>, body: Markup) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -33,7 +33,8 @@ fn layout(title: &str, user: Option<&WebUser>, body: Markup) -> Markup {
                     div.shell {
                         nav.side aria-label="Main" {
                             a.brand href="/meetings" { span.dot aria-hidden="true" {} "Cap" }
-                            a.nav-item.active href="/meetings" { "Meetings" }
+                            a.nav-item href="/meetings" { "Meetings" }
+                            @if state_has_calendar() { a.nav-item href="/calendar" { "Calendar" } }
                             div.side-foot {
                                 div.who {
                                     div.name { (u.name) }
@@ -53,6 +54,14 @@ fn layout(title: &str, user: Option<&WebUser>, body: Markup) -> Markup {
             }
         }
     }
+}
+
+/// Set once at start-up when calendar attendance is configured.
+pub(crate) static CALENDAR_NAV: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn state_has_calendar() -> bool {
+    CALENDAR_NAV.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 pub fn message_page(status: StatusCode, title: &str, text: &str) -> Response {

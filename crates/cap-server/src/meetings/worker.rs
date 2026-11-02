@@ -512,11 +512,7 @@ async fn frozen_delivery(
         meeting: DeliveredMeeting {
             id: id.to_string(),
             title: m.get("title"),
-            source: if m.get::<String, _>("source") == "desktop" {
-                DeviceKind::Desktop
-            } else {
-                DeviceKind::Extension
-            },
+            source: DeviceKind::parse(m.get("source")).unwrap_or(DeviceKind::Extension),
             provider_hint: m.get("provider_hint"),
             started_at: started,
             ended_at: ended,

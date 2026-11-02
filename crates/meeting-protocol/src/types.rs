@@ -149,6 +149,9 @@ pub struct CreatePairingResponse {
 pub enum DeviceKind {
     Desktop,
     Extension,
+    /// Cap's own server-side calendar attendance worker. Never accepted from
+    /// the public pairing redeem endpoint; the server issues it internally.
+    CalendarBot,
 }
 
 impl DeviceKind {
@@ -156,6 +159,16 @@ impl DeviceKind {
         match self {
             DeviceKind::Desktop => "desktop",
             DeviceKind::Extension => "extension",
+            DeviceKind::CalendarBot => "calendar_bot",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "desktop" => Some(Self::Desktop),
+            "extension" => Some(Self::Extension),
+            "calendar_bot" => Some(Self::CalendarBot),
+            _ => None,
         }
     }
 }
@@ -631,5 +644,69 @@ mod tests {
         assert_ne!(delivery_event_id("mtg_a", 1), delivery_event_id("mtg_a", 2));
         assert_ne!(delivery_event_id("mtg_a", 1), delivery_event_id("mtg_b", 1));
         assert!(crate::ids::parse_uuid(&delivery_event_id("mtg_a", 1)).is_some());
+    }
+}
+
+// ---- Calendar attendance (Cap → Calari, signed purpose `calendar`) ----
+// See docs/integrations/calari/CALENDAR-PORTAL-CONTRACT.md.
+
+/// Most attendee emails sent in one resolve request.
+pub const MAX_CALENDAR_ATTENDEES: usize = 100;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarResolveRequest {
+    pub user_id: String,
+    pub attendee_emails: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarClientMapping {
+    pub email: String,
+    pub client_id: String,
+    /// Shown to the staff member when choosing; never used for matching.
+    pub client_display_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarResolveResponse {
+    pub tenant_id: String,
+    pub user_id: String,
+    pub active: bool,
+    #[serde(default)]
+    pub mappings: Vec<CalendarClientMapping>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarPairingRequest {
+    pub request_id: String,
+    pub user_id: String,
+    /// `staff_client` with a client, or `internal_team` (explicit staff
+    /// choice only) without one. A missing client never means internal.
+    pub pairing_kind: PairingKind,
+    pub client_id: Option<String>,
+    pub title: String,
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarPairingResponse {
+    pub pairing_id: String,
+    pub code: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+impl std::fmt::Debug for CalendarPairingResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CalendarPairingResponse")
+            .field("pairing_id", &self.pairing_id)
+            .field("code", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .finish()
     }
 }

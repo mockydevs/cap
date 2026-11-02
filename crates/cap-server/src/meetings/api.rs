@@ -227,6 +227,11 @@ pub async fn redeem_pairing(
     }
     let device_name = cap_meeting_protocol::clean_text(&req.device_name, 80)
         .ok_or(ApiError::bad("invalid_device_name"))?;
+    // Calendar bot devices are issued by the server itself, never redeemed
+    // over the public endpoint.
+    if req.device_kind == DeviceKind::CalendarBot {
+        return Err(ApiError::bad("invalid_device_kind"));
+    }
 
     let fail = || async {
         sqlx::query("INSERT INTO meeting_redeem_failures (source) VALUES ($1)")
@@ -314,10 +319,8 @@ impl FromRequestParts<AppState> for Device {
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(unauthorized)?;
-        let kind = match row.get::<String, _>("device_kind").as_str() {
-            "desktop" => DeviceKind::Desktop,
-            _ => DeviceKind::Extension,
-        };
+        let kind = DeviceKind::parse(&row.get::<String, _>("device_kind"))
+            .unwrap_or(DeviceKind::Extension);
         Ok(Device {
             token_hash: hash,
             pairing_id: row.get("pairing_id"),

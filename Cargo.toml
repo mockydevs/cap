@@ -6,6 +6,7 @@ members = [
   "crates/meeting-detector-wasm",
   "crates/cap-server",
   "crates/meeting-recorder",
+  "crates/meeting-bot",
 ]
 # The Tauri desktop app keeps its own lockfile and is built from its own
 # directory; it depends on the protocol and detector crates by path.

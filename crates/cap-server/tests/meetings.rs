@@ -157,6 +157,8 @@ impl Harness {
                 login_authorize_url: None,
                 login_exchange_url: None,
                 login_status_url: None,
+                calendar_resolve_url: None,
+                calendar_pairing_url: None,
             }],
             transcription,
             abandon_after: Duration::from_secs(3600),
@@ -164,6 +166,7 @@ impl Harness {
             download_dir: None,
             portal_url: None,
             ffmpeg_path: "ffmpeg".into(),
+            calendar: None,
         };
         cfg.validate().unwrap();
         let state = AppState::new(cfg).await.unwrap();

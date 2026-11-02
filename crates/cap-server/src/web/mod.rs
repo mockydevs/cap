@@ -20,6 +20,18 @@ pub fn router() -> Router<AppState> {
         .route("/auth/calari/callback", get(auth::callback))
         .route("/logout", post(auth::logout))
         .route("/meetings", get(pages::meetings))
+        .route("/calendar", get(crate::attendance::web::page))
+        .route("/calendar/connect", post(crate::attendance::web::connect))
+        .route(
+            "/calendar/google/callback",
+            get(crate::attendance::web::callback),
+        )
+        .route(
+            "/calendar/disconnect",
+            post(crate::attendance::web::disconnect),
+        )
+        .route("/calendar/settings", post(crate::attendance::web::settings))
+        .route("/calendar/choice", post(crate::attendance::web::choice))
         .route("/meetings/{id}", get(pages::meeting))
         .route("/meetings/{id}/parts/{seq}", get(pages::part))
         .route("/static/app.css", get(pages::css))

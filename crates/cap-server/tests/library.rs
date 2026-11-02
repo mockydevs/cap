@@ -165,6 +165,8 @@ impl H {
                 login_authorize_url: Some("https://calari.test/portal/cap/authorize".into()),
                 login_exchange_url: Some(format!("{base}/exchange")),
                 login_status_url: Some(format!("{base}/status")),
+                calendar_resolve_url: None,
+                calendar_pairing_url: None,
             }],
             transcription: TranscriptionConfig::TestFixture,
             abandon_after: Duration::from_secs(3600),
@@ -172,6 +174,7 @@ impl H {
             download_dir: None,
             portal_url: None,
             ffmpeg_path: "ffmpeg".into(),
+            calendar: None,
         };
         let state = AppState::new(cfg).await.unwrap();
         Some(Self {

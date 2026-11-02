@@ -1,0 +1,26 @@
+{
+  "URLBlocklist": [
+    "*"
+  ],
+  "URLAllowlist": [
+    "about:blank",
+    "meet.google.com",
+    "google.com",
+    "gstatic.com",
+    "googleapis.com",
+    "127.0.0.1"
+  ],
+  "DownloadRestrictions": 3,
+  "ExtensionInstallBlocklist": [
+    "*"
+  ],
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "MetricsReportingEnabled": false,
+  "PrintingEnabled": false,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2
+}

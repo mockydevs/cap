@@ -17,3 +17,5 @@ docs
 *.pid
 /*.png
 vendor
+# The calendar runner image needs its own entrypoint and Chrome policy.
+!infra/calendar-bot

@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/debug/deps/cap_server-674f90165b843b80)
+
+running 12 tests
+test calendar::tests::ambiguous_or_unknown_attendees_never_guess ... ok
+test config::tests::development_allows_local_http_and_test_fixture ... ok
+test calendar::tests::worker_destination_is_a_meet_code_not_a_url ... ok
+test config::tests::debug_output_redacts_secrets ... ok
+test google_calendar::tests::cancelled_events_need_no_time_or_attendees ... ok
+test calendar::tests::disconnect_cancel_decline_and_past_events_cancel ... ok
+test meetings::worker::tests::prompt_tail_is_bounded ... ok
+test google_calendar::tests::timestamps_preserve_offsets_and_self_decline ... ok
+test web::pages::range_tests::byte_ranges ... ok
+test meetings::worker::tests::backoff_grows_and_caps ... ok
+test config::tests::production_rules_fail_loudly ... ok
+test store::tests::filesystem_round_trip_and_rejects_traversal ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

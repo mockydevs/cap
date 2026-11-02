@@ -22,6 +22,10 @@ pub struct Integration {
     pub login_exchange_url: Option<String>,
     /// Calari endpoint that confirms a staff member is still active.
     pub login_status_url: Option<String>,
+    /// Calari endpoint resolving calendar attendees to clients (purpose `calendar`).
+    pub calendar_resolve_url: Option<String>,
+    /// Calari endpoint creating a pairing for a calendar attendance.
+    pub calendar_pairing_url: Option<String>,
 }
 
 impl std::fmt::Debug for Integration {
@@ -34,6 +38,8 @@ impl std::fmt::Debug for Integration {
             .field("login_authorize_url", &self.login_authorize_url)
             .field("login_exchange_url", &self.login_exchange_url)
             .field("login_status_url", &self.login_status_url)
+            .field("calendar_resolve_url", &self.calendar_resolve_url)
+            .field("calendar_pairing_url", &self.calendar_pairing_url)
             .finish()
     }
 }
@@ -100,6 +106,64 @@ pub struct Config {
     /// Universal Calari portal, separate from the privileged meetings-library SSO.
     pub portal_url: Option<String>,
     pub ffmpeg_path: String,
+    /// Calendar attendance; `None` keeps the feature off entirely.
+    pub calendar: Option<CalendarConfig>,
+}
+
+/// Google endpoints. Overridable only outside production (test stubs).
+#[derive(Clone, Debug)]
+pub struct GoogleEndpoints {
+    pub auth_url: String,
+    pub token_url: String,
+    pub revoke_url: String,
+    pub api_base: String,
+}
+
+impl Default for GoogleEndpoints {
+    fn default() -> Self {
+        Self {
+            auth_url: "https://accounts.google.com/o/oauth2/v2/auth".into(),
+            token_url: "https://oauth2.googleapis.com/token".into(),
+            revoke_url: "https://oauth2.googleapis.com/revoke".into(),
+            api_base: "https://www.googleapis.com".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CalendarConfig {
+    pub google_client_id: String,
+    pub google_client_secret: Secret,
+    pub google: GoogleEndpoints,
+    /// AEAD key for refresh tokens and bot device tokens at rest (32 bytes).
+    pub encryption_key: Secret32,
+    pub encryption_key_id: String,
+    /// sha256 hex of the bearer token the isolated bot runner presents.
+    pub bot_token_sha256: String,
+    /// Most attendances in progress at once on this server.
+    pub max_concurrent: u32,
+    /// How long before the start the bot is prepared and may join.
+    pub join_lead: Duration,
+    pub sync_interval: Duration,
+    /// How far ahead events are considered.
+    pub horizon: Duration,
+    /// Display name the bot uses in the meeting (shown to participants).
+    pub bot_display_name: String,
+    /// The Google account must have the staff member's Calari email.
+    pub require_same_email: bool,
+    /// Calari staff (not only admins) may connect calendars. Off until the
+    /// meetings library enforces per-staff ownership.
+    pub allow_staff: bool,
+}
+
+/// A 32-byte key that never prints.
+#[derive(Clone)]
+pub struct Secret32(pub [u8; 32]);
+
+impl std::fmt::Debug for Secret32 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
 }
 
 #[derive(Deserialize)]
@@ -116,6 +180,10 @@ struct RawIntegration {
     login_exchange_url: Option<String>,
     #[serde(default)]
     login_status_url: Option<String>,
+    #[serde(default)]
+    calendar_resolve_url: Option<String>,
+    #[serde(default)]
+    calendar_pairing_url: Option<String>,
 }
 
 fn var(name: &str) -> Option<String> {
@@ -168,6 +236,8 @@ impl Config {
                 login_authorize_url: r.login_authorize_url,
                 login_exchange_url: r.login_exchange_url,
                 login_status_url: r.login_status_url,
+                calendar_resolve_url: r.calendar_resolve_url,
+                calendar_pairing_url: r.calendar_pairing_url,
             });
         }
 
@@ -204,6 +274,73 @@ impl Config {
             },
         };
 
+        let calendar = if matches!(var("CAP_CALENDAR_ENABLED").as_deref(), Some("1" | "true")) {
+            let key = decode_secret(
+                &var("CAP_CALENDAR_ENCRYPTION_KEY")
+                    .context("CAP_CALENDAR_ENABLED needs CAP_CALENDAR_ENCRYPTION_KEY")?,
+            )
+            .ok()
+            .and_then(|k| <[u8; 32]>::try_from(k.as_slice()).ok())
+            .context(
+                "CAP_CALENDAR_ENCRYPTION_KEY must be base64url without padding, exactly 32 bytes",
+            )?;
+            let bot_token = var("CAP_CALENDAR_BOT_TOKEN")
+                .context("CAP_CALENDAR_ENABLED needs CAP_CALENDAR_BOT_TOKEN")?;
+            if bot_token.len() < 32 {
+                bail!("CAP_CALENDAR_BOT_TOKEN must be at least 32 random characters");
+            }
+            let mut google = GoogleEndpoints::default();
+            if let Some(v) = var("CAP_CALENDAR_GOOGLE_AUTH_URL") {
+                google.auth_url = v;
+            }
+            if let Some(v) = var("CAP_CALENDAR_GOOGLE_TOKEN_URL") {
+                google.token_url = v;
+            }
+            if let Some(v) = var("CAP_CALENDAR_GOOGLE_REVOKE_URL") {
+                google.revoke_url = v;
+            }
+            if let Some(v) = var("CAP_CALENDAR_GOOGLE_API_BASE") {
+                google.api_base = v.trim_end_matches('/').to_owned();
+            }
+            Some(CalendarConfig {
+                google_client_id: var("GOOGLE_OAUTH_CLIENT_ID")
+                    .context("CAP_CALENDAR_ENABLED needs GOOGLE_OAUTH_CLIENT_ID")?,
+                google_client_secret: Secret(
+                    var("GOOGLE_OAUTH_CLIENT_SECRET")
+                        .context("CAP_CALENDAR_ENABLED needs GOOGLE_OAUTH_CLIENT_SECRET")?,
+                ),
+                google,
+                encryption_key: Secret32(key),
+                encryption_key_id: var("CAP_CALENDAR_ENCRYPTION_KEY_ID")
+                    .unwrap_or_else(|| "v1".into()),
+                bot_token_sha256: cap_meeting_protocol::ids::sha256_hex(bot_token.as_bytes()),
+                max_concurrent: parse_var("CAP_CALENDAR_MAX_CONCURRENT", 1)?,
+                join_lead: Duration::from_secs(parse_var::<u64>(
+                    "CAP_CALENDAR_JOIN_LEAD_SECONDS",
+                    120,
+                )?),
+                sync_interval: Duration::from_secs(parse_var::<u64>(
+                    "CAP_CALENDAR_SYNC_SECONDS",
+                    300,
+                )?),
+                horizon: Duration::from_secs(
+                    parse_var::<u64>("CAP_CALENDAR_HORIZON_DAYS", 14)? * 86_400,
+                ),
+                bot_display_name: var("CAP_CALENDAR_BOT_NAME")
+                    .unwrap_or_else(|| "Calari Notetaker".into()),
+                require_same_email: !matches!(
+                    var("CAP_CALENDAR_REQUIRE_SAME_EMAIL").as_deref(),
+                    Some("0" | "false")
+                ),
+                allow_staff: matches!(
+                    var("CAP_CALENDAR_ALLOW_STAFF").as_deref(),
+                    Some("1" | "true")
+                ),
+            })
+        } else {
+            None
+        };
+
         let cfg = Config {
             bind: parse_var("CAP_SERVER_BIND", "127.0.0.1:8787".parse()?)?,
             database_url: Secret(var("DATABASE_URL").context("DATABASE_URL is required")?),
@@ -223,6 +360,7 @@ impl Config {
             download_dir: var("CAP_DOWNLOAD_DIR").map(PathBuf::from),
             portal_url: var("CALARI_PORTAL_URL"),
             ffmpeg_path: var("FFMPEG_PATH").unwrap_or_else(|| "ffmpeg".into()),
+            calendar,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -283,6 +421,63 @@ impl Config {
                     "integration {} needs login_authorize_url, login_exchange_url and login_status_url together",
                     i.key_id
                 ),
+            }
+            match (&i.calendar_resolve_url, &i.calendar_pairing_url) {
+                (None, None) => {}
+                (Some(r), Some(p)) => {
+                    let ok = |u: &str| {
+                        u.starts_with("https://") || (!self.production && u.starts_with("http://"))
+                    };
+                    if !ok(r) || !ok(p) {
+                        bail!("integration {} calendar URLs must be https", i.key_id);
+                    }
+                }
+                _ => bail!(
+                    "integration {} needs calendar_resolve_url and calendar_pairing_url together",
+                    i.key_id
+                ),
+            }
+        }
+        if let Some(c) = &self.calendar {
+            if c.google_client_id.is_empty() || c.google_client_secret.0.is_empty() {
+                bail!("calendar needs GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET");
+            }
+            if c.max_concurrent == 0 || c.max_concurrent > 4 {
+                bail!("CAP_CALENDAR_MAX_CONCURRENT must be 1-4");
+            }
+            if !cap_meeting_protocol::valid_external_id(&c.encryption_key_id) {
+                bail!("CAP_CALENDAR_ENCRYPTION_KEY_ID must be 1-128 chars of [A-Za-z0-9_.:-]");
+            }
+            if c.encryption_key
+                .0
+                .iter()
+                .all(|b| *b == c.encryption_key.0[0])
+            {
+                bail!("CAP_CALENDAR_ENCRYPTION_KEY is not random");
+            }
+            if c.bot_token_sha256.len() != 64 {
+                bail!("calendar bot token hash is invalid");
+            }
+            if c.bot_display_name.trim().is_empty() || c.bot_display_name.chars().count() > 60 {
+                bail!("CAP_CALENDAR_BOT_NAME must be 1-60 characters");
+            }
+            if !self
+                .integrations
+                .iter()
+                .any(|i| i.calendar_pairing_url.is_some() && i.login_status_url.is_some())
+            {
+                bail!("calendar needs an integration with calendar URLs and library sign-in");
+            }
+            // Tokens only ever go to Google itself in production.
+            if self.production {
+                let g = GoogleEndpoints::default();
+                if c.google.auth_url != g.auth_url
+                    || c.google.token_url != g.token_url
+                    || c.google.revoke_url != g.revoke_url
+                    || c.google.api_base != g.api_base
+                {
+                    bail!("Google endpoint overrides are refused in production");
+                }
             }
         }
         if !self.production {
@@ -383,6 +578,8 @@ pub(crate) mod tests {
                 login_authorize_url: None,
                 login_exchange_url: None,
                 login_status_url: None,
+                calendar_resolve_url: None,
+                calendar_pairing_url: None,
             }],
             transcription: TranscriptionConfig::OpenAiCompatible {
                 base_url: "https://whisper.example/v1".into(),
@@ -394,7 +591,67 @@ pub(crate) mod tests {
             download_dir: None,
             portal_url: Some("https://calari.example/portal".into()),
             ffmpeg_path: "ffmpeg".into(),
+            calendar: None,
         }
+    }
+
+    pub fn with_calendar() -> Config {
+        let mut c = base();
+        let i = &mut c.integrations[0];
+        i.login_authorize_url = Some("https://calari.example/a".into());
+        i.login_exchange_url = Some("https://calari.example/x".into());
+        i.login_status_url = Some("https://calari.example/s".into());
+        i.calendar_resolve_url = Some("https://calari.example/cr".into());
+        i.calendar_pairing_url = Some("https://calari.example/cp".into());
+        let mut key = [0u8; 32];
+        key.iter_mut().enumerate().for_each(|(n, b)| *b = n as u8);
+        c.calendar = Some(CalendarConfig {
+            google_client_id: "id".into(),
+            google_client_secret: Secret("google-secret".into()),
+            google: GoogleEndpoints::default(),
+            encryption_key: Secret32(key),
+            encryption_key_id: "v1".into(),
+            bot_token_sha256: "0".repeat(64),
+            max_concurrent: 1,
+            join_lead: Duration::from_secs(120),
+            sync_interval: Duration::from_secs(300),
+            horizon: Duration::from_secs(86_400),
+            bot_display_name: "Calari Notetaker".into(),
+            require_same_email: true,
+            allow_staff: false,
+        });
+        c
+    }
+
+    #[test]
+    fn calendar_rules_fail_closed() {
+        assert!(with_calendar().validate().is_ok());
+        type Mutation = Box<dyn Fn(&mut Config)>;
+        let cases: Vec<Mutation> = vec![
+            Box::new(|c| {
+                c.calendar.as_mut().unwrap().google.token_url = "https://evil.example/token".into()
+            }),
+            Box::new(|c| {
+                c.calendar.as_mut().unwrap().google.api_base = "http://127.0.0.1:1".into()
+            }),
+            Box::new(|c| c.calendar.as_mut().unwrap().max_concurrent = 0),
+            Box::new(|c| c.calendar.as_mut().unwrap().encryption_key = Secret32([9; 32])),
+            Box::new(|c| c.integrations[0].calendar_pairing_url = None),
+            Box::new(|c| {
+                c.integrations[0].calendar_resolve_url = Some("http://calari.example/cr".into())
+            }),
+            Box::new(|c| {
+                c.integrations[0].calendar_resolve_url = None;
+                c.integrations[0].calendar_pairing_url = None;
+            }),
+        ];
+        for (i, mutate) in cases.iter().enumerate() {
+            let mut c = with_calendar();
+            mutate(&mut c);
+            assert!(c.validate().is_err(), "calendar case {i} should be refused");
+        }
+        let rendered = format!("{:?}", with_calendar());
+        assert!(!rendered.contains("google-secret"));
     }
 
     #[test]

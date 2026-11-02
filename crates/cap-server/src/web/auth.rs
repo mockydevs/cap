@@ -48,6 +48,10 @@ pub fn cookie_name(production: bool) -> &'static str {
     }
 }
 
+pub(crate) fn cookie_value_pub(headers: &HeaderMap, name: &str) -> Option<String> {
+    cookie_value(headers, name)
+}
+
 pub fn callback_url(state: &AppState) -> String {
     format!("{}/auth/calari/callback", state.cfg.public_base_url)
 }
@@ -56,6 +60,8 @@ pub fn callback_url(state: &AppState) -> String {
 #[derive(Clone, Debug)]
 pub struct WebUser {
     pub tenant_id: String,
+    /// Calari's opaque staff id.
+    pub user_id: String,
     pub email: String,
     pub name: String,
     pub role: StaffRole,
@@ -104,6 +110,7 @@ impl FromRequestParts<AppState> for WebUser {
         .ok_or_else(to_login)?;
         let mut user = WebUser {
             tenant_id: row.get("tenant_id"),
+            user_id: row.get("calari_user_id"),
             email: row.get("email"),
             name: row.get("display_name"),
             role: if row.get::<String, _>("role") == "admin" {
@@ -115,7 +122,7 @@ impl FromRequestParts<AppState> for WebUser {
         };
         // Every protected request asks Calari first; there is no cached allow.
         {
-            let user_id: String = row.get("calari_user_id");
+            let user_id = user.user_id.clone();
             match check_status(state, &user.tenant_id, &user_id).await {
                 Status::Active(s) => {
                     user.email = s.email.trim().to_lowercase();

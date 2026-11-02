@@ -1,0 +1,138 @@
+   Compiling clang-sys v1.9.1
+   Compiling axum v0.8.9
+   Compiling bindgen v0.71.1
+   Compiling whisper-rs-sys v0.14.1
+   Compiling whisper-rs v0.15.1
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.33s
+     Running tests/attend.rs (target/debug/deps/attend-f12cb76726d0a8d1)
+
+running 1 test
+whisper_init_from_file_with_params_no_state: loading model from '/home/don/.cache/cap-whisper/ggml-tiny.en.bin'
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+whisper_init_with_params_no_state: gpu_device = 0
+whisper_init_with_params_no_state: dtw        = 0
+whisper_init_with_params_no_state: devices    = 1
+whisper_init_with_params_no_state: backends   = 1
+whisper_model_load: loading model
+whisper_model_load: n_vocab       = 51864
+whisper_model_load: n_audio_ctx   = 1500
+whisper_model_load: n_audio_state = 384
+whisper_model_load: n_audio_head  = 6
+whisper_model_load: n_audio_layer = 4
+whisper_model_load: n_text_ctx    = 448
+whisper_model_load: n_text_state  = 384
+whisper_model_load: n_text_head   = 6
+whisper_model_load: n_text_layer  = 4
+whisper_model_load: n_mels        = 80
+whisper_model_load: ftype         = 1
+whisper_model_load: qntvr         = 0
+whisper_model_load: type          = 1 (tiny)
+whisper_model_load: adding 1607 extra tokens
+whisper_model_load: n_langs       = 99
+whisper_model_load:          CPU total size =    77.11 MB
+whisper_model_load: model size    =   77.11 MB
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 513b1862-d5c9-4f6c-9fe9-bbd9f81a17fc
+cap-meeting-bot: 513b1862-d5c9-4f6c-9fe9-bbd9f81a17fc completed
+
+page events: [Object {"k": String("mic"), "v": Bool(true)}, Object {"k": String("cam"), "v": Bool(true)}, Object {"k": String("join"), "v": Object {"name": String("Calari Notetaker"), "path": String("/abc-defg-hij"), "trusted": Bool(true)}}, Object {"k": String("admitted"), "v": Bool(true)}, Object {"k": String("playing"), "v": Bool(true)}, Object {"k": String("ended"), "v": Bool(true)}]
+attended in 31.30733387s
+whisper_backend_init_gpu: no GPU found
+whisper_init_state: kv self size  =    3.15 MB
+whisper_init_state: kv cross size =    9.44 MB
+whisper_init_state: kv pad  size  =    2.36 MB
+whisper_init_state: compute buffer (conv)   =   13.21 MB
+whisper_init_state: compute buffer (encode) =   64.81 MB
+whisper_init_state: compute buffer (cross)  =    3.89 MB
+whisper_init_state: compute buffer (decode) =   95.91 MB
+
+whisper_full_with_state: strategy = 0, decoding with 1 decoders, temperature = 0.00
+
+
+whisper_full_with_state: prompt[0] = [_SOT_]
+
+
+whisper_full_with_state: id =   0, decoder = 0, token =  50363, p =  0.795, ts =    [_BEG_],  0.795, result_len =    0 '[_BEG_]'
+whisper_full_with_state: id =   1, decoder = 0, token =    314, p =  0.090, ts =        [?],  0.000, result_len =    0 ' I'
+whisper_full_with_state: id =   2, decoder = 0, token =    761, p =  0.535, ts =        [?],  0.008, result_len =    0 ' need'
+whisper_full_with_state: id =   3, decoder = 0, token =    257, p =  0.883, ts =        [?],  0.024, result_len =    0 ' a'
+whisper_full_with_state: id =   4, decoder = 0, token =   5486, p =  0.756, ts =        [?],  0.013, result_len =    0 ' speaking'
+whisper_full_with_state: id =   5, decoder = 0, token =     13, p =  0.429, ts =        [?],  0.046, result_len =    0 '.'
+whisper_full_with_state: id =   6, decoder = 0, token =    770, p =  0.489, ts =        [?],  0.025, result_len =    0 ' This'
+whisper_full_with_state: id =   7, decoder = 0, token =    318, p =  0.812, ts =        [?],  0.009, result_len =    0 ' is'
+whisper_full_with_state: id =   8, decoder = 0, token =    257, p =  0.795, ts =        [?],  0.006, result_len =    0 ' a'
+whisper_full_with_state: id =   9, decoder = 0, token =   3085, p =  0.753, ts =        [?],  0.005, result_len =    0 ' staff'
+whisper_full_with_state: id =  10, decoder = 0, token =  17719, p =  0.972, ts =        [?],  0.081, result_len =    0 ' briefing'
+whisper_full_with_state: id =  11, decoder = 0, token =    329, p =  0.956, ts =  [_TT_294],  0.157, result_len =    0 ' for'
+whisper_full_with_state: id =  12, decoder = 0, token =    674, p =  0.645, ts =        [?],  0.037, result_len =    0 ' our'
+whisper_full_with_state: id =  13, decoder = 0, token =   5456, p =  0.780, ts =        [?],  0.036, result_len =    0 ' client'
+whisper_full_with_state: id =  14, decoder = 0, token =    290, p =  0.705, ts =        [?],  0.065, result_len =    0 ' and'
+whisper_full_with_state: id =  15, decoder = 0, token =   1866, p =  0.169, ts =        [?],  0.096, result_len =    0 ' members'
+whisper_full_with_state: id =  16, decoder = 0, token =    284, p =  0.813, ts =        [?],  0.048, result_len =    0 ' to'
+whisper_full_with_state: id =  17, decoder = 0, token =    466, p =  0.291, ts =        [?],  0.026, result_len =    0 ' do'
+whisper_full_with_state: id =  18, decoder = 0, token =     13, p =  0.803, ts =        [?],  0.080, result_len =    0 '.'
+whisper_full_with_state: id =  19, decoder = 0, token =  50763, p =  0.026, ts =        [?],  0.026, result_len =   20 '[_TT_400]'
+whisper_full_with_state: id =  20, decoder = 0, token =  50763, p =  0.798, ts =  [_TT_400],  0.798, result_len =   21 '[_TT_400]'
+whisper_full_with_state: id =  21, decoder = 0, token =  20758, p =  0.330, ts =        [?],  0.000, result_len =   21 ' Claire'
+whisper_full_with_state: id =  22, decoder = 0, token =     11, p =  0.707, ts =        [?],  0.027, result_len =   21 ','
+whisper_full_with_state: id =  23, decoder = 0, token =   3387, p =  0.957, ts =        [?],  0.038, result_len =   21 ' please'
+whisper_full_with_state: id =  24, decoder = 0, token =   3758, p =  0.991, ts =        [?],  0.007, result_len =   21 ' send'
+whisper_full_with_state: id =  25, decoder = 0, token =    262, p =  0.724, ts =        [?],  0.005, result_len =   21 ' the'
+whisper_full_with_state: id =  26, decoder = 0, token =   9965, p =  0.918, ts =        [?],  0.005, result_len =   21 ' lunch'
+whisper_full_with_state: id =  27, decoder = 0, token =   4710, p =  0.496, ts =        [?],  0.008, result_len =   21 ' notes'
+whisper_full_with_state: id =  28, decoder = 0, token =    416, p =  0.553, ts =        [?],  0.014, result_len =   21 ' by'
+whisper_full_with_state: id =  29, decoder = 0, token =   3217, p =  0.997, ts =        [?],  0.010, result_len =   21 ' Friday'
+whisper_full_with_state: id =  30, decoder = 0, token =     13, p =  0.969, ts =  [_TT_550],  0.342, result_len =   21 '.'
+whisper_full_with_state: id =  31, decoder = 0, token =  20758, p =  0.462, ts =  [_TT_550],  0.511, result_len =   21 ' Claire'
+whisper_full_with_state: id =  32, decoder = 0, token =   1139, p =  0.549, ts =        [?],  0.018, result_len =   21 ' says'
+whisper_full_with_state: id =  33, decoder = 0, token =   3763, p =  0.847, ts =        [?],  0.065, result_len =   21 ' yes'
+whisper_full_with_state: id =  34, decoder = 0, token =     13, p =  0.610, ts =  [_TT_600],  0.225, result_len =   21 '.'
+whisper_full_with_state: id =  35, decoder = 0, token =    314, p =  0.742, ts =  [_TT_600],  0.556, result_len =   21 ' I'
+whisper_full_with_state: id =  36, decoder = 0, token =    481, p =  0.986, ts =        [?],  0.079, result_len =   21 ' will'
+whisper_full_with_state: id =  37, decoder = 0, token =   3758, p =  0.991, ts =  [_TT_628],  0.134, result_len =   21 ' send'
+whisper_full_with_state: id =  38, decoder = 0, token =    262, p =  0.953, ts =        [?],  0.099, result_len =   21 ' the'
+whisper_full_with_state: id =  39, decoder = 0, token =   9965, p =  0.990, ts =        [?],  0.099, result_len =   21 ' lunch'
+whisper_full_with_state: id =  40, decoder = 0, token =   4710, p =  0.816, ts =        [?],  0.095, result_len =   21 ' notes'
+whisper_full_with_state: id =  41, decoder = 0, token =    416, p =  0.892, ts =        [?],  0.076, result_len =   21 ' by'
+whisper_full_with_state: id =  42, decoder = 0, token =   3217, p =  0.961, ts =        [?],  0.075, result_len =   21 ' Friday'
+whisper_full_with_state: id =  43, decoder = 0, token =     13, p =  0.984, ts =  [_TT_700],  0.315, result_len =   21 '.'
+whisper_full_with_state: id =  44, decoder = 0, token =  51063, p =  0.289, ts =  [_TT_700],  0.289, result_len =   45 '[_TT_700]'
+whisper_full_with_state: id =  45, decoder = 0, token =  51063, p =  0.963, ts =  [_TT_700],  0.963, result_len =   46 '[_TT_700]'
+whisper_full_with_state: id =  46, decoder = 0, token =    770, p =  0.973, ts =        [?],  0.000, result_len =   46 ' This'
+whisper_full_with_state: id =  47, decoder = 0, token =   4876, p =  0.835, ts =        [?],  0.014, result_len =   46 ' task'
+whisper_full_with_state: id =  48, decoder = 0, token =    318, p =  0.676, ts =        [?],  0.010, result_len =   46 ' is'
+whisper_full_with_state: id =  49, decoder = 0, token =   8686, p =  0.973, ts =        [?],  0.011, result_len =   46 ' assigned'
+whisper_full_with_state: id =  50, decoder = 0, token =    284, p =  0.995, ts =        [?],  0.045, result_len =   46 ' to'
+whisper_full_with_state: id =  51, decoder = 0, token =  20758, p =  0.957, ts =        [?],  0.051, result_len =   46 ' Claire'
+whisper_full_with_state: id =  52, decoder = 0, token =     13, p =  0.980, ts =  [_TT_800],  0.130, result_len =   46 '.'
+whisper_full_with_state: id =  53, decoder = 0, token =    775, p =  0.929, ts =  [_TT_800],  0.734, result_len =   46 ' We'
+whisper_full_with_state: id =  54, decoder = 0, token =    635, p =  0.981, ts =        [?],  0.017, result_len =   46 ' also'
+whisper_full_with_state: id =  55, decoder = 0, token =  11765, p =  0.752, ts =        [?],  0.012, result_len =   46 ' reviewed'
+whisper_full_with_state: id =  56, decoder = 0, token =    262, p =  0.983, ts =        [?],  0.097, result_len =   46 ' the'
+whisper_full_with_state: id =  57, decoder = 0, token =   3052, p =  0.956, ts =        [?],  0.029, result_len =   46 ' website'
+whisper_full_with_state: id =  58, decoder = 0, token =  25863, p =  0.430, ts =        [?],  0.027, result_len =   46 ' onboard'
+whisper_full_with_state: id =  59, decoder = 0, token =    278, p =  0.998, ts =        [?],  0.027, result_len =   46 'ing'
+whisper_full_with_state: id =  60, decoder = 0, token =  15264, p =  0.595, ts =        [?],  0.044, result_len =   46 ' timeline'
+whisper_full_with_state: id =  61, decoder = 0, token =     13, p =  0.970, ts =  [_TT_950],  0.159, result_len =   46 '.'
+whisper_full_with_state: id =  62, decoder = 0, token =  51313, p =  0.516, ts =  [_TT_950],  0.516, result_len =   63 '[_TT_950]'
+whisper_full_with_state: id =  63, decoder = 0, token =  50256, p =  0.973, ts =  [_TT_950],  0.811, result_len =   63 '<|endoftext|>'
+whisper_full_with_state: decoder 0 completed
+whisper_full_with_state: decoder  0: score = -0.39510, result_len =  63, avg_logprobs = -0.39510, entropy =  3.16248
+whisper_full_with_state: best decoder = 0
+single timestamp ending - skip entire chunk
+seek = 2219, seek_delta = 2219
+transcribed and delivered in 986.858808ms
+transcript provider/model: "cap-whisper" "ggml-tiny.en"
+transcript: i need a speaking. this is a staff briefing for our client and members to do.
+claire, please send the lunch notes by friday. claire says yes. i will send the lunch notes by friday.
+this task is assigned to claire. we also reviewed the website onboarding timeline.
+Calari receipt: Some("rcpt-1")
+test runner_container_attends_records_and_delivers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.66s
+
+exit=0

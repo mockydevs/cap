@@ -36,6 +36,10 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::info!(bind = %state.cfg.bind, transcription = state.cfg.transcription_label(), "cap-server starting");
     tokio::spawn(worker::run(state.clone()));
+    if state.cfg.calendar.is_some() {
+        tracing::info!("calendar attendance enabled");
+        tokio::spawn(cap_server::attendance::run(state.clone()));
+    }
     let listener = tokio::net::TcpListener::bind(state.cfg.bind).await?;
     let app = router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
     axum::serve(listener, app)

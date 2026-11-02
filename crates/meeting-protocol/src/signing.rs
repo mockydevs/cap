@@ -38,6 +38,9 @@ pub enum Purpose {
     Delivery,
     /// Cap → Calari: exchange a one-time sign-in code for the staff member.
     Login,
+    /// Cap → Calari: resolve calendar attendees and request a pairing for a
+    /// scheduled calendar attendance on behalf of a connected staff member.
+    Calendar,
 }
 
 impl Purpose {
@@ -46,6 +49,7 @@ impl Purpose {
             Purpose::Pairing => "pairing",
             Purpose::Delivery => "delivery",
             Purpose::Login => "login",
+            Purpose::Calendar => "calendar",
         }
     }
 }
