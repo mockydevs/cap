@@ -1,0 +1,28 @@
+{
+  "signedOut": {
+    "page": 303,
+    "audio": 303
+  },
+  "login": {
+    "status": 303,
+    "authorize": "http://localhost:3105/portal/cap/authorize",
+    "redirect_uri": "https://localhost:8790/auth/calari/callback"
+  },
+  "approve": 201,
+  "callback": 303,
+  "list": {
+    "status": 200,
+    "hasTitle": true
+  },
+  "page": {
+    "status": 200,
+    "transcript": true,
+    "playlist": true,
+    "segments": 7
+  },
+  "audio": {
+    "status": 206,
+    "type": "audio/ogg",
+    "bytes": 1024
+  }
+}

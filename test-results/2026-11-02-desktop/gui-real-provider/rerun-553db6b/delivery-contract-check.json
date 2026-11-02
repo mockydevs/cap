@@ -1,0 +1,28 @@
+{
+  "accepted": true,
+  "issues": [],
+  "meeting": {
+    "source": "desktop",
+    "stop_reason": "user_stopped",
+    "partial": false,
+    "duration_ms": 45389,
+    "started_at": "2026-11-02T03:35:58.653186Z",
+    "ended_at": "2026-11-02T03:36:44.042699Z",
+    "cap_url_https": true,
+    "title": "Desktop real-provider briefing (fixed)",
+    "provider_hint": null
+  },
+  "context": {
+    "pairing_kind": "staff_client",
+    "capture_mode": "audio"
+  },
+  "client_id": true,
+  "intake_receipt_id": null,
+  "transcript": {
+    "provider": "cap-whisper",
+    "model": "ggml-base.en",
+    "segments": 7,
+    "chars": 261,
+    "last_end_ms": 45081
+  }
+}
