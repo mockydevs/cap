@@ -3,8 +3,18 @@
 //! The runner holds only its own runner token. Each claim brings a Meet code
 //! and a one-meeting device token; audio goes up through the same upload API
 //! and recorder the desktop app uses, so transcription and the signed Calari
-//! delivery are unchanged. A heartbeat keeps the lease; when the server says
-//! stop (cancelled, hard stop) or the lease is lost, the bot leaves.
+//! delivery are unchanged.
+//!
+//! Lease: the runner keeps a local deadline = send time of the last report
+//! the server confirmed + the lease it granted − a margin. Failed, refused or
+//! hung reports never extend it. Past the deadline the runner stops capturing
+//! and leaves, whatever the network does, so it can never overlap a runner the
+//! server re-queued the meeting to.
+//!
+//! Spool: audio and that meeting's own device token live in a private,
+//! durable spool until the server confirms the meeting is finalized. After an
+//! outage or restart [`crate::spool::recover`] uploads and finalizes them; it
+//! never rejoins or records again.
 
 use crate::{cdp, meet};
 use cap_meeting_detector::Config as DetectorConfig;
@@ -19,7 +29,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 
@@ -29,7 +39,12 @@ pub struct Config {
     pub runner_token: String,
     pub chrome: String,
     pub ffmpeg: String,
-    pub work_dir: PathBuf,
+    /// Durable, private: audio + per-meeting credential until finalized.
+    pub spool_dir: PathBuf,
+    /// Never claim while the spool holds more than this.
+    pub spool_max_bytes: u64,
+    /// Ephemeral browser profiles (tmpfs).
+    pub profile_dir: PathBuf,
     pub pulse_sink: String,
     pub no_sandbox: bool,
     pub meet_origin: String,
@@ -91,12 +106,26 @@ pub struct Api {
 struct Answer {
     #[serde(rename = "continue")]
     keep_going: bool,
+    lease_seconds: Option<i64>,
 }
 
 pub enum Reported {
-    Continue(bool),
+    /// Confirmed: keep going or not, and until when the lease surely holds.
+    Continue {
+        keep_going: bool,
+        holds_until: Instant,
+    },
     LeaseLost,
     Unreachable,
+}
+
+/// The lease surely holds until this instant: measured from when the request
+/// was SENT (the server granted it later), less a margin for clock drift and
+/// the time it takes to stop.
+pub fn lease_holds_until(sent: Instant, lease_seconds: i64) -> Instant {
+    let lease = Duration::from_secs(lease_seconds.clamp(1, 3_600) as u64);
+    let margin = (lease / 4).min(Duration::from_secs(10));
+    sent + lease.saturating_sub(margin)
 }
 
 impl Api {
@@ -109,8 +138,10 @@ impl Api {
         Ok(Self { http, cfg })
     }
 
-    /// `Ok(None)` when nothing is due.
-    pub fn claim(&self) -> Result<Option<Claim>, String> {
+    /// `Ok(None)` when nothing is due. Also returns until when the new lease
+    /// surely holds.
+    pub fn claim(&self) -> Result<Option<(Claim, Instant)>, String> {
+        let sent = Instant::now();
         let res = self
             .http
             .post(format!("{}/v1/calendar-bot/claim", self.cfg.server))
@@ -120,8 +151,11 @@ impl Api {
         match res.status().as_u16() {
             204 => Ok(None),
             200 => res
-                .json()
-                .map(Some)
+                .json::<Claim>()
+                .map(|c| {
+                    let until = lease_holds_until(sent, c.lease_seconds);
+                    Some((c, until))
+                })
                 .map_err(|_| "claim answer unreadable".into()),
             c => Err(format!("claim refused with {c}")),
         }
@@ -141,6 +175,7 @@ impl Api {
         if let Some(d) = detail {
             body["detail"] = json!(d.chars().take(200).collect::<String>());
         }
+        let sent = Instant::now();
         let res = self
             .http
             .post(format!(
@@ -153,7 +188,13 @@ impl Api {
         match res {
             Ok(r) if r.status().is_success() => r
                 .json::<Answer>()
-                .map(|a| Reported::Continue(a.keep_going))
+                .map(|a| Reported::Continue {
+                    keep_going: a.keep_going,
+                    holds_until: lease_holds_until(
+                        sent,
+                        a.lease_seconds.unwrap_or(c.lease_seconds),
+                    ),
+                })
                 .unwrap_or(Reported::Unreachable),
             Ok(r) if r.status().as_u16() == 409 => Reported::LeaseLost,
             _ => Reported::Unreachable,
@@ -167,9 +208,41 @@ struct Live {
     keep_going: AtomicBool,
     lease_lost: AtomicBool,
     done: AtomicBool,
+    /// Local fail-closed deadline; only confirmed reports move it.
+    deadline: Mutex<Instant>,
 }
 
-pub fn run_job(api: &Api, job: Claim) -> Outcome {
+impl Live {
+    fn confirmed(&self, r: &Reported) {
+        match r {
+            Reported::Continue {
+                keep_going,
+                holds_until,
+            } => {
+                if !keep_going {
+                    self.keep_going.store(false, Ordering::SeqCst);
+                }
+                if let Ok(mut d) = self.deadline.lock() {
+                    *d = (*d).max(*holds_until);
+                }
+            }
+            Reported::LeaseLost => {
+                self.lease_lost.store(true, Ordering::SeqCst);
+                self.keep_going.store(false, Ordering::SeqCst);
+            }
+            Reported::Unreachable => {}
+        }
+    }
+
+    fn lease_valid(&self) -> bool {
+        self.deadline
+            .lock()
+            .map(|d| Instant::now() < *d)
+            .unwrap_or(false)
+    }
+}
+
+pub fn run_job(api: &Api, job: Claim, lease_until: Instant) -> Outcome {
     let cfg = &api.cfg;
     if !meet::valid_code(&job.meet_code) {
         let _ = api.report(&job, "failed", None, Some("invalid meeting code"));
@@ -180,10 +253,15 @@ pub fn run_job(api: &Api, job: Claim) -> Outcome {
         keep_going: AtomicBool::new(true),
         lease_lost: AtomicBool::new(false),
         done: AtomicBool::new(false),
+        deadline: Mutex::new(lease_until),
     });
-    match api.report(&job, "joining", None, None) {
+    let first = api.report(&job, "joining", None, None);
+    live.confirmed(&first);
+    match first {
         Reported::LeaseLost => return Outcome::LeaseLost,
-        Reported::Continue(false) => {
+        Reported::Continue {
+            keep_going: false, ..
+        } => {
             let _ = api.report(&job, "completed", None, Some("cancelled before joining"));
             return Outcome::Completed;
         }
@@ -205,20 +283,15 @@ pub fn run_job(api: &Api, job: Claim) -> Outcome {
                     break;
                 }
                 let (state, meeting) = live.state.lock().map(|g| g.clone()).unwrap_or_default();
-                match api.report(&job, &state, meeting.as_deref(), None) {
-                    Reported::Continue(k) => live.keep_going.store(k, Ordering::SeqCst),
-                    Reported::LeaseLost => {
-                        live.lease_lost.store(true, Ordering::SeqCst);
-                        live.keep_going.store(false, Ordering::SeqCst);
-                    }
-                    Reported::Unreachable => {}
-                }
+                let r = api.report(&job, &state, meeting.as_deref(), None);
+                live.confirmed(&r);
             }
         })
     };
     let outcome = attend(api, &job, &live);
     live.done.store(true, Ordering::SeqCst);
-    let _ = hb.join();
+    // The heartbeat may be stuck in a hung request; never wait for it.
+    drop(hb);
     if live.lease_lost.load(Ordering::SeqCst) {
         return Outcome::LeaseLost;
     }
@@ -245,10 +318,10 @@ fn set_state(live: &Live, state: &str, meeting: Option<String>) {
 
 fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     let cfg = &api.cfg;
-    let dir = cfg.work_dir.join(job.attendance_id.to_string());
+    let dir = crate::spool::meeting_dir(&cfg.spool_dir, job.attendance_id);
     let mut browser = match cdp::Browser::launch(cdp::LaunchOptions {
         chrome: &cfg.chrome,
-        profile: dir.join("profile"),
+        profile: cfg.profile_dir.join(job.attendance_id.to_string()),
         pulse_sink: &cfg.pulse_sink,
         no_sandbox: cfg.no_sandbox,
     }) {
@@ -257,10 +330,12 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     };
     let url = format!("{}/{}?hl=en", cfg.meet_origin, job.meet_code);
     let leave_by = job.leave_by;
-    let keep = || live.keep_going.load(Ordering::SeqCst) && Utc::now() < leave_by;
+    let keep =
+        || live.keep_going.load(Ordering::SeqCst) && Utc::now() < leave_by && live.lease_valid();
     let mut on_waiting = || {
         set_state(live, "waiting", None);
-        let _ = api.report(job, "waiting", None, None);
+        let r = api.report(job, "waiting", None, None);
+        live.confirmed(&r);
     };
     let joined = meet::join(
         &mut browser,
@@ -275,6 +350,9 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     );
     match joined {
         Ok(meet::JoinOutcome::Admitted) => {}
+        Ok(meet::JoinOutcome::Stopped) if !live.lease_valid() => {
+            return Outcome::Failed("lease could not be renewed; left before recording".into())
+        }
         Ok(meet::JoinOutcome::Stopped) => return Outcome::Completed,
         Ok(meet::JoinOutcome::Refused) => {
             return Outcome::Failed("Google Meet did not let the notetaker join".into())
@@ -285,7 +363,14 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         Err(e) => return Outcome::Failed(format!("joining failed: {e}")),
     }
 
-    // Admitted: record what the meeting sounds like.
+    // Admitted: record what the meeting sounds like. The meeting's own
+    // credential goes to the spool first, so its audio can always be
+    // uploaded later, by this meeting's token only.
+    if let Err(e) = crate::spool::store_token(&cfg.spool_dir, job.attendance_id, &job.device_token)
+    {
+        meet::leave(&mut browser);
+        return Outcome::Failed(format!("spool: {e}"));
+    }
     let client = match recorder::Client::new(&cfg.server, &job.device_token) {
         Ok(c) => c,
         Err(e) => return Outcome::Failed(format!("upload client: {e}")),
@@ -301,7 +386,7 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
     };
     let session = recorder::Session::start(recorder::StartOptions {
         client,
-        dir: dir.join("audio"),
+        dir: dir.clone(),
         ffmpeg: cfg.ffmpeg.clone(),
         inputs: vec![recorder::ffmpeg::Input::LinuxPulse {
             source: format!("{}.monitor", cfg.pulse_sink),
@@ -326,21 +411,22 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         Ok(s) => s,
         Err(e) => {
             meet::leave(&mut browser);
+            crate::spool::forget_if_unused(&cfg.spool_dir, job.attendance_id);
             return Outcome::Failed(format!("recording could not start: {e}"));
         }
     };
     let meeting_id = session.meeting_id.clone();
     set_state(live, "recording", Some(meeting_id.clone()));
-    if let Reported::LeaseLost = api.report(job, "recording", Some(&meeting_id), None) {
-        live.lease_lost.store(true, Ordering::SeqCst);
-        live.keep_going.store(false, Ordering::SeqCst);
-    }
+    let r = api.report(job, "recording", Some(&meeting_id), None);
+    live.confirmed(&r);
+    let mut deadline_stop = false;
     loop {
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(Duration::from_millis(500));
         if !session.is_running() {
             break;
         }
         if !keep() {
+            deadline_stop = !live.lease_valid();
             session.signal(cap_meeting_detector::Signal::UserStop);
             break;
         }
@@ -358,25 +444,46 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
         // Treat the detector's idle warning as "nobody is speaking": keep
         // going until it stops on its own (everyone left).
     }
-    meet::leave(&mut browser);
+    // Capture stops before anything else (FFmpeg closes its last segment).
     session.stop();
+    meet::leave(&mut browser);
     drop(browser);
-    let uploaded = session.wait_uploaded(Duration::from_secs(600));
+    // The uploader's retries are bounded; wait for it to finish so the spool
+    // has exactly one writer before recovery may touch it.
+    while !session.wait_uploaded(Duration::from_secs(60)) {}
     let ev = events.lock().map(|v| v.clone()).unwrap_or_default();
-    let _ = std::fs::remove_dir_all(&dir);
-    if ev
-        .iter()
-        .any(|e| matches!(e, recorder::Event::Finalized { .. }))
-    {
-        Outcome::Completed
-    } else if let Some(recorder::Event::Failed { message, .. }) = ev
-        .iter()
-        .find(|e| matches!(e, recorder::Event::Failed { .. }))
-    {
-        Outcome::Failed(format!("upload failed: {message}"))
-    } else if !uploaded {
-        Outcome::Failed("upload did not finish in time".into())
-    } else {
-        Outcome::Failed("recording ended without being finalized".into())
+    let lost_lease = deadline_stop;
+    match crate::spool::settle(&cfg.spool_dir, job.attendance_id) {
+        crate::spool::Settled::Finalized if lost_lease => Outcome::Failed(
+            "lease could not be renewed; left early, recorded audio was delivered".into(),
+        ),
+        crate::spool::Settled::Finalized => Outcome::Completed,
+        crate::spool::Settled::Kept(why) => {
+            let upload = ev.iter().find_map(|e| match e {
+                recorder::Event::Failed { message, .. } => Some(message.clone()),
+                _ => None,
+            });
+            Outcome::Failed(format!(
+                "{why}{}",
+                upload.map(|m| format!(" ({m})")).unwrap_or_default()
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn lease_deadline_counts_from_send_with_margin() {
+        let sent = Instant::now();
+        assert_eq!(lease_holds_until(sent, 90), sent + Duration::from_secs(80));
+        assert_eq!(lease_holds_until(sent, 20), sent + Duration::from_secs(15));
+        // Nonsense from the server never yields an endless lease.
+        assert_eq!(
+            lease_holds_until(sent, i64::MAX),
+            sent + Duration::from_secs(3_590)
+        );
+        assert!(lease_holds_until(sent, -5) <= sent + Duration::from_secs(1));
     }
 }

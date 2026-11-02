@@ -28,13 +28,14 @@ fn main() {
             std::process::exit(2);
         }
     };
-    // Audio from a previous crash is not resumable without its device token;
-    // the server finalizes what it already received. Never keep it locally.
-    let _ = std::fs::remove_dir_all(&cfg.work_dir);
-    if let Err(e) = std::fs::create_dir_all(&cfg.work_dir) {
-        eprintln!("cap-meeting-bot: work dir: {e}");
+    // Browser profiles are throwaway; audio is not (see spool).
+    let _ = std::fs::remove_dir_all(&cfg.profile_dir);
+    if let Err(e) = cap_meeting_bot::spool::ensure(&cfg.spool_dir) {
+        eprintln!("cap-meeting-bot: spool: {e}");
         std::process::exit(2);
     }
+    let spool = cfg.spool_dir.clone();
+    let cap = cfg.spool_max_bytes;
     let api = match Api::new(cfg) {
         Ok(a) => a,
         Err(e) => {
@@ -44,11 +45,23 @@ fn main() {
     };
     eprintln!("cap-meeting-bot: ready");
     loop {
+        // Finish uploads left by a crash, restart or outage first. This
+        // never joins a meeting again.
+        for id in cap_meeting_bot::spool::recover(&spool) {
+            eprintln!("cap-meeting-bot: recovered and finalized meeting {id}");
+        }
+        let used = cap_meeting_bot::spool::size(&spool);
+        if used > cap {
+            // Fail closed: no new recording that could not be stored.
+            eprintln!("cap-meeting-bot: spool holds {used} bytes (cap {cap}); not attending until uploads drain");
+            std::thread::sleep(Duration::from_secs(30));
+            continue;
+        }
         match api.claim() {
-            Ok(Some(job)) => {
+            Ok(Some((job, lease_until))) => {
                 let id = job.attendance_id;
                 eprintln!("cap-meeting-bot: attending {id}");
-                match run_job(&api, job) {
+                match run_job(&api, job, lease_until) {
                     Outcome::Completed => eprintln!("cap-meeting-bot: {id} completed"),
                     Outcome::Failed(why) => eprintln!("cap-meeting-bot: {id} failed: {why}"),
                     Outcome::LeaseLost => eprintln!("cap-meeting-bot: {id} lease lost"),

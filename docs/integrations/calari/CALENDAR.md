@@ -89,9 +89,19 @@ No paid bot service; everything runs on the existing server.
    receives a Meet code (not a URL), title, display name, `leave_by` and the
    one-meeting device token.
 7. **Attend**: joining → waiting → recording → completed/failed, each report
-   fenced by the lease token (90 s lease, 20 s heartbeat). Cancellation reaches
-   the bot as `continue: false`. A lost runner: lease expiry re-queues it (if
-   nothing was recorded) or finalizes what was uploaded as `interrupted`.
+   fenced by the lease token (`CAP_CALENDAR_BOT_LEASE_SECONDS`, 90 s; 20 s
+   heartbeat). Cancellation reaches the bot as `continue: false`.
+   **Fail-closed lease:** the runner keeps a local deadline = send time of the
+   last report the server confirmed + the granted lease − a margin
+   (min(10 s, lease/4)). Failed, refused or hung reports never extend it; past
+   it the runner stops capturing and leaves, so it is gone before the server
+   could hand the meeting to another runner. Server side, a lapsed lease is
+   re-queued only if no meeting exists for the attendance's device (so a
+   meeting is never recorded twice); otherwise the attendance is failed and
+   its meeting stays open for the runner's recovery upload. A lost runner's
+   open meeting that receives nothing for 30 minutes is finalized with the
+   audio that arrived; its device is revoked only after the meeting is
+   finalized.
 8. **Deliver**: the existing worker transcribes and sends the signed delivery
    (`meeting.source = calendar_bot`, `provider_hint = google_meet`,
    `meeting_url = https://meet.google.com/<code>`). Finished attendances
@@ -106,7 +116,21 @@ input; no stealth plugins, user-agent or WebGL spoofing. Waiting room limit
 `CAP_BOT_WAITING_SECONDS` (600). Leaves when the meeting ends, the server says
 stop, `leave_by` (end + 30 min) passes, or 6 + 3 minutes of silence (everyone
 left). Audio goes through `cap-meeting-recorder` (30 s segments, resumable
-uploads). Profile and local audio are deleted after each meeting and at start.
+uploads). Browser profiles live on tmpfs and are deleted after each meeting.
+
+**Durable spool** (`CAP_BOT_SPOOL_DIR`, `/var/lib/cap-bot`, a private named
+volume `calendar-bot-spool`, 0700): `<attendance>/` holds segments + journal,
+`<attendance>.token` (0600) that meeting's own device token. Nothing is
+deleted until the server confirms the meeting finalized; segments the server
+refused for good are kept for an operator. On start and between meetings the
+runner uploads and finalizes leftovers with each meeting's own token (the
+recorder's recovery); it never rejoins or records again. An unfinished upload
+is reported as `failed` ("audio is kept on the runner…"), never as success.
+Cap: `CAP_BOT_SPOOL_MAX_MB` (2048); above it the runner refuses new meetings
+until uploads drain (fails closed, deletes nothing). Recovery window: until the
+server finalizes the meeting (30 min after the last chunk it received) and the
+device expires (meeting end + 48 h); later, the audio stays in the spool for
+an operator.
 
 ## Configuration
 

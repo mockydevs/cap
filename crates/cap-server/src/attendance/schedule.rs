@@ -30,6 +30,9 @@ pub const IN_PROGRESS: &[&str] = &["claimed", "joining", "waiting", "recording"]
 const PREPARE_MINUTES: i64 = 5;
 const MAX_PREPARE_ATTEMPTS: i32 = 6;
 const MAX_CLAIMS: i32 = 3;
+/// How long a lost runner's open meeting waits for its recovery upload
+/// (counted from the last chunk received) before it is finalized as is.
+pub const RECOVERY_GRACE_MINUTES: i64 = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Routing {
@@ -725,7 +728,9 @@ async fn prepare(
     .bind(&device_hash)
     .bind(pairing_uuid)
     .bind(&name)
-    .bind(ends + Duration::hours(12))
+    // Long enough for a runner's recovery after an outage; revoked earlier
+    // once the attendance and its meeting are finished.
+    .bind(ends + Duration::hours(48))
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -758,7 +763,7 @@ pub async fn expire(state: &AppState, now: DateTime<Utc>) -> Result<()> {
     .bind(now)
     .fetch_all(&state.db)
     .await?;
-    for (id, st, meeting, attempts, ends) in lost {
+    for (id, st, linked_meeting, attempts, ends) in lost {
         let mut tx = state.db.begin().await?;
         let still: Option<String> = sqlx::query_scalar(
             "SELECT state FROM calendar_attendances WHERE id = $1 AND lease_until < $2 FOR UPDATE",
@@ -770,10 +775,31 @@ pub async fn expire(state: &AppState, now: DateTime<Utc>) -> Result<()> {
         if still.as_deref() != Some(st.as_str()) {
             continue;
         }
-        if let Some(m) = meeting {
-            finalize_interrupted(&mut tx, m, now).await?;
+        // Any meeting made with this attendance's device counts, even one the
+        // runner had not reported yet: then it is never re-queued, so a second
+        // runner can never record the same meeting. The lost runner's spool
+        // may still upload it; the recovery sweep below finalizes otherwise.
+        let any_meeting: Option<Uuid> = match linked_meeting {
+            Some(m) => Some(m),
+            None => sqlx::query_scalar(
+                "SELECT m.id FROM meeting_sessions m JOIN calendar_attendances a ON a.device_token_hash = m.device_token_hash
+                 WHERE a.id = $1 ORDER BY m.created_at LIMIT 1",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?,
+        };
+        if linked_meeting.is_none() {
+            if let Some(m) = any_meeting {
+                sqlx::query("UPDATE calendar_attendances SET meeting_id = $2 WHERE id = $1")
+                    .bind(id)
+                    .bind(m)
+                    .execute(&mut *tx)
+                    .await?;
+            }
         }
-        let retry = meeting.is_none() && st != "cancelled" && attempts < MAX_CLAIMS && ends > now;
+        let retry =
+            any_meeting.is_none() && st != "cancelled" && attempts < MAX_CLAIMS && ends > now;
         if retry {
             sqlx::query("UPDATE calendar_attendances SET state = 'ready', lease_token = NULL, lease_until = NULL, updated_at = now() WHERE id = $1")
                 .bind(id)
@@ -786,7 +812,7 @@ pub async fn expire(state: &AppState, now: DateTime<Utc>) -> Result<()> {
             } else {
                 "failed"
             };
-            sqlx::query("UPDATE calendar_attendances SET state = $2, lease_token = NULL, lease_until = NULL, failure = coalesce(failure, 'bot stopped responding'), updated_at = now() WHERE id = $1")
+            sqlx::query("UPDATE calendar_attendances SET state = $2, lease_token = NULL, lease_until = NULL, failure = coalesce(failure, 'runner stopped responding; recorded audio is uploaded by its recovery if possible'), updated_at = now() WHERE id = $1")
                 .bind(id)
                 .bind(next)
                 .execute(&mut *tx)
@@ -804,11 +830,28 @@ pub async fn expire(state: &AppState, now: DateTime<Utc>) -> Result<()> {
         .bind(now)
         .execute(&state.db)
         .await?;
-    // Finished attendances keep no usable device.
+    // A lost runner's meeting that received nothing for the recovery grace
+    // is finalized with the audio that did arrive.
+    let stale: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT m.id FROM meeting_sessions m JOIN calendar_attendances a ON a.device_token_hash = m.device_token_hash
+         WHERE m.state = 'recording' AND a.lease_token IS NULL AND a.state IN ('completed', 'cancelled', 'failed')
+           AND coalesce(m.last_upload_at, m.created_at) < $1",
+    )
+    .bind(now - Duration::minutes(RECOVERY_GRACE_MINUTES))
+    .fetch_all(&state.db)
+    .await?;
+    for m in stale {
+        let mut tx = state.db.begin().await?;
+        finalize_interrupted(&mut tx, m, now).await?;
+        tx.commit().await?;
+    }
+    // Finished attendances keep no usable device, except while their
+    // meeting is still open for the runner's recovery upload.
     sqlx::query(
-        "UPDATE meeting_devices SET revoked_at = $1 WHERE revoked_at IS NULL AND token_hash IN (
+        "UPDATE meeting_devices d SET revoked_at = $1 WHERE revoked_at IS NULL AND token_hash IN (
            SELECT device_token_hash FROM calendar_attendances WHERE device_token_hash IS NOT NULL
-             AND state IN ('completed', 'cancelled', 'failed') AND lease_token IS NULL)",
+             AND state IN ('completed', 'cancelled', 'failed') AND lease_token IS NULL)
+           AND NOT EXISTS (SELECT 1 FROM meeting_sessions m WHERE m.device_token_hash = d.token_hash AND m.state = 'recording')",
     )
     .bind(now)
     .execute(&state.db)

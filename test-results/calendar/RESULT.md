@@ -1,5 +1,36 @@
 # Cap calendar attendance: implementation result
 
+## Review round 2 (fixes for review-round-1.md)
+- P1 #1 lease: runner keeps a local fail-closed deadline (send time of last
+  confirmed report + granted lease − min(10 s, lease/4)); failed/hung reports
+  never extend it; it stops capture and leaves by then; heartbeat thread is
+  never waited on. Server returns `lease_seconds` on every report
+  (`CAP_CALENDAR_BOT_LEASE_SECONDS`, 20–600, default 90), re-queues a lapsed
+  lease only when no meeting exists for the device, keeps the meeting open for
+  recovery (finalized after 30 min without chunks), revokes the device only
+  once the meeting is finalized.
+- P1 #2 spool: durable private spool volume (`/var/lib/cap-bot`, named volume
+  `calendar-bot-spool`), per-meeting token file (0600), deleted only after the
+  server confirms finalize (quarantined audio kept), startup/idle recovery via
+  the recorder's `recover_all` with that meeting's own token only, never
+  rejoins; spool cap (`CAP_BOT_SPOOL_MAX_MB`, 2048) refuses new meetings
+  instead of deleting; unfinished upload reported as failed.
+- Evidence: `bot-e2e-real-whisper.log` exit 0, 3 container tests:
+  `unconfirmed_lease_stops_capture_before_server_expiry` (reports hung; runner
+  left 15.2 s after the last confirmed report, before the 20 s server lease;
+  meeting ended before lease; one meeting, one join, delivered once) and
+  `upload_outage_and_restart_deliver_once_without_rejoining` (uploads 503 for
+  the whole meeting → failed "kept on the runner", 0 chunks on server, tick
+  did not revoke, container removed and replaced on same volume, uploads
+  restored → same audio finalized + delivered once with real Whisper, one
+  meeting, one join, spool empty).
+- Counter-evidence: `counter-evidence-48348fd.log` (exit 101): the same two
+  tests against a runner image built from 48348fd both fail (never left the
+  meeting; audio deleted, "upload failed").
+- Workspace 138 passed / 0 failed; clippy 0 warnings; fmt clean; prod image
+  rebuilt (`bot-image-prod-*.log`).
+
+
 Owner: claude:9bd968c2-5830-42fd-a3fc-673ac2d8d96e (Claude Desktop)
 Worktree: /home/don/code/cap-calendar, branch codex/cap-calendar, base 4350356.
 Commits: 1d81430 (implementation), merge of origin/main 4c722b4 (root privacy
@@ -34,7 +65,7 @@ were kept and extended.
 ## Evidence (test-results/calendar/)
 | Command | Exit | Result |
 | --- | --- | --- |
-| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet` | 0 | 133 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below) |
+| `CAP_TEST_DATABASE_URL=… cargo test --workspace --features cap-meeting-bot/fake-meet` | 0 | 138 passed, 0 failed (`cargo-test-workspace.log`; attend test self-skips here, run separately below) |
 | `… CAP_TEST_BOT_IMAGE=cap-meeting-bot:calendar-test CAP_TEST_WHISPER_MODEL=ggml-tiny.en cargo test -p cap-meeting-bot --features fake-meet,cap-server/local-whisper --test attend` | 0 | real runner container joined local Meet stand-in, trusted clicks, name "Calari Notetaker", mic/cam off, waited, admitted, recorded synthetic speech, left on end (31 s); real Whisper transcript; signed delivery verified; client routed; receipt rcpt-1; device revoked (`bot-e2e-real-whisper.log`) |
 | `cargo clippy --workspace --all-targets --features cap-meeting-bot/fake-meet` | 0 | 0 warnings (`clippy.log`) |
 | `cargo fmt --all -- --check` | 0 | (`fmt.log`) |

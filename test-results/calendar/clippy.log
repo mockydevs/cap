@@ -1,9 +1,2 @@
-    Checking siphasher v1.0.4
-    Checking phf_shared v0.12.1
-    Checking phf v0.12.1
-    Checking chrono-tz v0.10.4
-    Checking cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
-    Checking cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
-    Checking cap-meeting-recorder v0.1.0 (/home/don/code/cap-calendar/crates/meeting-recorder)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.33s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
 exit=0

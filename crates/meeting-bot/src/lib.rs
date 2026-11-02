@@ -5,6 +5,7 @@
 pub mod cdp;
 pub mod meet;
 pub mod runner;
+pub mod spool;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -50,7 +51,13 @@ pub fn config_from_env() -> Result<runner::Config, String> {
         runner_token,
         chrome: var("CHROME_PATH").unwrap_or_else(|| "google-chrome".into()),
         ffmpeg: var("FFMPEG_PATH").unwrap_or_else(|| "ffmpeg".into()),
-        work_dir: PathBuf::from(var("CAP_BOT_WORK_DIR").unwrap_or_else(|| "/tmp/cap-bot".into())),
+        spool_dir: PathBuf::from(
+            var("CAP_BOT_SPOOL_DIR").unwrap_or_else(|| "/var/lib/cap-bot".into()),
+        ),
+        spool_max_bytes: secs("CAP_BOT_SPOOL_MAX_MB", 2048)?.as_secs() * 1024 * 1024,
+        profile_dir: PathBuf::from(
+            var("CAP_BOT_PROFILE_DIR").unwrap_or_else(|| "/tmp/cap-bot-profiles".into()),
+        ),
         pulse_sink: var("CAP_BOT_PULSE_SINK").unwrap_or_else(|| "cap_bot".into()),
         no_sandbox: matches!(var("CAP_BOT_CHROME_NO_SANDBOX").as_deref(), Some("1")),
         meet_origin: meet_origin(),

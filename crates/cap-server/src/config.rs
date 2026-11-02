@@ -151,6 +151,8 @@ pub struct CalendarConfig {
     pub bot_display_name: String,
     /// The Google account must have the staff member's Calari email.
     pub require_same_email: bool,
+    /// Runner lease; renewed by each report.
+    pub bot_lease_seconds: i64,
     /// Zone for times shown to staff (instants are always stored in UTC).
     pub display_tz: chrono_tz::Tz,
     /// Calari staff (not only admins) may connect calendars. Off until the
@@ -334,6 +336,7 @@ impl Config {
                     var("CAP_CALENDAR_REQUIRE_SAME_EMAIL").as_deref(),
                     Some("0" | "false")
                 ),
+                bot_lease_seconds: parse_var("CAP_CALENDAR_BOT_LEASE_SECONDS", 90)?,
                 display_tz: var("CAP_DISPLAY_TIMEZONE")
                     .unwrap_or_else(|| "America/New_York".into())
                     .parse()
@@ -462,6 +465,9 @@ impl Config {
                 .all(|b| *b == c.encryption_key.0[0])
             {
                 bail!("CAP_CALENDAR_ENCRYPTION_KEY is not random");
+            }
+            if !(20..=600).contains(&c.bot_lease_seconds) {
+                bail!("CAP_CALENDAR_BOT_LEASE_SECONDS must be 20-600");
             }
             if c.bot_token_sha256.len() != 64 {
                 bail!("calendar bot token hash is invalid");
@@ -626,6 +632,7 @@ pub(crate) mod tests {
             horizon: Duration::from_secs(86_400),
             bot_display_name: "Calari Notetaker".into(),
             require_same_email: true,
+            bot_lease_seconds: 90,
             display_tz: chrono_tz::America::New_York,
             allow_staff: false,
         });

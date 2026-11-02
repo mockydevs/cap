@@ -450,6 +450,14 @@ impl World {
         transcription: TranscriptionConfig,
         allow_staff: bool,
     ) -> Option<Self> {
+        Self::with_settings(transcription, allow_staff, 90).await
+    }
+
+    pub async fn with_settings(
+        transcription: TranscriptionConfig,
+        allow_staff: bool,
+        bot_lease_seconds: i64,
+    ) -> Option<Self> {
         let Ok(admin_url) = std::env::var("CAP_TEST_DATABASE_URL") else {
             eprintln!("SKIPPED: set CAP_TEST_DATABASE_URL to run calendar tests");
             return None;
@@ -521,6 +529,7 @@ impl World {
                 horizon: Duration::from_secs(14 * 86_400),
                 bot_display_name: "Calari Notetaker".into(),
                 require_same_email: true,
+                bot_lease_seconds,
                 display_tz: "America/New_York".parse().unwrap(),
                 allow_staff,
             }),

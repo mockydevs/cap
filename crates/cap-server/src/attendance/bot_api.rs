@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
-pub const LEASE_SECONDS: i64 = 90;
 /// Longest a bot may stay after the scheduled end before it must leave.
 pub const OVERRUN_MINUTES: i64 = 30;
 
@@ -122,7 +121,7 @@ pub async fn claim(
     .bind(now)
     .bind(lead)
     .bind(token)
-    .bind(LEASE_SECONDS as f64)
+    .bind(cal.bot_lease_seconds as f64)
     .fetch_optional(&mut *tx)
     .await?;
     let Some(row) = row else {
@@ -164,7 +163,7 @@ pub async fn claim(
         ends_at: ends,
         leave_by: ends + Duration::minutes(OVERRUN_MINUTES),
         device_token,
-        lease_seconds: LEASE_SECONDS,
+        lease_seconds: cal.bot_lease_seconds,
     })
     .into_response())
 }
@@ -196,6 +195,10 @@ pub struct ReportAnswer {
     #[serde(rename = "continue")]
     pub keep_going: bool,
     pub leave_by: DateTime<Utc>,
+    /// The lease now runs this long from when the server handled the report.
+    /// A runner must stop capturing once it cannot confirm a renewal within
+    /// this time of sending one.
+    pub lease_seconds: i64,
 }
 
 fn rank(state: &str) -> Option<u8> {
@@ -217,6 +220,12 @@ pub async fn report(
     Json(req): Json<Report>,
 ) -> Result<impl IntoResponse, ApiError> {
     let now = Utc::now();
+    let lease_seconds = state
+        .cfg
+        .calendar
+        .as_ref()
+        .map(|c| c.bot_lease_seconds)
+        .ok_or(ApiError::internal())?;
     let to = rank(&req.state)
         .filter(|r| *r > 0)
         .ok_or(ApiError::bad("invalid_state"))?;
@@ -295,7 +304,7 @@ pub async fn report(
         )
         .bind(id)
         .bind(&next_state)
-        .bind(now + Duration::seconds(LEASE_SECONDS))
+        .bind(now + Duration::seconds(lease_seconds))
         .execute(&mut *tx)
         .await?;
     }
@@ -313,5 +322,6 @@ pub async fn report(
     Ok(Json(ReportAnswer {
         keep_going: !cancelled && !terminal && now < leave_by,
         leave_by,
+        lease_seconds,
     }))
 }
