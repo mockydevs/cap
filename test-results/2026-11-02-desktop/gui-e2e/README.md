@@ -31,3 +31,14 @@ an async command. It is now created and dropped only on a blocking thread
 
 Not covered: real microphones/speakers, a real browser opening the link, Wayland,
 Windows/macOS GUI.
+
+## Final run on source 4b93215 (after keyring and 0700 fixes)
+
+Screenshots, `delivery-summary.json` and `audio-content.txt` above are from
+this run, with the DEBUG TEST package (sha256
+76541c752edfeb3f956b218fab12a5979c2af0b7d9cd01024d6f1ea6b84f7bb1, never for
+publication). No meeting existed before the click; FFmpeg recorded Pulse
+default + speakers monitor; 2 keyring items; meeting folder mode 700
+(`meeting-folder-modes.txt`); no panics; signed delivery verified, title from
+the link, user_stopped, not partial; both tones present (838/837), controls
+silent. The production package is described in `../final-linux-deb.txt`.
