@@ -151,6 +151,8 @@ pub struct CalendarConfig {
     pub bot_display_name: String,
     /// The Google account must have the staff member's Calari email.
     pub require_same_email: bool,
+    /// Zone for times shown to staff (instants are always stored in UTC).
+    pub display_tz: chrono_tz::Tz,
     /// Calari staff (not only admins) may connect calendars. Off until the
     /// meetings library enforces per-staff ownership.
     pub allow_staff: bool,
@@ -332,6 +334,12 @@ impl Config {
                     var("CAP_CALENDAR_REQUIRE_SAME_EMAIL").as_deref(),
                     Some("0" | "false")
                 ),
+                display_tz: var("CAP_DISPLAY_TIMEZONE")
+                    .unwrap_or_else(|| "America/New_York".into())
+                    .parse()
+                    .map_err(|_| {
+                        anyhow::anyhow!("CAP_DISPLAY_TIMEZONE must be an IANA zone name")
+                    })?,
                 allow_staff: matches!(
                     var("CAP_CALENDAR_ALLOW_STAFF").as_deref(),
                     Some("1" | "true")
@@ -618,6 +626,7 @@ pub(crate) mod tests {
             horizon: Duration::from_secs(86_400),
             bot_display_name: "Calari Notetaker".into(),
             require_same_email: true,
+            display_tz: chrono_tz::America::New_York,
             allow_staff: false,
         });
         c

@@ -1,12 +1,6 @@
-   Compiling clang-sys v1.9.1
-   Compiling axum v0.8.9
-   Compiling bindgen v0.71.1
-   Compiling whisper-rs-sys v0.14.1
-   Compiling whisper-rs v0.15.1
-   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
    Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.33s
-     Running tests/attend.rs (target/debug/deps/attend-f12cb76726d0a8d1)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.92s
+     Running tests/attend.rs (target/debug/deps/attend-fce76c9d269f0d00)
 
 running 1 test
 whisper_init_from_file_with_params_no_state: loading model from '/home/don/.cache/cap-whisper/ggml-tiny.en.bin'
@@ -36,11 +30,11 @@ whisper_model_load:          CPU total size =    77.11 MB
 whisper_model_load: model size    =   77.11 MB
 runner log:
 cap-meeting-bot: ready
-cap-meeting-bot: attending 513b1862-d5c9-4f6c-9fe9-bbd9f81a17fc
-cap-meeting-bot: 513b1862-d5c9-4f6c-9fe9-bbd9f81a17fc completed
+cap-meeting-bot: attending b846e090-550a-471a-be79-ccc8149324c8
+cap-meeting-bot: b846e090-550a-471a-be79-ccc8149324c8 completed
 
 page events: [Object {"k": String("mic"), "v": Bool(true)}, Object {"k": String("cam"), "v": Bool(true)}, Object {"k": String("join"), "v": Object {"name": String("Calari Notetaker"), "path": String("/abc-defg-hij"), "trusted": Bool(true)}}, Object {"k": String("admitted"), "v": Bool(true)}, Object {"k": String("playing"), "v": Bool(true)}, Object {"k": String("ended"), "v": Bool(true)}]
-attended in 31.30733387s
+attended in 31.281361046s
 whisper_backend_init_gpu: no GPU found
 whisper_init_state: kv self size  =    3.15 MB
 whisper_init_state: kv cross size =    9.44 MB
@@ -125,7 +119,7 @@ whisper_full_with_state: decoder  0: score = -0.39510, result_len =  63, avg_log
 whisper_full_with_state: best decoder = 0
 single timestamp ending - skip entire chunk
 seek = 2219, seek_delta = 2219
-transcribed and delivered in 986.858808ms
+transcribed and delivered in 805.795206ms
 transcript provider/model: "cap-whisper" "ggml-tiny.en"
 transcript: i need a speaking. this is a staff briefing for our client and members to do.
 claire, please send the lunch notes by friday. claire says yes. i will send the lunch notes by friday.
@@ -133,6 +127,6 @@ this task is assigned to claire. we also reviewed the website onboarding timelin
 Calari receipt: Some("rcpt-1")
 test runner_container_attends_records_and_delivers ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.66s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.63s
 
 exit=0

@@ -125,6 +125,7 @@ Cap server (all required when `CAP_CALENDAR_ENABLED=1`; boot fails otherwise):
 | `CAP_CALENDAR_HORIZON_DAYS` | default 14 |
 | `CAP_CALENDAR_BOT_NAME` | name shown in the meeting (default "Calari Notetaker") |
 | `CAP_CALENDAR_REQUIRE_SAME_EMAIL` | default on; `0` allows a different Google account |
+| `CAP_DISPLAY_TIMEZONE` | zone for times on `/calendar` (default `America/New_York`, shown with EST/EDT); storage stays UTC |
 | `CAP_CALENDAR_ALLOW_STAFF` | default off: only Calari admins may use `/calendar` until the meetings library enforces per-staff ownership (separate phase) |
 | `CAP_MEETING_INTEGRATIONS[].calendar_resolve_url`, `.calendar_pairing_url` | Calari endpoints (both, https) |
 

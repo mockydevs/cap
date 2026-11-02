@@ -103,8 +103,24 @@ fn forbidden() -> Response {
         .into_response()
 }
 
-fn fmt_time(t: DateTime<Utc>) -> String {
-    t.format("%a %d %b, %H:%M UTC").to_string()
+fn fmt_time(t: DateTime<Utc>, tz: chrono_tz::Tz) -> String {
+    // Zone abbreviation (EST/EDT) follows daylight saving.
+    t.with_timezone(&tz)
+        .format("%a %d %b, %H:%M %Z")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tz_tests {
+    #[test]
+    fn eastern_time_follows_daylight_saving() {
+        use chrono::TimeZone;
+        let summer = chrono::Utc.with_ymd_and_hms(2026, 7, 1, 16, 0, 0).unwrap();
+        let winter = chrono::Utc.with_ymd_and_hms(2026, 12, 1, 16, 0, 0).unwrap();
+        let ny = chrono_tz::America::New_York;
+        assert_eq!(super::fmt_time(summer, ny), "Wed 01 Jul, 12:00 EDT");
+        assert_eq!(super::fmt_time(winter, ny), "Tue 01 Dec, 11:00 EST");
+    }
 }
 
 #[derive(Deserialize)]
@@ -185,7 +201,7 @@ pub async fn page(State(state): State<AppState>, user: WebUser) -> Response {
                     p { "Google account: " strong { (c.account_email) } }
                     @if let Some(m) = &meta {
                         @if let Some(t) = m.get::<Option<DateTime<Utc>>, _>("last_synced_at") {
-                            p.muted.small { "Last checked " (fmt_time(t)) }
+                            p.muted.small { "Last checked " (fmt_time(t, cal.display_tz)) }
                         }
                         @if let Some(err) = m.get::<Option<String>, _>("last_error") {
                             p.error.small { "Last check failed: " (err) }
@@ -261,7 +277,7 @@ pub async fn page(State(state): State<AppState>, user: WebUser) -> Response {
                             div {
                                 div.title { (r.get::<String, _>("title")) }
                                 div.meta {
-                                    @if let Some(t) = r.get::<Option<DateTime<Utc>>, _>("starts_at") { span { (fmt_time(t)) } }
+                                    @if let Some(t) = r.get::<Option<DateTime<Utc>>, _>("starts_at") { span { (fmt_time(t, cal.display_tz)) } }
                                     span { @match &routing {
                                         Some(schedule::Routing::Internal) => "Internal (no client)",
                                         Some(schedule::Routing::Client(id)) => (candidates.iter().find(|c| c.client_id == id.to_string()).map(|c| c.name.as_str()).unwrap_or("Client")),

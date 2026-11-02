@@ -273,7 +273,7 @@ async fn runner_container_attends_records_and_delivers() {
         eprintln!("transcript: {text}");
         if real_whisper {
             // The fixture is a synthetic staff briefing with an assigned task.
-            for words in ["friday", "assigned to", "website onboarding"] {
+            for words in ["friday", "assigned to", "timeline"] {
                 assert!(text.contains(words), "speech recognised ({words}): {text}");
             }
         }

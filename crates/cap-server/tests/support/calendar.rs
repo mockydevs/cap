@@ -521,6 +521,7 @@ impl World {
                 horizon: Duration::from_secs(14 * 86_400),
                 bot_display_name: "Calari Notetaker".into(),
                 require_same_email: true,
+                display_tz: "America/New_York".parse().unwrap(),
                 allow_staff,
             }),
         };

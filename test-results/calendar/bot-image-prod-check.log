@@ -1,0 +1,5 @@
+uid=10002(capbot) gid=997(capbot) groups=997(capbot)
+cap-bot.json
+0
+cap-meeting-bot: CAP_SERVER_URL must be https
+bot-exit=2
