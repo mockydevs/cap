@@ -161,6 +161,10 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
         "-hide_banner".into(),
         "-loglevel".into(),
         "error".into(),
+        // FFmpeg 7+ reads the "q" sent at Stop only once per stats period
+        // (0.5 s by default), so it kept recording up to 0.5 s after Stop.
+        "-stats_period".into(),
+        "0.05".into(),
         "-y".into(),
     ];
     for input in inputs {
@@ -309,6 +313,7 @@ mod tests {
         assert!(joined.contains(&*segments.to_string_lossy()));
         assert!(joined.contains(&format!("-segment_list {}", list.to_string_lossy())));
         assert!(joined.ends_with("-flush_packets 1 -f s16le pipe:1"));
+        assert!(joined.starts_with("-hide_banner -loglevel error -stats_period 0.05 -y"));
         assert_eq!(
             joined.matches("-flush_packets 1").count(),
             2,

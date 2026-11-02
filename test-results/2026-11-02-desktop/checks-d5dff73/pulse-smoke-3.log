@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 10456 ms of ~10 s, inputs ready after 1468 ms: [(0, 2011), (2011, 4011), (4011, 6011), (6011, 8011), (8011, 10011), (10011, 10456)]
+test linux_records_the_microphone_and_the_speakers_through_pulse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 15.05s
+
+[PulseAudio outdev @ 0x597d6b747780] PulseAudio stream is in invalid state.
+[aost#0:0/pcm_s16le @ 0x597d6b747c80] Error submitting a packet to the muxer: Generic error in an external library
+[out#0/pulse @ 0x597d6b7468c0] Error muxing a packet
+[PulseAudio outdev @ 0x59e85b12a780] PulseAudio stream is in invalid state.
+[aost#0:0/pcm_s16le @ 0x59e85b12ac80] Error submitting a packet to the muxer: Generic error in an external library
+[out#0/pulse @ 0x59e85b1298c0] Error muxing a packet

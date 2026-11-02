@@ -832,7 +832,14 @@ fn control_loop(mut c: ControlCtx) {
             }
             _ => last_warn = None,
         }
-        std::thread::sleep(Duration::from_millis(250));
+        // Wait for the next signal instead of sleeping, so Stop takes effect
+        // at once rather than up to 250 ms later (audio after Stop is never
+        // recorded).
+        if let Ok(sig) = c.rx.recv_timeout(Duration::from_millis(250)) {
+            if let Ok(mut d) = c.detector.lock() {
+                d.signal(c.clock.elapsed().as_millis() as u64, sig);
+            }
+        }
     };
     if let Ok(mut r) = c.stop_reason.lock() {
         *r = Some(reason);
