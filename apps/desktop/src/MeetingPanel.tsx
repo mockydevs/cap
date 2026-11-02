@@ -153,7 +153,7 @@ export function MeetingPanel({
                 disabled={busy}
                 onClick={() => void acceptLink()}
               >
-                Start recording
+                {busy ? "Starting…" : "Start recording"}
               </button>
               <button className="btn btn-ghost" onClick={() => setLink(null)}>
                 Not now
@@ -267,7 +267,7 @@ export function MeetingPanel({
             disabled={busy}
             onClick={() => void start()}
           >
-            Start recording
+            {busy ? "Starting…" : "Start recording"}
           </button>
           <button
             className="btn btn-ghost"

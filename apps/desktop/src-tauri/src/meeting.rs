@@ -260,6 +260,8 @@ pub async fn meeting_start(
                 let _ = emitter.emit("meeting-event", ev);
             }),
             upload_interval: std::time::Duration::from_secs(3),
+            // Starting... until capture produces audio; then Recording.
+            ready_timeout: std::time::Duration::from_secs(15),
         })
         .map_err(|e| e.to_string())?;
         keep_credential(session, |id| {

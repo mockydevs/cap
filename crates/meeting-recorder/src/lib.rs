@@ -457,6 +457,9 @@ pub struct StartOptions {
     pub on_event: Arc<dyn Fn(Event) + Send + Sync>,
     /// How often the uploader looks for finished segments.
     pub upload_interval: Duration,
+    /// Longest wait for the first captured audio before giving up; the
+    /// session counts as recording only after it arrives.
+    pub ready_timeout: Duration,
 }
 
 pub struct Session {
@@ -472,25 +475,7 @@ impl Session {
         private_dir(&opts.dir)?;
         // Before the meeting exists on the server, so a missing output
         // device is reported without leaving an empty meeting behind.
-        let (inputs, system_audio) = start_system_audio(&opts.inputs)?;
-        let meeting = opts.client.create_meeting(&CreateMeetingRequest {
-            title: opts.title.chars().take(200).collect(),
-            idempotency_key: uuid::Uuid::new_v4().to_string(),
-            started_at: chrono::Utc::now(),
-            capture_mode: opts.mode,
-            provider_hint: None,
-            meeting_url: None,
-        })?;
-        let journal = Arc::new(Mutex::new(Journal {
-            meeting_id: meeting.id.clone(),
-            server: opts.client.server.clone(),
-            mode: opts.mode,
-            uploaded: Vec::new(),
-            quarantined: Vec::new(),
-            stop_reason: None,
-            finalized: false,
-        }));
-        lock(&journal)?.save(&opts.dir)?;
+        let (inputs, mut system_audio) = start_system_audio(&opts.inputs)?;
 
         let mut child = Command::new(&opts.ffmpeg)
             .args(ffmpeg::args(
@@ -513,10 +498,56 @@ impl Session {
         let detector = Arc::new(Mutex::new(Detector::new(opts.detector, 0)));
         let clock = Instant::now();
         let pcm_alive = Arc::new(AtomicBool::new(true));
+        let (ready_tx, ready_rx) = mpsc::channel();
         {
             let detector = detector.clone();
             let alive = pcm_alive.clone();
-            std::thread::spawn(move || pcm_reader(stdout, detector, clock, alive));
+            std::thread::spawn(move || pcm_reader(stdout, detector, clock, alive, Some(ready_tx)));
+        }
+        // "Recording" is reported only once the mixed capture produces audio
+        // (silence counts): some devices take seconds to start (a fresh
+        // PulseAudio about 2 s), and words spoken before that would be lost.
+        // The meeting is created on the server only after this, so a device
+        // that never starts leaves nothing behind.
+        let abort =
+            |child: &mut Child, system_audio: &mut Vec<system_audio::Loopback>, why: String| {
+                let _ = child.kill();
+                let _ = child.wait();
+                for capture in system_audio.iter_mut() {
+                    capture.stop();
+                }
+                let _ = std::fs::remove_dir_all(&opts.dir);
+                Error::Other(why)
+            };
+        if ready_rx.recv_timeout(opts.ready_timeout).is_err() {
+            return Err(abort(
+                &mut child,
+                &mut system_audio,
+                "Cap could not start recording: no audio arrived from the microphone or the computer's sound. Check the devices and try again.".into(),
+            ));
+        }
+        let meeting = match opts.client.create_meeting(&CreateMeetingRequest {
+            title: opts.title.chars().take(200).collect(),
+            idempotency_key: uuid::Uuid::new_v4().to_string(),
+            started_at: chrono::Utc::now(),
+            capture_mode: opts.mode,
+            provider_hint: None,
+            meeting_url: None,
+        }) {
+            Ok(meeting) => meeting,
+            Err(e) => return Err(abort(&mut child, &mut system_audio, e.to_string())),
+        };
+        let journal = Arc::new(Mutex::new(Journal {
+            meeting_id: meeting.id.clone(),
+            server: opts.client.server.clone(),
+            mode: opts.mode,
+            uploaded: Vec::new(),
+            quarantined: Vec::new(),
+            stop_reason: None,
+            finalized: false,
+        }));
+        if let Err(e) = lock(&journal).and_then(|j| j.save(&opts.dir)) {
+            return Err(abort(&mut child, &mut system_audio, e.to_string()));
         }
         let capture_done = Arc::new(AtomicBool::new(false));
         let stop_reason = Arc::new(Mutex::new(None::<StopReason>));
@@ -600,10 +631,14 @@ fn pcm_reader(
     detector: Arc<Mutex<Detector>>,
     clock: Instant,
     alive: Arc<AtomicBool>,
+    mut ready: Option<mpsc::Sender<()>>,
 ) {
     // 100 ms frames of s16le mono.
     let mut buf = vec![0u8; (ffmpeg::PCM_RATE as usize / 10) * 2];
     while out.read_exact(&mut buf).is_ok() {
+        if let Some(tx) = ready.take() {
+            let _ = tx.send(());
+        }
         let mut sum = 0f64;
         for pair in buf.chunks_exact(2) {
             let v = f64::from(i16::from_le_bytes([pair[0], pair[1]])) / 32768.0;

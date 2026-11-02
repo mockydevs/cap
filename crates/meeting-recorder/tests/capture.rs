@@ -187,6 +187,7 @@ fn start_with(
         watch_window: None,
         on_event: Arc::new(move |ev| sink.lock().unwrap().push(ev)),
         upload_interval: Duration::from_millis(500),
+        ready_timeout: Duration::from_secs(15),
     })
     .unwrap();
     (s, events)
@@ -536,6 +537,139 @@ fn stop_keeps_audio_up_to_stop_and_nothing_after() {
         before_stop.as_secs_f64()
     );
     assert!(after < before / 20.0, "audio from after Stop was recorded");
+    e.rt.block_on(e.state.db.close());
+}
+
+/// "Recording" is reported only once capture produces audio: a source that
+/// takes 2 s to start keeps the session starting, and the first sound after
+/// that is in the recording.
+#[cfg(unix)]
+#[test]
+fn recording_starts_only_once_audio_arrives_and_keeps_the_first_sound() {
+    use cap_meeting_recorder::system_audio::{Pacer, FRAME_BYTES};
+    use std::io::Write;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let fifo = root.join("slow-device.pcm");
+    assert!(std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap()
+        .success());
+    let done = Arc::new(AtomicBool::new(false));
+    let writer = {
+        let (fifo, done) = (fifo.clone(), done.clone());
+        std::thread::spawn(move || {
+            // The "device" starts 2 s late, then plays 700 Hz for 0.5 s
+            // (the first words) and 440 Hz after that.
+            std::thread::sleep(Duration::from_secs(2));
+            let mut out = std::fs::OpenOptions::new().write(true).open(&fifo).unwrap();
+            let start = Instant::now();
+            let mut pacer = Pacer::new(start);
+            let mut n = 0u64;
+            while !done.load(Ordering::SeqCst) {
+                let freq = if start.elapsed() < Duration::from_millis(500) {
+                    700.0
+                } else {
+                    440.0
+                };
+                let plan = pacer.plan(Instant::now(), 480);
+                let mut buf = Vec::with_capacity(plan.keep as usize * FRAME_BYTES);
+                for _ in 0..plan.keep {
+                    let v = ((n as f32) * freq * std::f32::consts::TAU / 48_000.0).sin() * 0.4;
+                    n += 1;
+                    buf.extend(v.to_le_bytes());
+                    buf.extend(v.to_le_bytes());
+                }
+                if out.write_all(&buf).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        })
+    };
+    let asked = Instant::now();
+    let (mut session, _events) = start_with(
+        Client::new(&e.server, &e.token).unwrap(),
+        &e.ffmpeg,
+        &d,
+        vec![Input::PcmPipe {
+            path: fifo.to_string_lossy().into_owned(),
+        }],
+        CaptureMode::Audio,
+        DetectorConfig::default(),
+    );
+    let starting = asked.elapsed();
+    assert!(
+        starting >= Duration::from_millis(1_900),
+        "reported recording after {starting:?}, before any audio"
+    );
+    std::thread::sleep(Duration::from_secs(3));
+    session.stop();
+    done.store(true, Ordering::SeqCst);
+    let _ = writer.join();
+    assert!(session.wait_uploaded(Duration::from_secs(60)));
+    let samples = decoded_segments(&e.ffmpeg, &d);
+    let head = &samples[..samples.len().min(8_000)]; // first second
+    let (first, later) = (tone_level(head, 700.0), tone_level(&samples, 440.0));
+    eprintln!(
+        "starting took {starting:?}; kept {:.2} s; first second 700 Hz {first:.1}; 440 Hz {later:.1}",
+        samples.len() as f64 / 8000.0
+    );
+    assert!(
+        first > later / 4.0,
+        "the first sound after Recording is missing"
+    );
+    assert!(samples.len() as f64 / 8000.0 >= 2.5);
+    e.rt.block_on(e.state.db.close());
+}
+
+/// A device that never produces audio: starting fails within the time
+/// limit, FFmpeg is stopped, no meeting exists on the server and no local
+/// folder is left.
+#[cfg(unix)]
+#[test]
+fn a_device_that_never_starts_fails_cleanly() {
+    let Some(e) = env() else { return };
+    let (root, d) = dir();
+    let fifo = root.join("dead-device.pcm");
+    assert!(std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap()
+        .success());
+    let asked = Instant::now();
+    let result = Session::start(StartOptions {
+        client: Client::new(&e.server, &e.token).unwrap(),
+        dir: d.clone(),
+        ffmpeg: e.ffmpeg.clone(),
+        inputs: vec![Input::PcmPipe {
+            path: fifo.to_string_lossy().into_owned(),
+        }],
+        title: "Never starts".into(),
+        mode: CaptureMode::Audio,
+        segment_seconds: 2,
+        detector: DetectorConfig::default(),
+        watch_window: None,
+        on_event: Arc::new(|_| {}),
+        upload_interval: Duration::from_millis(500),
+        ready_timeout: Duration::from_secs(2),
+    });
+    let took = asked.elapsed();
+    let error = result.err().expect("start must fail").to_string();
+    assert!(error.contains("no audio arrived"), "{error}");
+    assert!(took < Duration::from_secs(6), "gave up after {took:?}");
+    assert!(!d.exists(), "local meeting folder left behind");
+    let meetings: i64 =
+        e.rt.block_on(
+            sqlx::query_scalar("SELECT count(*) FROM meeting_sessions").fetch_one(&e.state.db),
+        )
+        .unwrap();
+    assert_eq!(
+        meetings, 0,
+        "a meeting was created for a device that never started"
+    );
     e.rt.block_on(e.state.db.close());
 }
 
