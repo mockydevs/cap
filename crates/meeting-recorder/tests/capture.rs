@@ -625,6 +625,80 @@ fn recording_starts_only_once_audio_arrives_and_keeps_the_first_sound() {
     e.rt.block_on(e.state.db.close());
 }
 
+/// Capture that dies while the meeting is still being created (a slow
+/// server) is not reported as a running recording: Start fails with
+/// CaptureStopped, the audio captured so far stays on disk marked
+/// device-lost, and recovery delivers it.
+#[test]
+fn capture_that_dies_while_the_meeting_is_created_is_not_reported_as_recording() {
+    let Some(e) = env() else { return };
+    // A proxy in front of the real server that holds "create meeting" for 2.5 s.
+    let upstream = e.server.clone();
+    let proxy = e.rt.block_on(async move {
+        let http = reqwest::Client::new();
+        let app = axum::Router::new().fallback(move |req: axum::extract::Request| {
+            let (http, upstream) = (http.clone(), upstream.clone());
+            async move {
+                let (parts, body) = req.into_parts();
+                let body = axum::body::to_bytes(body, 64 << 20).await.unwrap();
+                if parts.method == axum::http::Method::POST && parts.uri.path() == "/v1/meetings" {
+                    tokio::time::sleep(Duration::from_millis(2_500)).await;
+                }
+                let mut fwd =
+                    http.request(parts.method.clone(), format!("{upstream}{}", parts.uri));
+                for (k, v) in &parts.headers {
+                    if k != axum::http::header::HOST {
+                        fwd = fwd.header(k, v);
+                    }
+                }
+                let res = fwd.body(body).send().await.unwrap();
+                let status = res.status();
+                let bytes = res.bytes().await.unwrap();
+                (status, bytes)
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}")
+    });
+    let (root, d) = dir();
+    let result = Session::start(StartOptions {
+        client: Client::new(&proxy, &e.token).unwrap(),
+        dir: d.clone(),
+        ffmpeg: e.ffmpeg.clone(),
+        // Produces audio at once, then ends after 1 s (the device goes away).
+        inputs: vec![Input::Synthetic {
+            seconds: 1,
+            silent: false,
+        }],
+        title: "Dies while starting".into(),
+        mode: CaptureMode::Audio,
+        segment_seconds: 2,
+        detector: DetectorConfig::default(),
+        watch_window: None,
+        on_event: Arc::new(|_| {}),
+        upload_interval: Duration::from_millis(500),
+        ready_timeout: Duration::from_secs(15),
+    });
+    let meeting_id = match result {
+        Err(cap_meeting_recorder::Error::CaptureStopped { meeting_id }) => meeting_id,
+        Err(other) => panic!("wrong error: {other}"),
+        Ok(_) => panic!("reported a recording whose capture had already stopped"),
+    };
+    let journal = Journal::load(&d).unwrap();
+    assert_eq!(journal.meeting_id, meeting_id);
+    assert_eq!(journal.stop_reason, Some(StopReason::DeviceLost));
+    assert!(segment_files(&d) >= 1, "captured audio was not kept");
+    let token = e.token.clone();
+    let done = cap_meeting_recorder::recover_all(&root, |_| vec![token.clone()]);
+    assert_eq!(ids(done), vec![meeting_id]);
+    let p = delivered(&e);
+    assert_eq!(p.meeting.stop_reason, StopReason::DeviceLost);
+    assert!(!p.transcript.segments.is_empty());
+    e.rt.block_on(e.state.db.close());
+}
+
 /// A device that never produces audio: starting fails within the time
 /// limit, FFmpeg is stopped, no meeting exists on the server and no local
 /// folder is left.

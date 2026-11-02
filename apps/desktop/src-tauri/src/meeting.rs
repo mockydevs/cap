@@ -241,9 +241,11 @@ pub async fn meeting_start(
     let session_token = token.clone();
     // The recorder's HTTP client is blocking: it must be created and dropped
     // off the async runtime, or the app panics and the recording never starts.
-    let session = tauri::async_runtime::spawn_blocking(move || {
-        let client = Client::new(&server, &session_token).map_err(|e| e.to_string())?;
-        let session = Session::start(StartOptions {
+    // Err((message, recover_now)): recover_now when capture stopped as it
+    // began, so the audio it did capture is uploaded straight away.
+    let started = tauri::async_runtime::spawn_blocking(move || {
+        let client = Client::new(&server, &session_token).map_err(|e| (e.to_string(), false))?;
+        let session = match Session::start(StartOptions {
             client,
             dir,
             ffmpeg: crate::ffmpeg_path(),
@@ -262,21 +264,52 @@ pub async fn meeting_start(
             upload_interval: std::time::Duration::from_secs(3),
             // Starting... until capture produces audio; then Recording.
             ready_timeout: std::time::Duration::from_secs(15),
-        })
-        .map_err(|e| e.to_string())?;
+        }) {
+            Ok(session) => session,
+            Err(e @ cap_meeting_recorder::Error::CaptureStopped { .. }) => {
+                if let cap_meeting_recorder::Error::CaptureStopped { meeting_id } = &e {
+                    // Its own credential, so recovery can upload it even if
+                    // the app is re-paired; the current pairing is the fallback.
+                    if let Ok(entry) = entry(&meeting_token_key(meeting_id)) {
+                        let _ = entry.set_password(&session_token);
+                    }
+                }
+                return Err((e.to_string(), true));
+            }
+            Err(e) => return Err((e.to_string(), false)),
+        };
         keep_credential(session, |id| {
             entry(&meeting_token_key(id))?
                 .set_password(&session_token)
                 .map_err(|e| e.to_string())
         })
+        .map_err(|e| (e, false))
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| e.to_string())?;
+    let session = match started {
+        Ok(session) => session,
+        Err((message, recover_now)) => {
+            if recover_now {
+                recover_in_background(&app);
+            }
+            return Err(message);
+        }
+    };
     let id = session.meeting_id.clone();
+    // Capture can still end between the last check and now: never report a
+    // recording that has already stopped (its upload carries on regardless).
+    let running = session.is_running();
     let previous = state.0.lock().map_err(|e| e.to_string())?.replace(session);
     // A finished session still holds a blocking client: drop it off the runtime.
     if let Some(old) = previous {
         tauri::async_runtime::spawn_blocking(move || drop(old));
+    }
+    if !running {
+        return Err(
+            "Recording stopped as it began because the audio device stopped. What was captured will still be sent."
+                .into(),
+        );
     }
     Ok(id)
 }

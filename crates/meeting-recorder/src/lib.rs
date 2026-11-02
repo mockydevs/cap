@@ -45,6 +45,10 @@ pub enum Error {
     Reauthorize,
     #[error("{0}")]
     Other(String),
+    /// Capture stopped (device gone, FFmpeg exited) before the meeting was
+    /// fully started. Its audio so far is kept for recovery to upload.
+    #[error("Recording stopped as it began because the audio device stopped. What was captured will still be sent.")]
+    CaptureStopped { meeting_id: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -556,6 +560,23 @@ impl Session {
         }));
         if let Err(e) = lock(&journal).and_then(|j| j.save(&opts.dir)) {
             return Err(abort(&mut child, &mut system_audio, e.to_string()));
+        }
+        // Creating the meeting can take a while; if capture died meanwhile,
+        // do not report a recording that has already stopped. What was
+        // captured stays on disk with its journal, so recovery uploads it.
+        if !pcm_alive.load(Ordering::SeqCst) || matches!(child.try_wait(), Ok(Some(_))) {
+            let _ = child.kill();
+            let _ = child.wait();
+            for capture in system_audio.iter_mut() {
+                capture.stop();
+            }
+            if let Ok(mut j) = lock(&journal) {
+                j.stop_reason = Some(StopReason::DeviceLost);
+                let _ = j.save(&opts.dir);
+            }
+            return Err(Error::CaptureStopped {
+                meeting_id: meeting.id,
+            });
         }
         let capture_done = Arc::new(AtomicBool::new(false));
         let stop_reason = Arc::new(Mutex::new(None::<StopReason>));
