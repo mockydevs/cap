@@ -1,0 +1,9 @@
+== Codex root composition failure before the fix (excerpts)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test a_paced_system_audio_pipe_mixes_with_the_microphone ... FAILED
+---- a_paced_system_audio_pipe_mixes_with_the_microphone stdout ----
+thread 'a_paced_system_audio_pipe_mixes_with_the_microphone' (2714958) panicked at crates/meeting-recorder/tests/capture.rs:407:5:
+[TranscriptSegment { index: 0, start_ms: 0, end_ms: 2000, text: "[test-fixture transcript, not real speech recognition: chunk 0 of 16338 bytes]" }, TranscriptSegment { index: 1, start_ms: 2000, end_ms: 3164, text: "[test-fixture transcript, not real speech recognition: chunk 1 of 8092 bytes]" }]

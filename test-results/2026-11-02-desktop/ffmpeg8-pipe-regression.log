@@ -12,3 +12,10 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.24s
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== Without the fix (probing flags removed), FFmpeg 8.0.1 native, x3:
+[TranscriptSegment { index: 0, start_ms: 0, end_ms: 2000, text: "[test-fixture transcript, not real speech recognition: chunk 0 of 16361 bytes]" }, TranscriptSe
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 7.66s
+only 4359 ms of ~7 s recorded
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 7.65s
+[TranscriptSegment { index: 0, start_ms: 0, end_ms: 2000, text: "[test-fixture transcript, not real speech recognition: chunk 0 of 16361 bytes]" }, TranscriptSe
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 7.91s
