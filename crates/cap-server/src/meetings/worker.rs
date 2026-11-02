@@ -172,6 +172,30 @@ async fn housekeeping(state: &AppState, now: DateTime<Utc>) -> Result<()> {
             "finalized abandoned recordings as interrupted"
         );
     }
+    // A recording that never received any audio (capture failed after the
+    // meeting was created, device gone) is closed after a long window that
+    // still allows offline spool recovery and re-pair adoption. Locks each
+    // row like chunk upload does; one that got audio meanwhile is skipped.
+    let empty = Duration::from_std(state.cfg.empty_after).unwrap_or(Duration::hours(48));
+    let closed = sqlx::query(
+        "UPDATE meeting_sessions m SET state = 'failed', failure = $3, ended_at = coalesce(m.ended_at, m.created_at),
+            next_attempt_at = NULL, updated_at = $1
+         WHERE m.id IN (
+           SELECT id FROM meeting_sessions s
+           WHERE s.state = 'recording' AND coalesce(s.last_upload_at, s.created_at) < $2
+             AND NOT EXISTS (SELECT 1 FROM meeting_chunks c WHERE c.meeting_id = s.id)
+           FOR UPDATE SKIP LOCKED)
+           AND NOT EXISTS (SELECT 1 FROM meeting_chunks c WHERE c.meeting_id = m.id)",
+    )
+    .bind(now)
+    .bind(now - empty)
+    .bind(format!("{}: nothing was uploaded", cap_meeting_protocol::NO_AUDIO))
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if closed > 0 {
+        tracing::info!(count = closed, "closed empty recordings as no_audio");
+    }
     Ok(())
 }
 
@@ -674,6 +698,15 @@ pub async fn retry_failed(state: &AppState, id: Uuid) -> Result<()> {
     let next = st
         .transition(Transition::Retry)
         .context("only failed meetings can be retried")?;
+    let chunks: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
+    anyhow::ensure!(
+        chunks > 0,
+        "this meeting has no audio; there is nothing to retry"
+    );
     sqlx::query(
         "UPDATE meeting_sessions SET state = $2, attempts = 0, next_attempt_at = now(), failure = NULL, lease_until = NULL, lease_token = NULL WHERE id = $1",
     )

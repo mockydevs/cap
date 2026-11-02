@@ -28,6 +28,9 @@ pub enum Transition {
     StartDelivery,
     Delivered,
     Fail,
+    /// A recording that never received audio is closed: an explicit cancel
+    /// before capture began, or the aged-empty sweep. Never with chunks.
+    Abandon,
     /// Operator retry of a failed meeting: back to the start of processing.
     Retry,
 }
@@ -64,6 +67,7 @@ impl MeetingState {
             (Summarizing | Delivering, T::StartDelivery) => Delivering,
             (Delivering, T::Delivered) => Delivered,
             (Finalized | Transcribing | Summarizing | Delivering, T::Fail) => Failed,
+            (Recording, T::Abandon) => Failed,
             (Failed, T::Retry) => Finalized,
             _ => return None,
         })
@@ -93,6 +97,9 @@ mod tests {
     fn illegal_jumps_are_refused() {
         assert_eq!(Recording.transition(StartDelivery), None);
         assert_eq!(Recording.transition(Fail), None);
+        assert_eq!(Recording.transition(Abandon), Some(Failed));
+        assert_eq!(Finalized.transition(Abandon), None);
+        assert_eq!(Failed.transition(Abandon), None);
         assert_eq!(MeetingState::Delivered.transition(Finalize), None);
         assert_eq!(MeetingState::Delivered.transition(Fail), None);
         assert_eq!(Finalized.transition(Finalize), None);

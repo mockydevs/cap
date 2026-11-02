@@ -1,5 +1,27 @@
 # Cap calendar attendance: implementation result
 
+## Empty recordings (review-empty-recordings.md, 22:22Z)
+
+- POST /v1/meetings/{id}/cancel (device token; body {"reason":
+  "capture_failed"|"device_unavailable"|"user_cancelled"}, unknown fields
+  refused): under the meeting row lock shared with chunk upload/finalize,
+  closes a recording with NO chunks as failed
+  "cancelled_before_audio: <reason>"; idempotent 200; 409 has_audio if any
+  chunk (never discards); 409 already_finalized; 404 for another device.
+  New lifecycle transition Recording -Abandon-> Failed. Nothing transcribed
+  or delivered. Contract proposal (pending extension owner confirmation via
+  root): handoff proposal-cancel-empty.md.
+- Housekeeping closes recordings with no chunks and no upload for
+  CAP_MEETING_EMPTY_AFTER_HOURS (default 48; boot refuses less than the 6 h
+  abandon window) as failed "no_audio: nothing was uploaded", row-locked
+  (SKIP LOCKED) and re-checked for chunks. Non-empty recordings keep the
+  abandon/finalize path. Operator retry refuses meetings with no audio.
+- Tests (tests/meetings.rs, real PG): baseline gap, cancel semantics,
+  cancel-vs-first-chunk race (both orders: 8/12) and sweep-vs-late-chunk race
+  (both orders), non-empty unchanged. Counter-evidence: the 4 new tests fail on
+  1988c72 (`counter-evidence-empty-1988c72.log`), 15 existing pass on both.
+  Workspace 148 passed / 0 failed; clippy 0; fmt; prettier.
+
 ## Test-only synthetic speaker (root request 21:42Z)
 
 - `cap-meet-speaker` (feature `test-speaker`, own image

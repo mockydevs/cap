@@ -95,6 +95,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/meetings/{id}/finalize", post(api::finalize_meeting))
         .route("/v1/meetings/{id}/events", post(api::meeting_event))
+        .route("/v1/meetings/{id}/cancel", post(api::cancel_meeting))
         .route("/v1/meetings/{id}/adopt", post(api::adopt_meeting))
         .route("/v1/calendar-bot/claim", post(attendance::bot_api::claim))
         .route(

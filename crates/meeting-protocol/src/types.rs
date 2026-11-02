@@ -710,3 +710,35 @@ impl std::fmt::Debug for CalendarPairingResponse {
             .finish()
     }
 }
+
+// ---- Cancel before audio (device → Cap) ----
+
+/// Why a recording is cancelled before any audio was uploaded.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CancelReason {
+    CaptureFailed,
+    DeviceUnavailable,
+    UserCancelled,
+}
+
+impl CancelReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CancelReason::CaptureFailed => "capture_failed",
+            CancelReason::DeviceUnavailable => "device_unavailable",
+            CancelReason::UserCancelled => "user_cancelled",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CancelMeetingRequest {
+    pub reason: CancelReason,
+}
+
+/// Failure text prefix for a meeting cancelled before audio.
+pub const CANCELLED_BEFORE_AUDIO: &str = "cancelled_before_audio";
+/// Failure text prefix for an empty recording closed by the server sweep.
+pub const NO_AUDIO: &str = "no_audio";

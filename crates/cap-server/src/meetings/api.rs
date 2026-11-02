@@ -662,6 +662,67 @@ pub async fn finalize_meeting(
     Ok((StatusCode::ACCEPTED, Json(view(&state, &device, id).await?)))
 }
 
+/// POST /v1/meetings/{id}/cancel: the device could not start capturing
+/// after creating the meeting. Closes it only while it has no audio at all;
+/// under the same row lock as chunk upload and finalize, so a racing first
+/// chunk either lands first (then this refuses) or is refused itself.
+/// Idempotent. Nothing is transcribed or delivered.
+pub async fn cancel_meeting(
+    State(state): State<AppState>,
+    device: Device,
+    Path(id): Path<Uuid>,
+    Json(req): Json<cap_meeting_protocol::CancelMeetingRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let mut tx = state.db.begin().await?;
+    let m = sqlx::query(
+        "SELECT state, failure FROM meeting_sessions WHERE id = $1 AND device_token_hash = $2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(&device.token_hash)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "meeting_not_found"))?;
+    let has_audio: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM meeting_chunks WHERE meeting_id = $1)")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+    let current = MeetingState::parse(m.get("state")).ok_or(ApiError::internal())?;
+    if has_audio {
+        return Err(ApiError::new(StatusCode::CONFLICT, "has_audio"));
+    }
+    if current != MeetingState::Recording {
+        let already = current == MeetingState::Failed
+            && m.get::<Option<String>, _>("failure")
+                .is_some_and(|f| f.starts_with(cap_meeting_protocol::CANCELLED_BEFORE_AUDIO));
+        drop(tx);
+        return if already {
+            Ok((StatusCode::OK, Json(view(&state, &device, id).await?)))
+        } else {
+            Err(ApiError::new(StatusCode::CONFLICT, "already_finalized"))
+        };
+    }
+    let next = current
+        .transition(cap_meeting_protocol::Transition::Abandon)
+        .ok_or(ApiError::internal())?;
+    sqlx::query(
+        "UPDATE meeting_sessions SET state = $2, failure = $3, ended_at = now(), next_attempt_at = NULL,
+         updated_at = now() WHERE id = $1",
+    )
+    .bind(id)
+    .bind(next.as_str())
+    .bind(format!(
+        "{}: {}",
+        cap_meeting_protocol::CANCELLED_BEFORE_AUDIO,
+        req.reason.as_str()
+    ))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    tracing::info!(meeting = %id, reason = req.reason.as_str(), "meeting cancelled before any audio");
+    Ok((StatusCode::OK, Json(view(&state, &device, id).await?)))
+}
+
 pub async fn meeting_event(
     State(state): State<AppState>,
     device: Device,

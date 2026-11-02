@@ -170,6 +170,7 @@ impl H {
             }],
             transcription: TranscriptionConfig::TestFixture,
             abandon_after: Duration::from_secs(3600),
+            empty_after: std::time::Duration::from_secs(48 * 3600),
             worker_interval: Duration::from_millis(50),
             download_dir: None,
             portal_url: None,

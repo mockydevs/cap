@@ -162,6 +162,7 @@ impl Harness {
             }],
             transcription,
             abandon_after: Duration::from_secs(3600),
+            empty_after: std::time::Duration::from_secs(48 * 3600),
             worker_interval: Duration::from_millis(50),
             download_dir: None,
             portal_url: None,
@@ -1078,4 +1079,267 @@ async fn pkce_bound_pairings_need_the_verifier() {
         StatusCode::OK
     );
     h.drop_db().await;
+}
+
+// ---- Empty recordings: cancel before audio, aged-empty sweep ----
+
+async fn cancel(h: &Harness, token: &str, id: &str, reason: &str) -> (StatusCode, Value) {
+    h.call(json_req(
+        "POST",
+        &format!("/v1/meetings/{id}/cancel"),
+        Some(token),
+        &json!({ "reason": reason }),
+    ))
+    .await
+}
+
+async fn db_state(h: &Harness, id: &str) -> (String, Option<String>) {
+    sqlx::query_as("SELECT state, failure FROM meeting_sessions WHERE id = $1")
+        .bind(Uuid::parse_str(id).unwrap())
+        .fetch_one(&h.state.db)
+        .await
+        .unwrap()
+}
+
+/// The reported gap: capture failed after the meeting was created, so no
+/// chunk ever arrives. Finalize refuses (no_audio) and, before this change,
+/// the meeting stayed `recording` forever. Now the sweep closes it after the
+/// empty window, and never sooner than that window.
+#[tokio::test]
+async fn empty_recording_is_closed_by_the_sweep_only_after_its_window() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let token = h.device(client_pairing()).await;
+    let id = h.meeting(&token, "empty-1").await;
+    let (s, body) = h.finalize(&token, &id, 0, true).await;
+    assert_eq!(
+        (s, body["error"].as_str()),
+        (StatusCode::CONFLICT, Some("no_audio"))
+    );
+    // Past the 6 h abandon window: still open (offline spool may upload).
+    h.drain(Utc::now() + chrono::Duration::hours(7)).await;
+    assert_eq!(db_state(&h, &id).await.0, "recording");
+    // Past the 48 h empty window: closed as no_audio, nothing delivered.
+    h.drain(Utc::now() + chrono::Duration::hours(49)).await;
+    let (state, failure) = db_state(&h, &id).await;
+    assert_eq!(state, "failed");
+    assert!(failure.unwrap().starts_with("no_audio"));
+    assert!(
+        h.calari.lock().unwrap().received.is_empty(),
+        "no phantom delivery"
+    );
+    // The device sees it failed, and late audio is refused, not lost silently.
+    let (s, v) = h.call(get_req(&format!("/v1/meetings/{id}"), &token)).await;
+    assert_eq!((s, v["state"].as_str()), (StatusCode::OK, Some("failed")));
+    let (s, v) = h.chunk(&token, &id, 0, &ogg(1)).await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::CONFLICT, Some("meeting_not_recording"))
+    );
+    // Operator retry has nothing to process.
+    assert!(
+        worker::retry_failed(&h.state, Uuid::parse_str(&id).unwrap())
+            .await
+            .is_err()
+    );
+    h.drop_db().await;
+}
+
+#[tokio::test]
+async fn cancel_closes_only_empty_recordings_idempotently() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let token = h.device(client_pairing()).await;
+    let other = h.device(client_pairing()).await;
+
+    // Empty: cancelled, then the same call again is fine.
+    let id = h.meeting(&token, "cancel-1").await;
+    let (s, v) = cancel(&h, &other, &id, "capture_failed").await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::NOT_FOUND, Some("meeting_not_found")),
+        "another device cannot"
+    );
+    let (s, _) = cancel(&h, &token, &id, "something_else").await;
+    assert!(s.is_client_error());
+    let (s, _) = h
+        .call(json_req(
+            "POST",
+            &format!("/v1/meetings/{id}/cancel"),
+            Some(&token),
+            &json!({"reason": "capture_failed", "extra": 1}),
+        ))
+        .await;
+    assert!(s.is_client_error(), "unknown fields refused");
+    assert_eq!(
+        db_state(&h, &id).await.0,
+        "recording",
+        "refusals change nothing"
+    );
+    let (s, v) = cancel(&h, &token, &id, "capture_failed").await;
+    assert_eq!(
+        (s, v["state"].as_str()),
+        (StatusCode::OK, Some("failed")),
+        "{v}"
+    );
+    assert_eq!(v["failure"], "cancelled_before_audio: capture_failed");
+    let (s, v) = cancel(&h, &token, &id, "capture_failed").await;
+    assert_eq!(
+        (s, v["state"].as_str()),
+        (StatusCode::OK, Some("failed")),
+        "idempotent"
+    );
+    let (s, v) = h.chunk(&token, &id, 0, &ogg(1)).await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::CONFLICT, Some("meeting_not_recording"))
+    );
+    let (s, v) = h.finalize(&token, &id, 0, true).await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::CONFLICT, Some("already_finalized"))
+    );
+
+    // With audio: refused, nothing discarded; finalize still works.
+    let id2 = h.meeting(&token, "cancel-2").await;
+    assert_eq!(
+        h.chunk(&token, &id2, 0, &ogg(2)).await.0,
+        StatusCode::CREATED
+    );
+    let (s, v) = cancel(&h, &token, &id2, "capture_failed").await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::CONFLICT, Some("has_audio"))
+    );
+    assert_eq!(db_state(&h, &id2).await.0, "recording");
+    assert_eq!(
+        h.finalize(&token, &id2, 0, false).await.0,
+        StatusCode::ACCEPTED
+    );
+    let (s, v) = cancel(&h, &token, &id2, "user_cancelled").await;
+    assert_eq!(
+        (s, v["error"].as_str()),
+        (StatusCode::CONFLICT, Some("has_audio"))
+    );
+
+    // An empty meeting finalized some other way cannot be "cancelled".
+    h.drain(Utc::now()).await;
+    let delivered = h.calari.lock().unwrap().received.len();
+    assert_eq!(delivered, 1, "only the meeting with audio was delivered");
+    // A cancelled meeting is never processed or delivered.
+    h.drain(Utc::now() + chrono::Duration::hours(1)).await;
+    assert_eq!(h.calari.lock().unwrap().received.len(), 1);
+    h.drop_db().await;
+}
+
+/// Cancel and a first chunk racing: the row lock serializes them, so either
+/// the chunk is stored and the cancel is refused, or the cancel wins and the
+/// chunk is refused. Never a failed meeting holding audio, never both.
+#[tokio::test]
+async fn cancel_and_first_chunk_race_never_lose_or_strand_audio() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let h = Arc::new(h);
+    let token = h.device(client_pairing()).await;
+    let (mut cancels_won, mut chunks_won) = (0, 0);
+    for n in 0..20u8 {
+        let id = h.meeting(&token, &format!("race-{n}")).await;
+        let (h1, h2) = (h.clone(), h.clone());
+        let (t1, t2) = (token.clone(), token.clone());
+        let (i1, i2) = (id.clone(), id.clone());
+        // Odd rounds give the upload a head start so both orders occur.
+        let delay = if n % 2 == 1 { 60 } else { 0 };
+        let c = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            cancel(&h1, &t1, &i1, "capture_failed").await
+        });
+        let u = tokio::spawn(async move { h2.chunk(&t2, &i2, 0, &ogg(n)).await });
+        let (cancel_res, chunk_res) = (c.await.unwrap(), u.await.unwrap());
+        let chunks: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1")
+                .bind(Uuid::parse_str(&id).unwrap())
+                .fetch_one(&h.state.db)
+                .await
+                .unwrap();
+        let state = db_state(&h, &id).await.0;
+        match (cancel_res.0, chunk_res.0) {
+            (StatusCode::OK, StatusCode::CONFLICT) => {
+                cancels_won += 1;
+                assert_eq!((state.as_str(), chunks), ("failed", 0));
+            }
+            (StatusCode::CONFLICT, StatusCode::CREATED) => {
+                chunks_won += 1;
+                assert_eq!(cancel_res.1["error"], "has_audio");
+                assert_eq!((state.as_str(), chunks), ("recording", 1));
+            }
+            other => panic!("inconsistent outcome {other:?} state {state} chunks {chunks}"),
+        }
+    }
+    eprintln!("races: cancel won {cancels_won}, chunk won {chunks_won}");
+    assert!(cancels_won > 0 && chunks_won > 0, "both orders exercised");
+    Arc::try_unwrap(h).ok().unwrap().drop_db().await;
+}
+
+/// The sweep and a late first chunk racing on an old empty recording: the
+/// chunk is either stored (and the meeting stays open) or refused after the
+/// sweep closed it. Non-empty recordings keep the abandon behaviour.
+#[tokio::test]
+async fn empty_sweep_and_late_chunk_race_and_nonempty_unchanged() {
+    let Some(h) = Harness::new(TranscriptionConfig::TestFixture, calari()).await else {
+        return;
+    };
+    let h = Arc::new(h);
+    let token = h.device(client_pairing()).await;
+    let (mut swept, mut stored) = (0, 0);
+    for n in 0..10u8 {
+        let id = h.meeting(&token, &format!("sweep-race-{n}")).await;
+        let (h1, h2, t, i) = (h.clone(), h.clone(), token.clone(), id.clone());
+        let later = Utc::now() + chrono::Duration::hours(49);
+        let delay = if n % 2 == 1 { 60 } else { 0 };
+        let sweep = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+            worker::run_once(&h1.state, later).await.unwrap()
+        });
+        let up = tokio::spawn(async move { h2.chunk(&t, &i, 0, &ogg(n)).await });
+        sweep.await.unwrap();
+        let chunk = up.await.unwrap();
+        let chunks: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM meeting_chunks WHERE meeting_id = $1")
+                .bind(Uuid::parse_str(&id).unwrap())
+                .fetch_one(&h.state.db)
+                .await
+                .unwrap();
+        let state = db_state(&h, &id).await.0;
+        match chunk.0 {
+            StatusCode::CREATED => {
+                stored += 1;
+                // Audio kept; the normal abandon sweep (also past its
+                // window here) finalizes it with that audio.
+                assert_eq!(chunks, 1);
+                assert_ne!(state, "failed")
+            }
+            StatusCode::CONFLICT => {
+                swept += 1;
+                assert_eq!((state.as_str(), chunks), ("failed", 0))
+            }
+            other => panic!("unexpected {other}"),
+        }
+    }
+    eprintln!("sweep races: swept first {swept}, chunk first {stored}");
+    assert!(swept > 0 && stored > 0, "both orders exercised");
+    // A recording with audio is finalized as interrupted by the abandon
+    // sweep, never closed as no_audio.
+    let id = h.meeting(&token, "nonempty").await;
+    assert_eq!(
+        h.chunk(&token, &id, 0, &ogg(9)).await.0,
+        StatusCode::CREATED
+    );
+    h.drain(Utc::now() + chrono::Duration::hours(49)).await;
+    let (state, failure) = db_state(&h, &id).await;
+    assert_ne!(state, "failed", "{failure:?}");
+    assert_ne!(state, "recording");
+    Arc::try_unwrap(h).ok().unwrap().drop_db().await;
 }

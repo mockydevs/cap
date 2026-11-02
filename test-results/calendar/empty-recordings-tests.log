@@ -1,0 +1,31 @@
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+     Running tests/meetings.rs (target/debug/deps/meetings-4baf6d43401ec464)
+
+running 19 tests
+SKIPPED: set CAP_TEST_FFMPEG
+test overlong_compressed_audio_is_rejected_while_decoding ... ok
+sweep races: swept first 1, chunk first 9
+races: cancel won 8, chunk won 12
+test empty_recording_is_closed_by_the_sweep_only_after_its_window ... ok
+test internal_team_meetings_carry_no_client ... ok
+test device_tokens_only_reach_their_own_meetings ... ok
+test empty_sweep_and_late_chunk_race_and_nonempty_unchanged ... ok
+test pkce_bound_pairings_need_the_verifier ... ok
+test pairing_requests_are_authenticated_fresh_and_tenant_bound ... ok
+test an_expired_worker_lease_is_fenced_out ... ok
+test only_a_same_client_re_pairing_can_adopt_an_expired_meeting ... ok
+test delivery_retries_resend_identical_bytes_with_fresh_nonces ... ok
+test full_flow_delivers_a_signed_ordered_transcript ... ok
+test cancel_and_first_chunk_race_never_lose_or_strand_audio ... ok
+test pairing_retries_are_idempotent_and_codes_single_use ... ok
+test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
+test transcription_retries_never_repeat_finished_chunks ... ok
+test cancel_closes_only_empty_recordings_idempotently ... ok
+test chunks_are_validated_and_finalize_reports_gaps ... ok
+test rejected_delivery_fails_visibly_and_operator_can_retry ... ok
+test an_upload_racing_finalize_or_abandon_is_refused ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.98s
+
+exit=0

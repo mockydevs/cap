@@ -100,6 +100,9 @@ pub struct Config {
     /// A meeting still `recording` with no upload for this long is finalized
     /// as `interrupted` with whatever audio arrived.
     pub abandon_after: Duration,
+    /// A recording with no audio at all and no upload for this long is
+    /// closed as failed (`no_audio`). Never shorter than `abandon_after`.
+    pub empty_after: Duration,
     pub worker_interval: Duration,
     /// Dedicated publisher-owned directory, mounted read-only; optional until installers ship.
     pub download_dir: Option<PathBuf>,
@@ -367,6 +370,9 @@ impl Config {
             abandon_after: Duration::from_secs(
                 parse_var::<u64>("CAP_MEETING_ABANDON_AFTER_MINUTES", 360)? * 60,
             ),
+            empty_after: Duration::from_secs(
+                parse_var::<u64>("CAP_MEETING_EMPTY_AFTER_HOURS", 48)? * 3600,
+            ),
             worker_interval: Duration::from_secs(2),
             download_dir: var("CAP_DOWNLOAD_DIR").map(PathBuf::from),
             portal_url: var("CALARI_PORTAL_URL"),
@@ -379,6 +385,9 @@ impl Config {
 
     /// Rules that hold everywhere, plus production-only rules.
     pub fn validate(&self) -> Result<()> {
+        if self.empty_after < self.abandon_after {
+            bail!("CAP_MEETING_EMPTY_AFTER_HOURS must not be shorter than the abandon window");
+        }
         if self.production && self.portal_url.is_none() {
             bail!("CALARI_PORTAL_URL is required for the public hub in production");
         }
@@ -601,6 +610,7 @@ pub(crate) mod tests {
                 model: "whisper-1".into(),
             },
             abandon_after: Duration::from_secs(60),
+            empty_after: std::time::Duration::from_secs(48 * 3600),
             worker_interval: Duration::from_secs(1),
             download_dir: None,
             portal_url: Some("https://calari.example/portal".into()),

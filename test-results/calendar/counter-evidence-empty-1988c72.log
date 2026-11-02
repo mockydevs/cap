@@ -1,0 +1,64 @@
+   Compiling cap-server v0.1.0 (/tmp/claude-1000/-home-don-code-cap-calendar/9bd968c2-5830-42fd-a3fc-673ac2d8d96e/scratchpad/old-1988c72/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.22s
+     Running tests/meetings.rs (target/debug/deps/meetings-4baf6d43401ec464)
+
+running 19 tests
+test overlong_compressed_audio_is_rejected_while_decoding ... ok
+test cancel_closes_only_empty_recordings_idempotently ... FAILED
+test cancel_and_first_chunk_race_never_lose_or_strand_audio ... FAILED
+test empty_recording_is_closed_by_the_sweep_only_after_its_window ... FAILED
+test empty_sweep_and_late_chunk_race_and_nonempty_unchanged ... FAILED
+test pairing_requests_are_authenticated_fresh_and_tenant_bound ... ok
+test device_tokens_only_reach_their_own_meetings ... ok
+test transcription_retries_never_repeat_finished_chunks ... ok
+test full_flow_delivers_a_signed_ordered_transcript ... ok
+test pairing_retries_are_idempotent_and_codes_single_use ... ok
+test delivery_retries_resend_identical_bytes_with_fresh_nonces ... ok
+test internal_team_meetings_carry_no_client ... ok
+test an_expired_worker_lease_is_fenced_out ... ok
+test only_a_same_client_re_pairing_can_adopt_an_expired_meeting ... ok
+test chunks_are_validated_and_finalize_reports_gaps ... ok
+test abandoned_recordings_are_finalized_with_the_audio_that_arrived ... ok
+test rejected_delivery_fails_visibly_and_operator_can_retry ... ok
+test pkce_bound_pairings_need_the_verifier ... ok
+test an_upload_racing_finalize_or_abandon_is_refused ... ok
+
+failures:
+
+---- cancel_closes_only_empty_recordings_idempotently stdout ----
+
+thread 'cancel_closes_only_empty_recordings_idempotently' (786207) panicked at crates/cap-server/tests/meetings.rs:1159:5:
+assertion `left == right` failed: another device cannot
+  left: (404, None)
+ right: (404, Some("meeting_not_found"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- cancel_and_first_chunk_race_never_lose_or_strand_audio stdout ----
+
+thread 'cancel_and_first_chunk_race_never_lose_or_strand_audio' (786206) panicked at crates/cap-server/tests/meetings.rs:1277:22:
+inconsistent outcome (404, 201) state recording chunks 1
+
+---- empty_recording_is_closed_by_the_sweep_only_after_its_window stdout ----
+
+thread 'empty_recording_is_closed_by_the_sweep_only_after_its_window' (786211) panicked at crates/cap-server/tests/meetings.rs:1125:5:
+assertion `left == right` failed
+  left: "recording"
+ right: "failed"
+
+---- empty_sweep_and_late_chunk_race_and_nonempty_unchanged stdout ----
+sweep races: swept first 0, chunk first 10
+
+thread 'empty_sweep_and_late_chunk_race_and_nonempty_unchanged' (786212) panicked at crates/cap-server/tests/meetings.rs:1331:5:
+both orders exercised
+
+
+failures:
+    cancel_and_first_chunk_race_never_lose_or_strand_audio
+    cancel_closes_only_empty_recordings_idempotently
+    empty_recording_is_closed_by_the_sweep_only_after_its_window
+    empty_sweep_and_late_chunk_race_and_nonempty_unchanged
+
+test result: FAILED. 15 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.00s
+
+error: test failed, to rerun pass `-p cap-server --test meetings`
+exit=101
