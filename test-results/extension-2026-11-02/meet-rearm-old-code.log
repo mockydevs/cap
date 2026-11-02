@@ -1,0 +1,30 @@
+✖ each call's end is reported once, including after rejoining the same page (0.858556ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 29.778172
+
+✖ failing tests:
+
+test at test/meet.test.mjs:32:1
+✖ each call's end is reported once, including after rejoining the same page (0.858556ms)
+  AssertionError [ERR_ASSERTION]: the second call's end is reported too
+  
+  1 !== 2
+  
+      at TestContext.<anonymous> (file:///home/don/code/cap-extension/apps/extension/test/meet.test.mjs:45:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

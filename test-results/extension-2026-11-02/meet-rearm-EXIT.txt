@@ -1,0 +1,2 @@
+old code exit=1
+fixed all tests exit=0

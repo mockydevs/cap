@@ -5,18 +5,20 @@
 (() => {
   const ENDED =
     /you left the meeting|you've left the meeting|the call has ended|you were removed from the meeting/i;
-  let reported = false;
+  // Reported once each time the page goes from "in a call" to "call ended".
+  // Rejoining clears the ended screen, so the next end is reported again;
+  // the background only acts on it for the tab that is recording.
+  let ended = false;
 
   function check() {
-    if (reported) return;
     const text = document.body?.innerText?.slice(0, 5_000) ?? "";
     const rejoin = [...document.querySelectorAll("button")].some((b) =>
       /^\s*rejoin\s*$/i.test(b.innerText),
     );
-    if (ENDED.test(text) || rejoin) {
-      reported = true;
+    const now = ENDED.test(text) || rejoin;
+    if (now && !ended)
       chrome.runtime.sendMessage({ type: "meet-ended" }).catch(() => {});
-    }
+    ended = now;
   }
 
   new MutationObserver(check).observe(document.documentElement, {
