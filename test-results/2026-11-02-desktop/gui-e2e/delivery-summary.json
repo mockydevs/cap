@@ -6,10 +6,5 @@
   "stop_reason": "user_stopped",
   "partial": false,
   "duration_ms": 15660,
-  "transcript_segments": [
-    [
-      0,
-      12903
-    ]
-  ]
+  "transcript_segments": [[0, 12903]]
 }
