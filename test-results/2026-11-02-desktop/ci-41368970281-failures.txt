@@ -1,0 +1,3 @@
+2026-11-02T00:54:23.6677503Z thread 'linux_records_the_microphone_and_the_speakers_through_pulse' (22446) panicked at crates/meeting-recorder/tests/capture.rs:477:5:
+2026-11-02T00:54:23.6679146Z assertion failed: delivered(&e).transcript.segments.len() >= 3
+2026-11-02T01:08:22.1348342Z dist/desktop/cap-desktop_0.2.0-beta.6_windows-x86_64-setup.exe: machine 0x14c, optional header 0x10b; want AMD64 PE32+

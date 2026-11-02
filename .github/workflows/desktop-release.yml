@@ -239,16 +239,19 @@ jobs:
           $name = "cap-desktop_$($env:VERSION)_windows-x86_64-setup.exe"
           $src = "apps/desktop/src-tauri/target/release/bundle/nsis/Cap_$($env:VERSION)_x64-setup.exe"
           Copy-Item $src "$out/$name"
-          python -I scripts/desktop/check-pe.py "$out/$name"
-          if ($LASTEXITCODE -ne 0) { throw 'installer is not an x86-64 Windows program' }
+          # The NSIS setup stub is a 32-bit program; the app it installs must be 64-bit.
+          python -I scripts/desktop/check-pe.py --installer "$out/$name"
+          if ($LASTEXITCODE -ne 0) { throw 'installer is not a Windows program' }
           $p = Start-Process -FilePath "$out/$name" -ArgumentList '/S' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "installer exit $($p.ExitCode)" }
           $dir = Join-Path $env:LOCALAPPDATA 'Cap'
           foreach ($f in 'cap-desktop.exe', 'ffmpeg.exe', 'ffmpeg/NOTICE.txt', 'ffmpeg/LICENSE.txt', 'uninstall.exe') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "installed app is missing $f" }
           }
-          python -I scripts/desktop/check-pe.py (Join-Path $dir 'cap-desktop.exe')
-          if ($LASTEXITCODE -ne 0) { throw 'installed app is not an x86-64 Windows program' }
+          foreach ($exe in 'cap-desktop.exe', 'ffmpeg.exe') {
+            python -I scripts/desktop/check-pe.py (Join-Path $dir $exe)
+            if ($LASTEXITCODE -ne 0) { throw "installed $exe is not an x86-64 Windows program" }
+          }
           & (Join-Path $dir 'ffmpeg.exe') -hide_banner -version | Select-Object -First 1
           Get-ChildItem $dir -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 200 | Set-Content "$out/$name.files.txt"
           Start-Process -FilePath (Join-Path $dir 'uninstall.exe') -ArgumentList '/S' -Wait | Out-Null

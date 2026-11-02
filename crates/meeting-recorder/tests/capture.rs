@@ -474,7 +474,19 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         }),
         "{evs:?}"
     );
-    assert!(delivered(&e).transcript.segments.len() >= 3);
+    let p = delivered(&e);
+    let recorded = p.transcript.segments.last().map_or(0, |s| s.end_ms);
+    let spans: Vec<_> = p
+        .transcript
+        .segments
+        .iter()
+        .map(|s| (s.start_ms, s.end_ms))
+        .collect();
+    eprintln!("pulse recorded {recorded} ms of ~7 s: {spans:?}");
+    assert!(p.transcript.segments.len() >= 3, "{spans:?}");
+    // The audio up to the stop must be kept: PulseAudio delivers with a
+    // 1-2 s delay, and stopping used to drop it (4.4-5.0 s kept of 7).
+    assert!(recorded >= 5_500, "only {recorded} ms of ~7 s recorded");
     e.rt.block_on(e.state.db.close());
 }
 

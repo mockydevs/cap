@@ -1,0 +1,22 @@
+== FFmpeg 6.1 (Ubuntu 24.04): fmt, clippy, recorder suite, Pulse smoke x3
+ws-fmt=0
+clippy errors: 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.89s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+pulse recorded 6433 ms of ~7 s: [(0, 2007), (2007, 4007), (4007, 6007), (6007, 6433)]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 9.04s
+pulse recorded 6339 ms of ~7 s: [(0, 2007), (2007, 4007), (4007, 6007), (6007, 6339)]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 8.82s
+pulse recorded 6356 ms of ~7 s: [(0, 2004), (2004, 4004), (4004, 6004), (6004, 6356)]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 8.92s
+== FFmpeg 8.0.1 native: recorder suite
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.05s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== Windows cross-clippy
+win clippy errors: 0
+Before the fix (same container, FFmpeg 6.1, Pulse smoke x3): recorded 4382 / 4962 / 4885 ms of ~7 s (tail dropped at stop); disabling input probing alone did not help (3765 / 4965 / 4877).
+Direct FFmpeg trace: first output ~2.0 s after start, then real time; 'q' drops in-flight audio (5.06 s file for 7.06 s wall).
