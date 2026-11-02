@@ -1,0 +1,20 @@
+   Compiling cap-meeting-recorder v0.1.0 (/home/don/code/cap-desktop-shipping/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.45s
+     Running tests/capture.rs (/home/don/.cache/cap-claude-host-target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+kept 7.93 s of 6.00 s before Stop; 440 Hz 3655.9, 1000 Hz 1503.4
+
+thread 'stop_keeps_audio_up_to_stop_and_nothing_after' (2906139) panicked at crates/meeting-recorder/tests/capture.rs:537:5:
+audio from after Stop was recorded
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test stop_keeps_audio_up_to_stop_and_nothing_after ... FAILED
+
+failures:
+
+failures:
+    stop_keeps_audio_up_to_stop_and_nothing_after
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 10.45s
+
+error: test failed, to rerun pass `-p cap-meeting-recorder --test capture`

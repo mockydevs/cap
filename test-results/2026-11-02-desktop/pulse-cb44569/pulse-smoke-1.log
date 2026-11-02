@@ -1,0 +1,10 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 8017 ms of ~10 s, inputs ready after 1963 ms: [(0, 2007), (2007, 4007), (4007, 6007), (6007, 8007), (8007, 8017)]
+test linux_records_the_microphone_and_the_speakers_through_pulse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 13.25s
+

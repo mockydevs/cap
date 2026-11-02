@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 8262 ms of ~10 s, inputs ready after 1468 ms: [(0, 2019), (2019, 4019), (4019, 6019), (6019, 8019), (8019, 8262)]
+test linux_records_the_microphone_and_the_speakers_through_pulse ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 12.72s
+

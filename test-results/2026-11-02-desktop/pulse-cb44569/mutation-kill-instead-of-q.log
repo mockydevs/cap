@@ -1,0 +1,32 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+warning: field `stdin` is never read
+   --> crates/meeting-recorder/src/lib.rs:669:5
+    |
+666 | struct ControlCtx {
+    |        ---------- field in this struct
+...
+669 |     stdin: Option<ChildStdin>,
+    |     ^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cap-meeting-recorder` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 1 test
+pulse recorded 6010 ms of ~10 s, inputs ready after 1959 ms: [(0, 2010), (2010, 4010), (4010, 6010)]
+
+thread 'linux_records_the_microphone_and_the_speakers_through_pulse' (574) panicked at crates/meeting-recorder/tests/capture.rs:665:5:
+only 6010 ms kept; inputs were ready after 1959 ms, so at least 7041 ms expected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test linux_records_the_microphone_and_the_speakers_through_pulse ... FAILED
+
+failures:
+
+failures:
+    linux_records_the_microphone_and_the_speakers_through_pulse
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 13.58s
+
+error: test failed, to rerun pass `-p cap-meeting-recorder --test capture`

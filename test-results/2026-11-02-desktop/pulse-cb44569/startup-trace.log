@@ -1,0 +1,3 @@
+microphone (default)                     first audio after 1.97s, then 1.03x real time
+speakers monitor (@DEFAULT_MONITOR@)     first audio after 1.40s, then 1.03x real time
+speakers monitor by name                 first audio after 0.10s, then 1.03x real time

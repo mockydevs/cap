@@ -1,0 +1,8 @@
+source cb4456908e2cb4849b920737db6944072f46e2e4
+startup-trace exit=0
+pulse-smoke-1 exit=0 (CAP_TEST_PULSE=1 set by script; ffmpeg 6.1.1)
+pulse-smoke-2 exit=0 (CAP_TEST_PULSE=1 set by script; ffmpeg 6.1.1)
+pulse-smoke-3 exit=0 (CAP_TEST_PULSE=1 set by script; ffmpeg 6.1.1)
+mutation-kill-instead-of-q exit=101 (CAP_TEST_PULSE=1 set by script; ffmpeg 6.1.1)
+mutation-capture-after-stop (stop_keeps_audio_up_to_stop_and_nothing_after, ffmpeg 8.0.1) exit=101
+stop_keeps_audio_up_to_stop_and_nothing_after (ffmpeg 8.0.1) exit=0
