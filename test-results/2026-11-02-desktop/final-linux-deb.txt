@@ -1,6 +1,6 @@
-source: eaf63250b324440456e35df424997b9513158dca (runtime/workflow; built from clean tree)
+source: 9320637450a942d729edabf8531057c5444037d4 (built from clean tree)
 package: /home/don/code/cap-desktop-shipping/dist/desktop/cap-desktop_0.2.0-beta.6_linux-x86_64.deb
-sha256: cf864bf615cdf841e8f70d95202457b964cff38009974dbc380f8b0f16b1a046  bytes: 7919356
+sha256: 71700226f1fdf1ee94eeadcddaa3c8d35eb5f19be206f2156544edadbad997d6  bytes: 7930324
 build: release profile, CAP_DEFAULT_SERVER_URL=https://meetings.calari.tech, release-config {createUpdaterArtifacts:false}, no updater pubkey/endpoint
 Package: cap
 Version: 0.2.0-beta.6
@@ -10,7 +10,7 @@ cap-desktop: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamicall
 production origin in binary: 1
 CAP_DEV_SERVER_URL in binary (must be 0): 0
 test server 127.0.0.1:87xx in binary (must be 0): 0
-supersedes (never publish): 7cbdb79c (5179a45, records after Stop), d9da06f8, 23b7fe4b
+supersedes (never publish): cf864bf6 (eaf6325: Recording before audio, Stop up to 0.5 s late on FFmpeg 7+), 7cbdb79c, d9da06f8, 23b7fe4b
 install=0
 missing shared libraries: 0
 app-running-after-12s
