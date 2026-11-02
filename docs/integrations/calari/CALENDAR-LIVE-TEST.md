@@ -50,12 +50,13 @@ password in any tool, and the notetaker never signs in to Google.
    docker build -f infra/calendar-bot/speaker.Dockerfile -t cap-meet-speaker:test .
    docker run --rm --shm-size 512m --read-only --tmpfs /tmp:rw,nosuid,size=512m \
      --cap-drop ALL --security-opt no-new-privileges:true \
-     -e CAP_SPEAKER_ALLOWED_CODE=<meet code> cap-meet-speaker:test --minutes 15 --repeat 2
+     -e CAP_SPEAKER_ALLOWED_CODE=<meet code> cap-meet-speaker:test \
+     --wav /opt/cap-speaker/speech.ogg --minutes 1 --repeat 1
    ```
 
    It asks to join as "Calari audio test" (camera off, microphone ON: the
    only participant that is), Don admits it, it plays the scripted synthetic
-   speech twice into its microphone and leaves. It refuses any other meeting
+   speech once into its microphone and leaves. It refuses any other meeting
    code, holds no Google credentials, records nothing, and exits at the time
    limit. The notetaker stays muted.
 
