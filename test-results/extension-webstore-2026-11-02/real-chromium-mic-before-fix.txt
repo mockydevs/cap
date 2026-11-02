@@ -1,0 +1,20 @@
+{
+  "extensionId": "edoidpfmflnlhjkmaimdamkmokaphcba",
+  "chromium": "Chrome/156.0.8078.4",
+  "offscreenBeforeGrant": {
+    "permission": "prompt",
+    "getUserMedia": "NotAllowedError: Permission dismissed"
+  },
+  "offscreenAfterGrantSameDoc": {
+    "permission": "granted",
+    "getUserMedia": "NotAllowedError: Permission dismissed"
+  },
+  "offscreenAfterGrantNewDoc": {
+    "permission": "granted",
+    "getUserMedia": "ok",
+    "tracks": [
+      "Fake Default Audio Input"
+    ]
+  }
+}
+chrome exited 0

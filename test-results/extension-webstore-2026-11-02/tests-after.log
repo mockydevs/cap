@@ -1,0 +1,34 @@
+✔ Calari sign-in binds redemption to state, exact callback and S256 verifier (16.961007ms)
+✔ sign-in refuses a changed callback state before redemption (0.55307ms)
+✔ sign-in refuses a changed callback origin before redemption (0.353115ms)
+✔ sign-in refuses a changed callback path before redemption (0.299772ms)
+✔ expiry returns sign-in state while preserving unfinished recordings (0.257813ms)
+✔ Stop reports offscreen errors and retains recording state (0.475344ms)
+✔ a revoked credential opens sign-in again without deleting recordings (0.666404ms)
+✔ re-pairing adopts an expired meeting even after all chunks uploaded (1.205967ms)
+✔ a delayed stop from another meeting cannot clear the current recording (0.171087ms)
+✔ crash with acknowledged chunks refreshes unknown sequence after renewed pairing (1.599712ms)
+✔ crash recovery never finalizes a persisted unsaved-audio marker (0.295734ms)
+✔ Start refuses before creating a meeting when the microphone is not allowed (0.159678ms)
+✔ a recorder page opened before the grant is replaced and recording starts (0.205318ms)
+✔ with the microphone turned off, Start records the tab without a check (0.171217ms)
+✔ chunks are contiguous even when onstop fires after the next chunk starts (2.644575ms)
+✔ a stop right after start still yields one chunk with a positive duration (0.404074ms)
+✔ stop waits for an earlier chunk still being saved (3.546621ms)
+✔ stop reports failed chunk persistence instead of claiming success (1.017906ms)
+✔ quota failure retains earlier and final chunks for Stop retry without recapture (0.425333ms)
+✔ each call's end is reported once, including after rejoining the same page (0.947606ms)
+✔ mic-check reports a refusal and a grant, releasing the test stream (0.787461ms)
+✔ Start fails and releases the tab when the requested microphone is refused (0.347999ms)
+✔ manual Stop quota failure; retry preserves bytes and finalizes once (17.244185ms)
+✔ rollover quota failure auto-stops without user action; retry preserves bytes and finalizes once (3.471231ms)
+✔ only a confirmed upload is an acknowledgement (0.388643ms)
+✔ gaps are accepted only for audio that is gone or quarantined (0.098697ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67.41445

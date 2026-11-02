@@ -1,0 +1,13 @@
+== mutation 1: offscreen falls back to tab only (old behaviour)
+ℹ pass 1
+ℹ fail 1
+== mutation 2: no microphone check before Start
+ℹ pass 12
+ℹ fail 2
+== mutation 3: no retry in a new recorder page
+ℹ pass 12
+ℹ fail 2
+== restored
+ℹ tests 26
+ℹ pass 26
+ℹ fail 0

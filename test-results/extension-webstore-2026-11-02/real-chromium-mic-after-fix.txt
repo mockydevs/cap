@@ -1,0 +1,32 @@
+== unpacked
+{
+  "extensionId": "edoidpfmflnlhjkmaimdamkmokaphcba",
+  "chromium": "Chrome/156.0.8078.4",
+  "micCheckBeforeGrant": {
+    "ok": false,
+    "error": "NotAllowedError"
+  },
+  "micCheckAfterGrantSamePage": {
+    "ok": false,
+    "error": "NotAllowedError"
+  },
+  "micCheckAfterGrantNewPage": {
+    "ok": true
+  }
+}
+== store
+{
+  "extensionId": "deoihgkfafaplgpbnmiofbgengafiopa",
+  "chromium": "Chrome/156.0.8078.4",
+  "micCheckBeforeGrant": {
+    "ok": false,
+    "error": "NotAllowedError"
+  },
+  "micCheckAfterGrantSamePage": {
+    "ok": false,
+    "error": "NotAllowedError"
+  },
+  "micCheckAfterGrantNewPage": {
+    "ok": true
+  }
+}

@@ -1,0 +1,12 @@
+✔ manual Stop quota failure; retry preserves bytes and finalizes once (20.562035ms)
+✔ rollover quota failure auto-stops without user action; retry preserves bytes and finalizes once (3.351599ms)
+✔ only a confirmed upload is an acknowledgement (0.383361ms)
+✔ gaps are accepted only for audio that is gone or quarantined (0.097832ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 84.909245
