@@ -424,7 +424,7 @@ fn decoded_segments(ffmpeg: &str, dir: &Path) -> Vec<i16> {
         .unwrap()
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "ogg"))
+        .filter(|p| p.extension().is_some_and(|x| x == "ogg" || x == "webm"))
         .collect();
     files.sort();
     let mut samples = Vec::new();
@@ -751,14 +751,17 @@ fn a_device_that_never_starts_fails_cleanly() {
 /// default microphone plus the speakers' monitor. Needs a running PulseAudio
 /// (or PipeWire-Pulse) with something playing on both; see
 /// `scripts/desktop/pulse-capture-smoke.sh`.
+/// Records with the inputs the app picks on Linux, with sound controlled by
+/// instant source mutes: the microphone sounds for 0.7 s right after
+/// Recording is reported, the speakers for the last 1.5 s before Stop. Both
+/// must be in the recording where expected, with silence between.
 #[cfg(unix)]
-#[test]
-fn linux_records_the_microphone_and_the_speakers_through_pulse() {
+fn pulse_marker_case(
+    mode: CaptureMode,
+    screen: Option<(i32, i32, u32, u32)>,
+    display: Option<String>,
+) {
     use cap_meeting_recorder::devices::{self, InputChoice, Platform};
-    if std::env::var("CAP_TEST_PULSE").as_deref() != Ok("1") {
-        eprintln!("SKIPPED: set CAP_TEST_PULSE=1 with PulseAudio running");
-        return;
-    }
     let Some(e) = env() else { return };
     let found = devices::list_audio_devices(&e.ffmpeg, Platform::Linux);
     assert!(
@@ -769,17 +772,22 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
     let inputs = devices::resolve_inputs(
         Platform::Linux,
         &InputChoice {
-            mode: CaptureMode::Audio,
+            mode,
             microphone_id: None,
             system_audio: true,
-            screen: None,
-            x11_display: None,
+            screen,
+            x11_display: display,
         },
         &found,
     )
     .unwrap();
+    let audio: Vec<_> = inputs
+        .iter()
+        .filter(|i| !matches!(i, Input::LinuxX11 { .. }))
+        .cloned()
+        .collect();
     assert_eq!(
-        inputs,
+        audio,
         vec![
             Input::LinuxPulse {
                 source: "default".into()
@@ -805,7 +813,7 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         &e.ffmpeg,
         &d,
         inputs,
-        CaptureMode::Audio,
+        mode,
         DetectorConfig::default(),
     );
     // "First words": the microphone sounds for 0.7 s right after Recording
@@ -850,7 +858,7 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
     );
     let before_stop = tone_level(at(secs - 1.5, secs), 550.0);
     eprintln!(
-        "pulse recorded {recorded} ms ({secs:.2} s decoded): {spans:?}; Recording after {starting:.2} s; first words 330 Hz {first_words:.1}; quiet middle 330/550 Hz {:.1}/{:.1}; last 1.5 s 550 Hz {before_stop:.1}",
+        "pulse {mode:?} recorded {recorded} ms ({secs:.2} s decoded): {spans:?}; Recording after {starting:.2} s; first words 330 Hz {first_words:.1}; quiet middle 330/550 Hz {:.1}/{:.1}; last 1.5 s 550 Hz {before_stop:.1}",
         quiet.0, quiet.1
     );
     let per_second: Vec<String> = (0..secs as usize)
@@ -878,7 +886,58 @@ fn linux_records_the_microphone_and_the_speakers_through_pulse() {
         quiet.0 < 50.0 && quiet.1 < 50.0,
         "sound where there was none: markers misplaced"
     );
+    if mode == CaptureMode::Video {
+        assert!(
+            video_segments_have_frames(&e.ffmpeg, &d),
+            "no video in the segments"
+        );
+    }
     e.rt.block_on(e.state.db.close());
+}
+
+#[cfg(unix)]
+#[test]
+fn linux_records_the_microphone_and_the_speakers_through_pulse() {
+    if std::env::var("CAP_TEST_PULSE").as_deref() != Ok("1") {
+        eprintln!("SKIPPED: set CAP_TEST_PULSE=1 with PulseAudio running");
+        return;
+    }
+    pulse_marker_case(CaptureMode::Audio, None, None);
+}
+
+/// Video mode: X11 screen plus the same two PulseAudio streams, aligned on
+/// one clock, so first words and the last speaker are kept and in sync.
+#[cfg(unix)]
+#[test]
+fn linux_video_records_the_screen_microphone_and_speakers_through_pulse() {
+    let (Ok("1"), Ok(display)) = (
+        std::env::var("CAP_TEST_PULSE").as_deref(),
+        std::env::var("CAP_TEST_X11_DISPLAY"),
+    ) else {
+        eprintln!("SKIPPED: set CAP_TEST_PULSE=1 and CAP_TEST_X11_DISPLAY");
+        return;
+    };
+    pulse_marker_case(CaptureMode::Video, Some((0, 0, 640, 480)), Some(display));
+}
+
+/// Every WebM segment carries at least one video frame.
+#[cfg(unix)]
+fn video_segments_have_frames(ffmpeg: &str, dir: &Path) -> bool {
+    let files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "webm"))
+        .collect();
+    !files.is_empty()
+        && files.iter().all(|f| {
+            std::process::Command::new(ffmpeg)
+                .args(["-hide_banner", "-loglevel", "error", "-i"])
+                .arg(f)
+                .args(["-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"])
+                .status()
+                .is_ok_and(|s| s.success())
+        })
 }
 
 #[test]

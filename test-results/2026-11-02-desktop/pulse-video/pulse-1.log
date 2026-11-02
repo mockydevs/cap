@@ -1,0 +1,14 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.82s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 2 tests
+test linux_records_the_microphone_and_the_speakers_through_pulse ... pulse Audio recorded 12479 ms (12.43 s decoded): [(0, 2000), (2000, 4000), (4000, 6000), (6000, 8000), (8000, 10000), (10000, 12000), (12000, 12479)]; Recording after 2.44 s; first words 330 Hz 1353.8; quiet middle 330/550 Hz 0.0/0.0; last 1.5 s 550 Hz 1275.8
+per second 330/550 Hz: 0:0/0 1:0/0 2:1485/3 3:546/5 4:0/0 5:0/0 6:0/0 7:0/0 8:0/0 9:0/0 10:3/293 11:7/2730
+ok
+test linux_video_records_the_screen_microphone_and_speakers_through_pulse ... pulse Video recorded 13674 ms (13.46 s decoded): [(0, 2074), (2074, 4074), (4074, 6074), (6074, 8074), (8074, 10074), (10074, 12074), (12074, 13674)]; Recording after 3.46 s; first words 330 Hz 1189.8; quiet middle 330/550 Hz 0.0/0.0; last 1.5 s 550 Hz 2551.5
+per second 330/550 Hz: 0:0/0 1:0/0 2:0/0 3:1206/4 4:679/3 5:0/0 6:0/0 7:0/0 8:0/0 9:0/0 10:0/0 11:0/118 12:1/2596
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 27.77s
+

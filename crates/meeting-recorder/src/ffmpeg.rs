@@ -160,14 +160,16 @@ pub fn args(inputs: &[Input], mode: CaptureMode, dir: &Path, segment_seconds: u3
     args_aligned(inputs, mode, dir, segment_seconds, None)
 }
 
-/// Whether live PulseAudio inputs should be aligned on wall-clock time:
-/// audio mode with more than one input, all of them PulseAudio.
+/// Whether live Linux inputs should be aligned on wall-clock time: more than
+/// one input, all of them PulseAudio or (in video mode) X11 screen capture,
+/// which all carry wall-clock timestamps.
 pub fn wants_alignment(inputs: &[Input], mode: CaptureMode) -> bool {
-    mode == CaptureMode::Audio
-        && inputs.len() > 1
-        && inputs
-            .iter()
-            .all(|i| matches!(i, Input::LinuxPulse { .. } | Input::LinuxMonitor))
+    inputs.len() > 1
+        && inputs.iter().all(|i| match i {
+            Input::LinuxPulse { .. } | Input::LinuxMonitor => true,
+            Input::LinuxX11 { .. } => mode == CaptureMode::Video,
+            _ => false,
+        })
 }
 
 /// Like [`args`]; with `origin` (Unix seconds, taken just before FFmpeg
@@ -209,18 +211,27 @@ pub fn args_aligned(
         .iter()
         .position(Input::is_video)
         .filter(|_| mode == CaptureMode::Video);
-    let mix = if let (Some(origin), true) = (origin, audio.len() > 1) {
+    let mix = if let Some(origin) = origin {
+        // Every stream shifted to the same origin; audio padded with silence
+        // until its stream starts, so all inputs stay in sync.
         let mut graph = String::new();
+        if let Some(v) = video {
+            graph.push_str(&format!("[{v}:v]setpts=PTS-{origin:.6}/TB[vid];"));
+        }
         for n in &audio {
             graph.push_str(&format!(
                 "[{n}:a]asetpts=PTS-{origin:.6}/TB,aresample=async=1:first_pts=0[a{n}];"
             ));
         }
         let labels: String = audio.iter().map(|n| format!("[a{n}]")).collect();
-        format!(
-            "{graph}{labels}amix=inputs={}:duration=longest:normalize=0,asplit=2[rec][vad]",
-            audio.len()
-        )
+        if audio.len() > 1 {
+            format!(
+                "{graph}{labels}amix=inputs={}:duration=longest:normalize=0,asplit=2[rec][vad]",
+                audio.len()
+            )
+        } else {
+            format!("{graph}{labels}asplit=2[rec][vad]")
+        }
     } else if audio.len() > 1 {
         let labels: String = audio.iter().map(|n| format!("[{n}:a]")).collect();
         format!(
@@ -238,7 +249,11 @@ pub fn args_aligned(
     if let Some(v) = video {
         out.extend([
             "-map".into(),
-            format!("{v}:v"),
+            if origin.is_some() {
+                "[vid]".into()
+            } else {
+                format!("{v}:v")
+            },
             "-c:v".into(),
             "libvpx".into(),
             "-deadline".into(),
@@ -416,7 +431,35 @@ mod tests {
             Input::LinuxMonitor,
         ];
         assert!(wants_alignment(&pulse, CaptureMode::Audio));
-        assert!(!wants_alignment(&pulse, CaptureMode::Video));
+        assert!(wants_alignment(&pulse, CaptureMode::Video));
+        let screen = Input::LinuxX11 {
+            display: ":0".into(),
+            x: 0,
+            y: 0,
+            width: 640,
+            height: 480,
+        };
+        let video = [screen.clone(), pulse[0].clone(), pulse[1].clone()];
+        assert!(wants_alignment(&video, CaptureMode::Video));
+        assert!(!wants_alignment(&video, CaptureMode::Audio));
+        let joined =
+            args_aligned(&video, CaptureMode::Video, Path::new("/m"), 30, Some(5.0)).join(" ");
+        assert!(
+            joined.contains("[0:v]setpts=PTS-5.000000/TB[vid];"),
+            "{joined}"
+        );
+        assert!(joined.contains("[a1][a2]amix=inputs=2"));
+        assert!(joined.contains("-map [vid] -c:v libvpx"));
+        // One microphone with the screen: aligned too (sound and picture in sync).
+        let joined = args_aligned(
+            &video[..2],
+            CaptureMode::Video,
+            Path::new("/m"),
+            30,
+            Some(5.0),
+        )
+        .join(" ");
+        assert!(joined.contains("[a1]asplit=2[rec][vad]"), "{joined}");
         assert!(!wants_alignment(&pulse[..1], CaptureMode::Audio));
         assert!(!wants_alignment(
             &[

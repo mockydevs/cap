@@ -1,0 +1,24 @@
+   Compiling cap-meeting-recorder v0.1.0 (/src/crates/meeting-recorder)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.99s
+     Running tests/capture.rs (/target/debug/deps/capture-b7a82461879667fd)
+
+running 2 tests
+test linux_records_the_microphone_and_the_speakers_through_pulse ... pulse Audio recorded 12354 ms (12.31 s decoded): [(0, 2000), (2000, 4000), (4000, 6000), (6000, 8000), (8000, 10000), (10000, 12000), (12000, 12354)]; Recording after 2.32 s; first words 330 Hz 1354.7; quiet middle 330/550 Hz 0.0/0.0; last 1.5 s 550 Hz 1682.0
+per second 330/550 Hz: 0:0/0 1:0/0 2:1949/1 3:83/3 4:0/0 5:0/0 6:0/0 7:0/0 8:0/0 9:0/0 10:2/646 11:7/2725
+ok
+test linux_video_records_the_screen_microphone_and_speakers_through_pulse ... pulse Video recorded 11874 ms (10.56 s decoded): [(0, 2007), (2007, 4007), (4007, 6007), (6007, 8007), (8007, 10007), (10007, 11874)]; Recording after 3.19 s; first words 330 Hz 13.0; quiet middle 330/550 Hz 0.4/373.7; last 1.5 s 550 Hz 611.6
+per second 330/550 Hz: 0:0/0 1:0/0 2:1427/1 3:0/0 4:0/0 5:0/0 6:0/0 7:0/0 8:3/524 9:4/1853
+
+thread 'linux_video_records_the_screen_microphone_and_speakers_through_pulse' (779) panicked at crates/meeting-recorder/tests/capture.rs:879:5:
+the first words after Recording are missing
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    linux_video_records_the_screen_microphone_and_speakers_through_pulse
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 27.61s
+
+error: test failed, to rerun pass `-p cap-meeting-recorder --test capture`

@@ -1,0 +1,5 @@
+source: video alignment (committed next)
+pulse-audio+video-1 exit=0
+pulse-audio+video-2 exit=0
+pulse-audio+video-3 exit=0
+mutation-no-video-alignment exit=101
