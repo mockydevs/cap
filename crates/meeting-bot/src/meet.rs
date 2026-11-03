@@ -404,6 +404,12 @@ pub fn join(b: &mut Browser, url: &str, o: JoinOptions<'_>) -> Result<JoinOutcom
             continue;
         }
         if asked_at.is_none() {
+            // The page-load limit comes before any action, so a prompt that
+            // never goes away (or a name box that keeps clearing) cannot
+            // keep the bot here.
+            if start.elapsed() > o.page_load_timeout {
+                return Ok(JoinOutcome::NoJoinButton(diag!()));
+            }
             // Only a muted participant may say "continue without microphone".
             if let (Some([x, y]), true) = (s.without_media, o.mute_microphone) {
                 b.click(x, y)?;
@@ -428,9 +434,6 @@ pub fn join(b: &mut Browser, url: &str, o: JoinOptions<'_>) -> Result<JoinOutcom
                 b.click(x, y)?;
                 asked_at = Some(Instant::now());
                 continue;
-            }
-            if start.elapsed() > o.page_load_timeout {
-                return Ok(JoinOutcome::NoJoinButton(diag!()));
             }
         } else if asked_at.is_some_and(|t| t.elapsed() > o.waiting_timeout) {
             return Ok(JoinOutcome::NotAdmitted(diag!()));

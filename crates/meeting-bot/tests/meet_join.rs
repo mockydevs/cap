@@ -35,6 +35,11 @@ fn page(kind: &str) -> String {
               document.getElementById('j').remove(); document.getElementById('w').hidden = false;
               setTimeout(() => { document.body.innerHTML = '<p>Someone in the call denied your request to join</p>'; }, 1500);
             };</script>"#.into(),
+        // A media prompt that never goes away, and a name box that clears
+        // itself: the page-load limit must still end the attempt.
+        "sticky" => r#"<button id="m">Continue without microphone and camera</button>
+            <input type="text" aria-label="Your name" id="n">
+            <script>setInterval(() => { document.getElementById('n').value = ''; }, 100);</script>"#.into(),
         _ => String::new(),
     };
     format!(
@@ -172,4 +177,30 @@ async fn refusal_timeout_disabled_and_denied_are_told_apart() {
     assert_eq!(reason, RefusalReason::Denied);
     assert_eq!((diag.asked, diag.waited), (true, true));
     assert_safe(&diag.to_string(), &base);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn page_load_limit_holds_against_a_persistent_prompt() {
+    let Ok(chrome) = std::env::var("CAP_TEST_CHROME") else {
+        eprintln!("SKIPPED: set CAP_TEST_CHROME");
+        return;
+    };
+    let base = serve().await;
+    let url = format!("{base}/abc-defg-hij?k=sticky");
+    let started = std::time::Instant::now();
+    // Limit 4 s; anything past 20 s means the deadline was bypassed (the
+    // blocking attempt is then abandoned with the test).
+    let out = tokio::time::timeout(
+        Duration::from_secs(20),
+        tokio::task::spawn_blocking(move || attempt(&chrome, url)),
+    )
+    .await
+    .expect("join kept acting past its page-load limit")
+    .unwrap();
+    let JoinOutcome::NoJoinButton(diag) = out else {
+        panic!("sticky: {out:?}")
+    };
+    eprintln!("sticky: {diag} after {:?}", started.elapsed());
+    assert!(!diag.asked);
+    assert!((4..=6).contains(&diag.secs), "{diag}");
 }

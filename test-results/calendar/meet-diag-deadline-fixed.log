@@ -1,0 +1,40 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s
+     Running unittests src/lib.rs (target/debug/deps/cap_meeting_bot-5a8f0269745be671)
+
+running 8 tests
+test meet::tests::hosts ... ok
+test meet::tests::page_kinds_and_unknown_flags_are_dropped ... ok
+test runner::tests::lease_deadline_counts_from_send_with_margin ... ok
+test cdp::tests::blocked_requests_are_bucketed_without_urls ... ok
+test meet::tests::codes ... ok
+test spool::tests::credential_is_private_and_unused_spool_is_forgotten ... ok
+test meet::tests::worst_case_summary_fits_the_failure_note ... ok
+cap-meeting-bot: attendance e03e4c19-7ffc-4de8-9c82-dd48e725b02d: audio still waiting to upload
+cap-meeting-bot: meeting b56cf7d0-8e95-410a-bfce-624c5981701c finalized; segments [3] were refused by the server and are kept in /tmp/spool-b168a98043ee4cd2a31444a138c800b5/e03e4c19-7ffc-4de8-9c82-dd48e725b02d
+test spool::tests::unfinalized_audio_is_never_deleted ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/meet_join.rs (target/debug/deps/meet_join-0e507194db919fa9)
+
+running 2 tests
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=disabled prompt=n asked=n waited=n t=0s btn=1 in=1 flags=join_disabled
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=n waited=n t=0s btn=1 in=0 flags=getting_ready,someone_in_call,join_variant blocked=other:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=n waited=n t=0s btn=1 in=0 flags=return_home
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=none prompt=y asked=n waited=n t=0s btn=1 in=1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=0s btn=1 in=1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=disabled prompt=n asked=n waited=n t=1s btn=1 in=1 flags=join_disabled
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=1s btn=1 in=1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=none prompt=n asked=y waited=y t=2s btn=0 in=1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=3s btn=0 in=0
+cant-join: CantJoin page=meet/code ready=complete name=none join=none prompt=n asked=n waited=n t=0s btn=1 in=0 flags=return_home
+no-button: page=meet/code ready=complete name=none join=none prompt=n asked=n waited=n t=4s btn=1 in=0 flags=getting_ready,someone_in_call,join_variant blocked=other:1
+disabled: page=meet/code ready=complete name=filled join=disabled prompt=n asked=n waited=n t=4s btn=1 in=1 flags=join_disabled
+denied: Denied page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=3s btn=0 in=0
+test refusal_timeout_disabled_and_denied_are_told_apart ... ok
+sticky: page=meet/code ready=complete name=empty join=none prompt=y asked=n waited=n t=4s btn=1 in=1 after 4.587228449s
+test page_load_limit_holds_against_a_persistent_prompt ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.59s
+

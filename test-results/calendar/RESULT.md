@@ -255,8 +255,21 @@ Change (meeting-bot only; no security/policy change, no live join):
   text, URLs, names or tokens (test asserts a secret marker, host, port and
   code never appear). Runner logs a short trail of page changes in the same
   terms; the failure note (200 chars) leads with the useful facts.
-- Join waits capped at 120 s (`CAP_BOT_WAITING_SECONDS` default 600 → 120;
-  page load 90; both refuse values above 120), per Don.
+- Join waits are capped PER STEP at 120 s (`CAP_BOT_WAITING_SECONDS`
+  default 600 → 120; `CAP_BOT_PAGE_LOAD_SECONDS` 90; each refuses values
+  above 120), per Don. Total join time is page load + admission, so up to
+  90 + 120 = 210 s by default (240 s at the caps); there is no single total
+  limit.
+
+Review round 1 (root, P1): the page-load deadline was checked only after the
+prompt/mic/camera/name actions, so a prompt that never went away or a name
+box that kept clearing looped forever. The deadline now comes before any
+action. Real-Chrome regression `page_load_limit_holds_against_a_persistent_prompt`
+(persistent "Continue without microphone" + self-clearing name, limit 4 s):
+on f8b146e it never returned (20 s guard panicked, run killed, rc 124,
+`meet-diag-deadline-counter-f8b146e.log`); fixed: `NoJoinButton` after 4.6 s
+(`meet-diag-deadline-fixed.log`). Main container test still passes
+(`meet-diag-deadline-attend.log`).
 
 Finding: Chrome's `URLBlocklist` does not block subresources. In the test
 image (policy allows only 127.0.0.1) a `<script src=http://blocked.invalid>`
@@ -267,7 +280,7 @@ policy.
 
 | Command | Exit | Result |
 | --- | --- | --- |
-| `CAP_TEST_CHROME=google-chrome cargo test -p cap-meeting-bot --lib --test meet_join` | 0 | 8 unit + real-Chrome test: cant_join vs no-button vs disabled vs denied told apart; no leaks (`meet-diag-join.log`) |
+| `CAP_TEST_CHROME=google-chrome cargo test -p cap-meeting-bot --lib --test meet_join` | 0 | 8 unit + 2 real-Chrome tests: cant_join vs no-button vs disabled vs denied told apart, no leaks; page-load limit holds against a persistent prompt (`meet-diag-deadline-fixed.log`) |
 | `… cargo test -p cap-meeting-bot --features fake-meet --test attend` (7 containers in parallel) | 101 | 6/7; `injected_platform_secrets…` saw no Xvfb in its process snapshot under parallel load (`meet-diag-attend.log`) |
 | same test alone, twice | 0, 0 | passes, Xvfb present (`meet-diag-attend-secrets-1.log`, `-2.log`) |
 | `cargo clippy --workspace --all-targets … -D warnings` / `cargo fmt --all --check` | 0 / 0 | (`meet-diag-clippy.log`, `meet-diag-fmt.log`) |

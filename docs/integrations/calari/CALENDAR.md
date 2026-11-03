@@ -118,7 +118,7 @@ PulseAudio null sink (`cap_bot`), microphone is a silent null source;
 mic and camera switched off before asking to join. Trusted CDP mouse/keyboard
 input; no stealth plugins, user-agent or WebGL spoofing. Waiting room limit
 `CAP_BOT_WAITING_SECONDS` (120) and page-load limit `CAP_BOT_PAGE_LOAD_SECONDS`
-(90); both are capped at 120 s. A failed join reports a fixed-vocabulary
+(90); each step is capped at 120 s (so up to 210 s in total by default). A failed join reports a fixed-vocabulary
 reason (`cant_join`, `denied`, `not_allowed`, `bad_code`, `not_found`, or "no
 join button") plus page facts (page kind, join/name state, known-phrase flags,
 policy-blocked request domains); never page text or URLs. Leaves when the meeting ends, the server says

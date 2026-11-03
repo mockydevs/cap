@@ -1,0 +1,11 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running tests/meet_join.rs (target/debug/deps/meet_join-0e507194db919fa9)
+
+running 1 test
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=none prompt=y asked=n waited=n t=0s btn=1 in=1
+
+thread 'page_load_limit_holds_against_a_persistent_prompt' (1226412) panicked at crates/meeting-bot/tests/meet_join.rs:198:6:
+join kept acting past its page-load limit: Elapsed(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test page_load_limit_holds_against_a_persistent_prompt has been running for over 60 seconds

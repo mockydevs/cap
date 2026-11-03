@@ -1,0 +1,24 @@
+   Compiling cap-meeting-bot v0.1.0 (/home/don/code/cap-calendar/crates/meeting-bot)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.86s
+     Running tests/attend.rs (target/debug/deps/attend-b57928efb7fa5515)
+
+running 1 test
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 9c37959b-93bd-47e4-9d13-158439c5978f
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=1s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=3s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=4s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: 9c37959b-93bd-47e4-9d13-158439c5978f completed
+
+page events: [Object {"k": String("nomedia"), "t": Number(1793665681884), "v": Bool(true)}, Object {"k": String("mic"), "t": Number(1793665682587), "v": Bool(true)}, Object {"k": String("cam"), "t": Number(1793665683290), "v": Bool(true)}, Object {"k": String("join"), "t": Number(1793665684699), "v": Object {"name": String("Calari Notetaker"), "path": String("/abc-defg-hij"), "trusted": Bool(true)}}, Object {"k": String("admitted"), "t": Number(1793665687200), "v": Bool(true)}, Object {"k": String("playing"), "t": Number(1793665691201), "v": Bool(true)}, Object {"k": String("ended"), "t": Number(1793665709734), "v": Bool(true)}]
+attended in 30.267081085s
+transcribed and delivered in 22.645847ms
+transcript provider/model: "test-fixture" "none"
+transcript: [test-fixture transcript, not real speech recognition: chunk 0 of 103122 bytes]
+Calari receipt: Some("rcpt-1")
+test runner_container_attends_records_and_delivers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 30.83s
+
