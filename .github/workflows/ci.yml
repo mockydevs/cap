@@ -219,6 +219,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22 }
       - run: node --test apps/extension/test/chunker.test.mjs apps/extension/test/uploads.test.mjs
+      - run: node --test crates/cap-server/tests/web_drafts.test.mjs
 
   cap-server-build:
     runs-on: ubuntu-24.04

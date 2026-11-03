@@ -56,6 +56,15 @@ fn layout_full(
     body: Markup,
 ) -> Markup {
     let current = |n: Nav| if n == nav { Some("page") } else { None };
+    let draft_scope = user.map(|u| {
+        cap_meeting_protocol::ids::sha256_hex(
+            format!(
+                "cap.drafts.v1:{}:{}:{}",
+                u.tenant_id, u.user_id, u.session_hash
+            )
+            .as_bytes(),
+        )
+    });
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -67,7 +76,7 @@ fn layout_full(
                 link rel="stylesheet" href="/static/app.css";
                 script src="/static/app.js" defer {}
             }
-            body data-saved-draft=[saved_draft] {
+            body data-draft-scope=[draft_scope.as_deref()] data-saved-draft=[saved_draft] {
                 a.skip href="#main" { "Skip to content" }
                 @if let Some(u) = user {
                     div.shell {

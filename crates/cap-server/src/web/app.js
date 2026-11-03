@@ -2,7 +2,16 @@
 // parts, draft keeping, a double-submit guard and an unsaved-changes warning.
 (() => {
   // ---- Drafts: kept per tab in sessionStorage, never sent anywhere. ----
-  const PREFIX = "cap.draft.";
+  const ROOT = "cap.draft.";
+  const PREFIX =
+    ROOT + (document.body.dataset.draftScope || "signed-out") + ".";
+  // Expiry/re-login can change users without a Sign out click. Never restore
+  // another session's drafts, including legacy unscoped drafts.
+  try {
+    for (const k of Object.keys(sessionStorage))
+      if (k.startsWith(ROOT) && !k.startsWith(PREFIX))
+        sessionStorage.removeItem(k);
+  } catch {}
   const store = {
     get(k) {
       try {
@@ -24,7 +33,7 @@
     clearAll() {
       try {
         for (const k of Object.keys(sessionStorage))
-          if (k.startsWith(PREFIX)) sessionStorage.removeItem(k);
+          if (k.startsWith(ROOT)) sessionStorage.removeItem(k);
       } catch {}
     },
   };
