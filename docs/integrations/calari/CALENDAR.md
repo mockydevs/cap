@@ -117,7 +117,11 @@ Headed Chromium on a private Xvfb display; meeting audio to a private
 PulseAudio null sink (`cap_bot`), microphone is a silent null source;
 mic and camera switched off before asking to join. Trusted CDP mouse/keyboard
 input; no stealth plugins, user-agent or WebGL spoofing. Waiting room limit
-`CAP_BOT_WAITING_SECONDS` (600). Leaves when the meeting ends, the server says
+`CAP_BOT_WAITING_SECONDS` (120) and page-load limit `CAP_BOT_PAGE_LOAD_SECONDS`
+(90); both are capped at 120 s. A failed join reports a fixed-vocabulary
+reason (`cant_join`, `denied`, `not_allowed`, `bad_code`, `not_found`, or "no
+join button") plus page facts (page kind, join/name state, known-phrase flags,
+policy-blocked request domains); never page text or URLs. Leaves when the meeting ends, the server says
 stop, `leave_by` (end + 30 min) passes, or 6 + 3 minutes of silence (everyone
 left). Audio goes through `cap-meeting-recorder` (30 s segments, resumable
 uploads). Browser profiles live on tmpfs and are deleted after each meeting.

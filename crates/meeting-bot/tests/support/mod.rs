@@ -40,6 +40,7 @@ pub fn page(long: bool, admit_after_ms: u64) -> String {
 <div id="waiting" hidden>Asking to be let in…</div>
 <div id="incall" hidden><p>In the call</p><button aria-label="Leave call" id="leave">leave</button><audio id="a" src="/speech.ogg" {loop_attr}></audio></div>
 <div id="end" hidden>The meeting has ended</div>
+<script src="http://blocked.invalid/policy-check.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 setInterval(() => fetch('/alive', {{method: 'POST'}}), 500);

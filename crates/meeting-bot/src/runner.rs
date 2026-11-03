@@ -408,11 +408,18 @@ fn attend(api: &Api, job: &Claim, live: &Arc<Live>) -> Outcome {
             return Outcome::Failed("lease could not be renewed; left before recording".into())
         }
         Ok(meet::JoinOutcome::Stopped) => return Outcome::Completed,
-        Ok(meet::JoinOutcome::Refused) => {
-            return Outcome::Failed("Google Meet did not let the notetaker join".into())
+        // Fixed-vocabulary evidence only (see meet::Diag); never page text.
+        Ok(meet::JoinOutcome::Refused { reason, diag }) => {
+            return Outcome::Failed(format!(
+                "Google Meet refused the notetaker ({}): {diag}",
+                reason.code()
+            ))
         }
-        Ok(meet::JoinOutcome::NotAdmitted) => {
-            return Outcome::Failed("nobody admitted the notetaker".into())
+        Ok(meet::JoinOutcome::NoJoinButton(diag)) => {
+            return Outcome::Failed(format!("Meet page offered no join button: {diag}"))
+        }
+        Ok(meet::JoinOutcome::NotAdmitted(diag)) => {
+            return Outcome::Failed(format!("nobody admitted the notetaker: {diag}"))
         }
         Err(_) if live.watchdog_fired.load(Ordering::SeqCst) => {
             return Outcome::Failed("lease could not be renewed; left before recording".into())

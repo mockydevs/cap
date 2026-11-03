@@ -233,3 +233,41 @@ calendar.events.readonly`.
    Calari); real Google Meet + real portal + Don's calendar remain root's gate.
 7. Local test tooling: user-level `pipx install cmake` used to build
    local-whisper; test Postgres container `cap-calendar-pg-test` on 5447.
+
+## Join diagnostics (live failure 2026-11-03, attendance bd874f4f)
+
+Live: runner reported "Google Meet did not let the notetaker join" and the host
+saw no admission prompt. Source review: `meet::join` returned the same
+`Refused` both for a matched refusal phrase AND for "no enabled join button
+within the page-load limit", and it treated a click on a disabled "Ask to
+join" as asking. The live message therefore did not say which happened.
+
+Change (meeting-bot only; no security/policy change, no live join):
+- `JoinOutcome::Refused { reason, diag }` with fixed codes `cant_join`,
+  `denied`, `not_allowed`, `bad_code`, `not_found`;
+  `NoJoinButton(diag)` for the timeout (no longer called a refusal);
+  `NotAdmitted(diag)`. Only an enabled join button counts as asking.
+- `Diag` is fixed vocabulary only: page kind (meet/code, google_sign_in,
+  browser_error, …), ready state, name/join/prompt state, asked/waited,
+  seconds, counts, known-phrase flags (unsupported_browser, getting_ready,
+  sign_in_prompt, join_disabled, join_variant, someone_in_call, …), failed
+  requests by Chrome error code and policy blocks by domain bucket. No page
+  text, URLs, names or tokens (test asserts a secret marker, host, port and
+  code never appear). Runner logs a short trail of page changes in the same
+  terms; the failure note (200 chars) leads with the useful facts.
+- Join waits capped at 120 s (`CAP_BOT_WAITING_SECONDS` default 600 → 120;
+  page load 90; both refuse values above 120), per Don.
+
+Finding: Chrome's `URLBlocklist` does not block subresources. In the test
+image (policy allows only 127.0.0.1) a `<script src=http://blocked.invalid>`
+reached DNS (`ERR_NAME_NOT_RESOLVED`), not `ERR_BLOCKED_BY_ADMINISTRATOR`.
+So the bot's URL policy cannot have broken the Meet page; it limits
+navigations only. Egress control for subresources is the network, not the
+policy.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `CAP_TEST_CHROME=google-chrome cargo test -p cap-meeting-bot --lib --test meet_join` | 0 | 8 unit + real-Chrome test: cant_join vs no-button vs disabled vs denied told apart; no leaks (`meet-diag-join.log`) |
+| `… cargo test -p cap-meeting-bot --features fake-meet --test attend` (7 containers in parallel) | 101 | 6/7; `injected_platform_secrets…` saw no Xvfb in its process snapshot under parallel load (`meet-diag-attend.log`) |
+| same test alone, twice | 0, 0 | passes, Xvfb present (`meet-diag-attend-secrets-1.log`, `-2.log`) |
+| `cargo clippy --workspace --all-targets … -D warnings` / `cargo fmt --all --check` | 0 / 0 | (`meet-diag-clippy.log`, `meet-diag-fmt.log`) |

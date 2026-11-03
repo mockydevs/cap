@@ -4,6 +4,7 @@
 
 use serde_json::{json, Value};
 use std::{
+    collections::{BTreeMap, HashMap},
     net::TcpStream,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -31,16 +32,123 @@ fn err(e: impl std::fmt::Display) -> CdpError {
 pub struct Cdp {
     ws: WebSocket<MaybeTlsStream<TcpStream>>,
     next: u64,
+    net: NetStats,
+    /// Domain bucket of each request still in flight (bounded).
+    pending: HashMap<String, &'static str>,
+}
+
+const MAX_PENDING: usize = 5_000;
+
+/// Domains a blocked request is reported under; anything else is "other".
+/// Only these names (never URLs) leave the bot.
+pub const KNOWN_DOMAINS: &[&str] = &[
+    "google.com",
+    "gstatic.com",
+    "googleapis.com",
+    "googleusercontent.com",
+    "ggpht.com",
+    "gvt1.com",
+    "gvt2.com",
+    "youtube.com",
+    "ytimg.com",
+    "googlevideo.com",
+    "doubleclick.net",
+    "google-analytics.com",
+    "googletagmanager.com",
+    "googlesyndication.com",
+    "recaptcha.net",
+    "withgoogle.com",
+];
+
+/// Failed page requests, counted from the browser's own network log.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NetStats {
+    /// Requests the browser refused to make (URL policy), by domain bucket.
+    pub blocked: BTreeMap<&'static str, u32>,
+    /// Other network failures, by Chrome's own error code (`ERR_…`,
+    /// a fixed vocabulary; anything else is "ERR_OTHER").
+    pub errors: BTreeMap<String, u32>,
+}
+
+fn domain_bucket(url: &str) -> &'static str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority.rsplit('@').next().unwrap_or("");
+    let host = host.split(':').next().unwrap_or("").to_ascii_lowercase();
+    KNOWN_DOMAINS
+        .iter()
+        .copied()
+        .find(|d| host == *d || host.ends_with(&format!(".{d}")))
+        .unwrap_or("other")
+}
+
+impl NetStats {
+    /// `failed` is a `Network.loadingFailed` event's params. Production
+    /// Chrome blocks by URL policy (ERR_BLOCKED_BY_ADMINISTRATOR); tests
+    /// block through DevTools (blockedReason "inspector"). Cancelled and
+    /// aborted requests are normal page behaviour and not counted.
+    fn record_failure(&mut self, failed: &Value, bucket: &'static str) {
+        let text = failed
+            .get("errorText")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let reason = failed.get("blockedReason").and_then(Value::as_str);
+        if text.contains("ERR_BLOCKED_BY_ADMINISTRATOR") || reason == Some("inspector") {
+            let n = self.blocked.entry(bucket).or_insert(0);
+            *n = n.saturating_add(1);
+        } else if failed.get("canceled").and_then(Value::as_bool) != Some(true)
+            && !text.contains("ERR_ABORTED")
+            && (reason.is_some() || !text.is_empty())
+        {
+            let code = text.strip_prefix("net::").unwrap_or("");
+            let code = if code.len() <= 40
+                && code.starts_with("ERR_")
+                && code.bytes().all(|c| c.is_ascii_uppercase() || c == b'_')
+            {
+                code.to_owned()
+            } else {
+                "ERR_OTHER".to_owned()
+            };
+            if self.errors.len() < 8 || self.errors.contains_key(&code) {
+                let n = self.errors.entry(code).or_insert(0);
+                *n = n.saturating_add(1);
+            }
+        }
+    }
 }
 
 impl Cdp {
+    /// Keeps only per-request domain buckets and failure counts.
+    fn event(&mut self, method: &str, p: &Value) {
+        let id = p.get("requestId").and_then(Value::as_str);
+        match (method, id) {
+            ("Network.requestWillBeSent", Some(id)) if self.pending.len() < MAX_PENDING => {
+                let url = p["request"]["url"].as_str().unwrap_or("");
+                self.pending.insert(id.to_owned(), domain_bucket(url));
+            }
+            ("Network.loadingFinished", Some(id)) => {
+                self.pending.remove(id);
+            }
+            ("Network.loadingFailed", Some(id)) => {
+                let bucket = self.pending.remove(id).unwrap_or("other");
+                self.net.record_failure(p, bucket);
+            }
+            _ => {}
+        }
+    }
+
     pub fn connect(url: &str) -> Result<Self> {
         let (ws, _) = tungstenite::connect(url).map_err(err)?;
         if let MaybeTlsStream::Plain(s) = ws.get_ref() {
             s.set_read_timeout(Some(Duration::from_millis(500)))
                 .map_err(err)?;
         }
-        Ok(Self { ws, next: 1 })
+        Ok(Self {
+            ws,
+            next: 1,
+            net: NetStats::default(),
+            pending: HashMap::new(),
+        })
     }
 
     /// Sends one command and waits for its answer, skipping events.
@@ -73,6 +181,10 @@ impl Cdp {
             let Ok(v) = serde_json::from_str::<Value>(text.as_str()) else {
                 continue;
             };
+            if let Some(m) = v.get("method").and_then(Value::as_str) {
+                self.event(m, &v["params"]);
+                continue;
+            }
             if v.get("id").and_then(Value::as_u64) != Some(id) {
                 continue;
             }
@@ -90,6 +202,57 @@ impl Cdp {
             }
             return Ok(v.get("result").cloned().unwrap_or(Value::Null));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn blocked_requests_are_bucketed_without_urls() {
+        let mut c = NetStats::default();
+        let admin = json!({"errorText": "net::ERR_BLOCKED_BY_ADMINISTRATOR", "canceled": false});
+        for url in [
+            "https://lh3.googleusercontent.com/a/x?sz=64",
+            "https://user:pw@www.gstatic.com:443/x.js",
+            "https://evil.example/secret-token",
+            "https://notgoogle.com.evil/x",
+        ] {
+            c.record_failure(&admin, domain_bucket(url));
+        }
+        c.record_failure(
+            &json!({"errorText": "", "blockedReason": "inspector"}),
+            "other",
+        );
+        c.record_failure(
+            &json!({"errorText": "net::ERR_CONNECTION_RESET", "canceled": false}),
+            "google.com",
+        );
+        c.record_failure(
+            &json!({"errorText": "net::ERR_<b>x", "canceled": false}),
+            "google.com",
+        );
+        c.record_failure(
+            &json!({"errorText": "net::ERR_ABORTED", "canceled": false}),
+            "google.com",
+        );
+        c.record_failure(
+            &json!({"errorText": "net::ERR_FAILED", "canceled": true}),
+            "google.com",
+        );
+        let want: BTreeMap<&str, u32> = [
+            ("googleusercontent.com", 1),
+            ("gstatic.com", 1),
+            ("other", 3),
+        ]
+        .into();
+        assert_eq!(c.blocked, want);
+        let errs: BTreeMap<String, u32> = [
+            ("ERR_CONNECTION_RESET".to_owned(), 1),
+            ("ERR_OTHER".to_owned(), 1),
+        ]
+        .into();
+        assert_eq!(c.errors, errs);
     }
 }
 
@@ -219,6 +382,9 @@ impl Browser {
             .to_owned();
         cdp.call(Some(&session), "Page.enable", json!({}))?;
         cdp.call(Some(&session), "Runtime.enable", json!({}))?;
+        // Failed requests (including URL-policy blocks) are counted by
+        // domain bucket; no URL is kept once a request settles.
+        cdp.call(Some(&session), "Network.enable", json!({}))?;
         Ok(Self {
             child: Arc::new(Mutex::new(child)),
             profile: o.profile,
@@ -281,6 +447,11 @@ impl Browser {
         self.cdp
             .call(Some(&session), "Input.insertText", json!({"text": text}))?;
         Ok(())
+    }
+
+    /// Failed requests seen so far on this page (safe summary).
+    pub fn net(&self) -> NetStats {
+        self.cdp.net.clone()
     }
 
     pub fn is_alive(&mut self) -> bool {

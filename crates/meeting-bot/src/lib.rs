@@ -17,6 +17,9 @@ fn var(name: &str) -> Option<String> {
 }
 
 /// Reads configuration from the environment; refuses unsafe values.
+/// Longest the bot waits for the Meet page or for the host to admit it.
+pub const MAX_JOIN_WAIT: Duration = Duration::from_secs(120);
+
 pub fn config_from_env() -> Result<runner::Config, String> {
     let server = var("CAP_SERVER_URL")
         .ok_or("CAP_SERVER_URL is required")?
@@ -46,6 +49,15 @@ pub fn config_from_env() -> Result<runner::Config, String> {
             None => default,
         }))
     };
+    // Joining never waits more than two minutes per step (page load, host
+    // admission), so a failed attempt is known quickly.
+    let join_wait = |name: &str, default: u64| -> Result<Duration, String> {
+        let d = secs(name, default)?;
+        if d.is_zero() || d > MAX_JOIN_WAIT {
+            return Err(format!("{name} must be 1-{}", MAX_JOIN_WAIT.as_secs()));
+        }
+        Ok(d)
+    };
     Ok(runner::Config {
         server,
         runner_token,
@@ -61,8 +73,8 @@ pub fn config_from_env() -> Result<runner::Config, String> {
         pulse_sink: var("CAP_BOT_PULSE_SINK").unwrap_or_else(|| "cap_bot".into()),
         no_sandbox: matches!(var("CAP_BOT_CHROME_NO_SANDBOX").as_deref(), Some("1")),
         meet_origin: meet_origin(),
-        waiting_timeout: secs("CAP_BOT_WAITING_SECONDS", 600)?,
-        page_load_timeout: secs("CAP_BOT_PAGE_LOAD_SECONDS", 90)?,
+        waiting_timeout: join_wait("CAP_BOT_WAITING_SECONDS", 120)?,
+        page_load_timeout: join_wait("CAP_BOT_PAGE_LOAD_SECONDS", 90)?,
         heartbeat: secs("CAP_BOT_HEARTBEAT_SECONDS", 20)?,
         idle_warning: secs("CAP_BOT_IDLE_WARNING_SECONDS", 360)?,
         idle_stop: secs("CAP_BOT_IDLE_STOP_SECONDS", 180)?,

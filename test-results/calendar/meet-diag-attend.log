@@ -1,0 +1,95 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/attend.rs (target/debug/deps/attend-b57928efb7fa5515)
+
+running 7 tests
+SKIPPED: set CAP_TEST_SPEAKER_IMAGE
+test test_speaker_joins_unmuted_and_plays_only_the_script ... ok
+processes inspected: ["cap-meeting-bot", "chromium", "chromium", "chromium", "pulseaudio", "chromium", "chromium", "ffmpeg", "chromium", "chrome_crashpad", "chrome_crashpad", "chromium", "chromium", "chromium", "chromium", "chromium"]
+
+thread 'injected_platform_secrets_never_reach_runner_processes' (1216041) panicked at crates/meeting-bot/tests/attend.rs:528:9:
+Xvfb not running: ["cap-meeting-bot", "chromium", "chromium", "chromium", "pulseaudio", "chromium", "chromium", "ffmpeg", "chromium", "chrome_crashpad", "chrome_crashpad", "chromium", "chromium", "chromium", "chromium", "chromium"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test injected_platform_secrets_never_reach_runner_processes ... FAILED
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending b3b563c4-491f-4b60-a18a-d0e3943384ac
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=1s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=3s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=4s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: b3b563c4-491f-4b60-a18a-d0e3943384ac failed: lease could not be renewed; left before recording
+
+waiting phase: last confirmed report 1793665065703, browser last alive 1793665079981 (14278 ms later), server lease ends 1793665085703
+test hung_waiting_report_leaves_before_server_lease ... ok
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 87707ebd-239f-44fb-ab37-5eb7510ea6ea
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=12s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=19s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=19s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: 87707ebd-239f-44fb-ab37-5eb7510ea6ea completed
+
+page events: [Object {"k": String("nomedia"), "t": Number(1793665077403), "v": Bool(true)}, Object {"k": String("mic"), "t": Number(1793665083108), "v": Bool(true)}, Object {"k": String("cam"), "t": Number(1793665083812), "v": Bool(true)}, Object {"k": String("join"), "t": Number(1793665085221), "v": Object {"name": String("Calari Notetaker"), "path": String("/abc-defg-hij"), "trusted": Bool(true)}}, Object {"k": String("admitted"), "t": Number(1793665087722), "v": Bool(true)}, Object {"k": String("playing"), "t": Number(1793665091981), "v": Bool(true)}, Object {"k": String("ended"), "t": Number(1793665110473), "v": Bool(true)}]
+attended in 46.258647767s
+transcribed and delivered in 23.350943ms
+transcript provider/model: "test-fixture" "none"
+transcript: [test-fixture transcript, not real speech recognition: chunk 0 of 102495 bytes]
+Calari receipt: Some("rcpt-1")
+test runner_container_attends_records_and_delivers ... ok
+test hung_first_recording_report_stops_capture_before_server_lease has been running for over 60 seconds
+test unconfirmed_lease_stops_capture_before_server_expiry has been running for over 60 seconds
+test upload_outage_and_restart_deliver_once_without_rejoining has been running for over 60 seconds
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 9b145720-2677-4ced-8130-2d614201e6ed
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=12s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=14s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=14s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: 9b145720-2677-4ced-8130-2d614201e6ed failed: lease could not be renewed; left early, recorded audio was delivered
+
+page events: [Object {"k": String("nomedia"), "t": Number(1793665077422), "v": Bool(true)}, Object {"k": String("mic"), "t": Number(1793665078126), "v": Bool(true)}, Object {"k": String("cam"), "t": Number(1793665078830), "v": Bool(true)}, Object {"k": String("join"), "t": Number(1793665080239), "v": Object {"name": String("Calari Notetaker"), "path": String("/abc-defg-hij"), "trusted": Bool(true)}}, Object {"k": String("admitted"), "t": Number(1793665082740), "v": Bool(true)}, Object {"k": String("playing"), "t": Number(1793665086982), "v": Bool(true)}]
+last confirmed report 1793665088258, browser last alive 1793665103025 (14767 ms later), server lease ends 1793665108258
+transcribed and delivered in 27.887323ms
+test unconfirmed_lease_stops_capture_before_server_expiry ... ok
+runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 7d5cb496-8b17-4d73-94cf-e7611316a576
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=12s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=24s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=24s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: 7d5cb496-8b17-4d73-94cf-e7611316a576 failed: lease could not be renewed; left early, recorded audio was delivered
+
+recording phase: last confirmed report 1793665090921, browser last alive 1793665105506 (14585 ms later), server lease ends 1793665110921
+transcribed and delivered in 21.27099ms
+test hung_first_recording_report_stops_capture_before_server_lease ... ok
+first runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: attending 551d5989-33f0-457c-a10c-894faa4221af
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=y asked=n waited=n t=0s btn=1 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=empty join=ready prompt=n asked=n waited=n t=12s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=filled join=ready prompt=n asked=n waited=n t=29s btn=3 in=1 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: meet page: page=meet/code ready=complete name=none join=none prompt=n asked=y waited=y t=29s btn=0 in=0 neterr=ERR_NAME_NOT_RESOLVED:1
+cap-meeting-bot: 551d5989-33f0-457c-a10c-894faa4221af failed: audio is kept on the runner; the upload will be retried (some audio is still waiting to upload: server returned 503)
+cap-meeting-bot: attendance 551d5989-33f0-457c-a10c-894faa4221af: audio still waiting to upload
+
+spool before restart: "551d5989-33f0-457c-a10c-894faa4221af\n551d5989-33f0-457c-a10c-894faa4221af.token"
+second runner log:
+cap-meeting-bot: ready
+cap-meeting-bot: recovered and finalized meeting be6ed245-6c58-461d-8958-5b462b3e4498
+
+transcribed and delivered in 30.265528ms
+transcript provider/model: "test-fixture" "none"
+transcript: [test-fixture transcript, not real speech recognition: chunk 0 of 103819 bytes]
+test upload_outage_and_restart_deliver_once_without_rejoining ... ok
+
+failures:
+
+failures:
+    injected_platform_secrets_never_reach_runner_processes
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 152.53s
+
+error: test failed, to rerun pass `-p cap-meeting-bot --test attend`
