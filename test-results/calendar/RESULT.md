@@ -285,3 +285,25 @@ policy.
 | `… cargo test -p cap-meeting-bot --features fake-meet --test attend` (7 containers in parallel) | 101   | 6/7; `injected_platform_secrets…` saw no Xvfb in its process snapshot under parallel load (`meet-diag-attend.log`)                                                                  |
 | same test alone, twice                                                                          | 0, 0  | passes, Xvfb present (`meet-diag-attend-secrets-1.log`, `-2.log`)                                                                                                                   |
 | `cargo clippy --workspace --all-targets … -D warnings` / `cargo fmt --all --check`              | 0 / 0 | (`meet-diag-clippy.log`, `meet-diag-fmt.log`)                                                                                                                                       |
+
+## Calendar discovery interval (request: reliable discovery within 2 minutes)
+
+- `CAP_CALENDAR_SYNC_SECONDS` default 300 → 60, validated 30–3600 at boot
+  (0, 29, 3601 refused; 30, 60, 3600 accepted). It was not passed through
+  `docker-compose.coolify.yml`, so setting it in Coolify had no effect; it is
+  now (`${CAP_CALENDAR_SYNC_SECONDS:-60}`).
+- Cost: one Google `events.list` per connected calendar per interval (more
+  pages only for very busy calendars). Failures keep the existing backoff
+  (30 s doubling to 30 min); leases and dedup are unchanged.
+- Discovery latency is at most the interval plus the 5 s scheduler tick
+  (≈65 s at 60). This is discovery only: preparing the pairing, the bot's
+  10 s claim poll, page load (≤90 s) and admission (≤120 s) come after it.
+  No total end-to-end bound is claimed.
+
+| Command                                                                     | Exit | Result                                                                  |
+| --------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------- |
+| `cargo test -p cap-server --lib config`                                     | 0    | 4 passed, includes bounds (`sync-interval-config.log`)                  |
+| `CAP_TEST_DATABASE_URL=… cargo test -p cap-server --test calendar`          | 0    | 9 passed (`sync-interval-calendar.log`)                                 |
+| `docker compose -f docker-compose.coolify.yml config` (placeholder values)  | 0    | renders `CAP_CALENDAR_SYNC_SECONDS: "60"` (`sync-interval-compose.log`) |
+| `cargo clippy --workspace --all-targets … -D warnings`, `cargo fmt --check` | 0, 0 | (`sync-interval-clippy.log`)                                            |
+| `prettier --check` CALENDAR.md, RESULT.md                                   | 0    |                                                                         |

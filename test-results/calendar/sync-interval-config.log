@@ -1,0 +1,12 @@
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.05s
+     Running unittests src/lib.rs (target/debug/deps/cap_server-f886e71ae3aa510e)
+
+running 4 tests
+test config::tests::debug_output_redacts_secrets ... ok
+test config::tests::development_allows_local_http_and_test_fixture ... ok
+test config::tests::production_rules_fail_loudly ... ok
+test config::tests::calendar_rules_fail_closed ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+

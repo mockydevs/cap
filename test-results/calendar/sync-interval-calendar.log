@@ -1,0 +1,17 @@
+   Compiling cap-server v0.1.0 (/home/don/code/cap-calendar/crates/cap-server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.50s
+     Running tests/calendar.rs (target/debug/deps/calendar-d9b6a0d5ddc00c44)
+
+running 9 tests
+test calendar_is_admin_only_unless_widened ... ok
+test oauth_is_bound_to_state_pkce_session_and_browser ... ok
+test concurrent_reconcile_creates_one_attendance ... ok
+test unanswered_invites_never_bring_the_bot_and_disconnect_forgets_events ... ok
+test revocation_refusal_and_crash_recovery_fail_closed ... ok
+test staff_pages_send_origin_and_only_calendar_may_post_to_google ... ok
+test scheduled_meeting_is_prepared_claimed_recorded_and_delivered ... ok
+test endless_recurring_series_stays_bounded_and_rolls_in ... ok
+test sync_resumes_pages_dedupes_reschedules_and_cancels ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+

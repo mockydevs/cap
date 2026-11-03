@@ -1,0 +1,2 @@
+compose exit=0
+88:      CAP_CALENDAR_SYNC_SECONDS: "60"

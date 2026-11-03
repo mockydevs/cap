@@ -328,7 +328,7 @@ impl Config {
                 )?),
                 sync_interval: Duration::from_secs(parse_var::<u64>(
                     "CAP_CALENDAR_SYNC_SECONDS",
-                    300,
+                    60,
                 )?),
                 horizon: Duration::from_secs(
                     parse_var::<u64>("CAP_CALENDAR_HORIZON_DAYS", 14)? * 86_400,
@@ -477,6 +477,11 @@ impl Config {
             }
             if !(20..=600).contains(&c.bot_lease_seconds) {
                 bail!("CAP_CALENDAR_BOT_LEASE_SECONDS must be 20-600");
+            }
+            // Each sync is one Google list call per connected calendar (more
+            // only for busy calendars); failures already back off from 30 s.
+            if !(30..=3_600).contains(&c.sync_interval.as_secs()) {
+                bail!("CAP_CALENDAR_SYNC_SECONDS must be 30-3600");
             }
             if c.bot_token_sha256.len() != 64 {
                 bail!("calendar bot token hash is invalid");
@@ -661,6 +666,9 @@ pub(crate) mod tests {
                 c.calendar.as_mut().unwrap().google.api_base = "http://127.0.0.1:1".into()
             }),
             Box::new(|c| c.calendar.as_mut().unwrap().max_concurrent = 0),
+            Box::new(|c| c.calendar.as_mut().unwrap().sync_interval = Duration::from_secs(0)),
+            Box::new(|c| c.calendar.as_mut().unwrap().sync_interval = Duration::from_secs(29)),
+            Box::new(|c| c.calendar.as_mut().unwrap().sync_interval = Duration::from_secs(3_601)),
             Box::new(|c| c.calendar.as_mut().unwrap().encryption_key = Secret32([9; 32])),
             Box::new(|c| c.integrations[0].calendar_pairing_url = None),
             Box::new(|c| {
@@ -675,6 +683,11 @@ pub(crate) mod tests {
             let mut c = with_calendar();
             mutate(&mut c);
             assert!(c.validate().is_err(), "calendar case {i} should be refused");
+        }
+        for ok in [30, 60, 3_600] {
+            let mut c = with_calendar();
+            c.calendar.as_mut().unwrap().sync_interval = Duration::from_secs(ok);
+            assert!(c.validate().is_ok(), "sync every {ok}s should be allowed");
         }
         let rendered = format!("{:?}", with_calendar());
         assert!(!rendered.contains("google-secret"));

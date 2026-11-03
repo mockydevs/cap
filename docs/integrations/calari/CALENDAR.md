@@ -153,7 +153,7 @@ Cap server (all required when `CAP_CALENDAR_ENABLED=1`; boot fails otherwise):
 | `CAP_CALENDAR_BOT_TOKEN`                                                   | runner bearer token (≥ 32 random chars; only its hash is kept)                                                               |
 | `CAP_CALENDAR_MAX_CONCURRENT`                                              | 1–4 (default 1)                                                                                                              |
 | `CAP_CALENDAR_JOIN_LEAD_SECONDS`                                           | default 120                                                                                                                  |
-| `CAP_CALENDAR_SYNC_SECONDS`                                                | default 300                                                                                                                  |
+| `CAP_CALENDAR_SYNC_SECONDS`                                                | default 60 (30-3600)                                                                                                         |
 | `CAP_CALENDAR_HORIZON_DAYS`                                                | default 14                                                                                                                   |
 | `CAP_CALENDAR_BOT_NAME`                                                    | name shown in the meeting (default "Calari Notetaker")                                                                       |
 | `CAP_CALENDAR_REQUIRE_SAME_EMAIL`                                          | default on; `0` allows a different Google account                                                                            |
