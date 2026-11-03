@@ -243,6 +243,7 @@ within the page-load limit", and it treated a click on a disabled "Ask to
 join" as asking. The live message therefore did not say which happened.
 
 Change (meeting-bot only; no security/policy change, no live join):
+
 - `JoinOutcome::Refused { reason, diag }` with fixed codes `cant_join`,
   `denied`, `not_allowed`, `bad_code`, `not_found`;
   `NoJoinButton(diag)` for the timeout (no longer called a refusal);
@@ -278,9 +279,9 @@ So the bot's URL policy cannot have broken the Meet page; it limits
 navigations only. Egress control for subresources is the network, not the
 policy.
 
-| Command | Exit | Result |
-| --- | --- | --- |
-| `CAP_TEST_CHROME=google-chrome cargo test -p cap-meeting-bot --lib --test meet_join` | 0 | 8 unit + 2 real-Chrome tests: cant_join vs no-button vs disabled vs denied told apart, no leaks; page-load limit holds against a persistent prompt (`meet-diag-deadline-fixed.log`) |
-| `… cargo test -p cap-meeting-bot --features fake-meet --test attend` (7 containers in parallel) | 101 | 6/7; `injected_platform_secrets…` saw no Xvfb in its process snapshot under parallel load (`meet-diag-attend.log`) |
-| same test alone, twice | 0, 0 | passes, Xvfb present (`meet-diag-attend-secrets-1.log`, `-2.log`) |
-| `cargo clippy --workspace --all-targets … -D warnings` / `cargo fmt --all --check` | 0 / 0 | (`meet-diag-clippy.log`, `meet-diag-fmt.log`) |
+| Command                                                                                         | Exit  | Result                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CAP_TEST_CHROME=google-chrome cargo test -p cap-meeting-bot --lib --test meet_join`            | 0     | 8 unit + 2 real-Chrome tests: cant_join vs no-button vs disabled vs denied told apart, no leaks; page-load limit holds against a persistent prompt (`meet-diag-deadline-fixed.log`) |
+| `… cargo test -p cap-meeting-bot --features fake-meet --test attend` (7 containers in parallel) | 101   | 6/7; `injected_platform_secrets…` saw no Xvfb in its process snapshot under parallel load (`meet-diag-attend.log`)                                                                  |
+| same test alone, twice                                                                          | 0, 0  | passes, Xvfb present (`meet-diag-attend-secrets-1.log`, `-2.log`)                                                                                                                   |
+| `cargo clippy --workspace --all-targets … -D warnings` / `cargo fmt --all --check`              | 0 / 0 | (`meet-diag-clippy.log`, `meet-diag-fmt.log`)                                                                                                                                       |
