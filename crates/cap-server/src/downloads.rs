@@ -347,7 +347,10 @@ impl Catalog {
 async fn catalog(Extension(catalog): Extension<Arc<Catalog>>) -> Response {
     let mut response = Json(serde_json::json!({
         "schema_version": 1, "artifacts": catalog.public,
-        "extension": { "status": "review_pending" },
+        "extension": {
+            "status": "available",
+            "store_url": "https://chromewebstore.google.com/detail/cap-meeting-recorder/aaliaccncpohckjpohahnpmhcimficdo",
+        },
         "updates": { "status": "not_published", "debian_updates": "manual" },
     }))
     .into_response();

@@ -114,6 +114,11 @@ nav {
   font-size: 12px;
   gap: 17px;
 }
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .button-primary {
   background: var(--brand);
   color: white;
@@ -544,7 +549,7 @@ h1 > span {
     margin: 18px 0 21px;
     max-width: 340px;
   }
-  .hero-copy > .button {
+  .hero-actions > .button {
     min-height: 45px;
     font-size: 12px;
   }
