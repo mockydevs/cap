@@ -60,7 +60,11 @@ async fn missing_catalog_has_no_downloads_or_invented_versions() {
     for item in body["artifacts"].as_array().unwrap() {
         assert!(item.get("download_url").is_none() && item.get("version").is_none());
     }
-    assert_eq!(body["extension"]["status"], "review_pending");
+    assert_eq!(body["extension"]["status"], "available");
+    assert_eq!(
+        body["extension"]["store_url"],
+        "https://chromewebstore.google.com/detail/cap-meeting-recorder/aaliaccncpohckjpohahnpmhcimficdo"
+    );
     assert_eq!(body["updates"]["status"], "not_published");
     assert_eq!(body["updates"]["debian_updates"], "manual");
 }
@@ -326,7 +330,11 @@ async fn server_rendered_hub_works_without_javascript_and_has_only_real_download
     );
     assert_eq!(body.matches("href=\"/downloads/").count(), 1);
     assert!(body.contains("Signing pending"));
-    assert!(body.contains("Chrome extension"));
+    assert!(body.contains("Cap Meeting Recorder for Chrome"));
+    assert!(body.contains("Add to Chrome"));
+    assert!(body.contains("href=\"https://chromewebstore.google.com/detail/cap-meeting-recorder/aaliaccncpohckjpohahnpmhcimficdo\""));
+    assert!(!body.contains("Review pending"));
+    assert!(!body.contains("extension will be available"));
 }
 
 #[tokio::test]
